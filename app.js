@@ -190,9 +190,7 @@ function renderPreviewProfile() {
 
 function showWelcome() {
   showOnly('welcome');
-  const invited = $('.invited');
   const hasInvite = Boolean(state.pendingInvite);
-  invited.textContent = hasInvite ? "You've been invited" : 'Private surf community';
   $('#enterButton').classList.toggle('hidden', !hasInvite);
   $('#inviteInstruction').classList.toggle('hidden', hasInvite);
 }
