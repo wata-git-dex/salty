@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0A141C">
+  <meta name="description" content="Salty — surf with your friends, not your feed.">
+  <title>Salty — surf crew</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css?v=3">
+</head>
+<body>
+  <svg class="svg-defs" aria-hidden="true">
+    <defs>
+      <linearGradient id="curl-gradient" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#54ABEC"/><stop offset="1" stop-color="#F6A23C"/></linearGradient>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4L3 21l1.1-3.6A8.4 8.4 0 1 1 21 11.5z"/></symbol>
+      <symbol id="i-surf" viewBox="0 0 24 24"><path d="M3 13c2-4 5-6 9-6s7 2 9 6M3 13l2 6h14l2-6M8 13v.01M16 13v.01"/></symbol>
+      <symbol id="i-feed" viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="m16 10 6-3v10l-6-3"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 5.6a5.5 5.5 0 0 0-7.8 0l-1 1-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 22l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    </defs>
+  </svg>
+
+  <div id="boot" class="boot" aria-live="polite">
+    <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
+    <span>salty</span>
+  </div>
+
+  <main id="welcome" class="welcome hidden">
+    <section class="landing-hero">
+      <span class="invited">🤙 You've been invited</span>
+      <svg class="landing-logo" viewBox="0 0 96 96"><rect width="96" height="96" rx="24" fill="#0A141C" stroke="#22384A"/><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
+      <h1>salty</h1>
+      <p><b>Surf with your friends,</b><br>not your feed.</p>
+    </section>
+    <section class="thesis">
+      <div><strong class="blue">Surfline</strong><span>tells you <b>if the waves are good</b>.</span></div>
+      <div><strong class="amber">Salty</strong><span>tells you <b>what your crew is doing</b> — who's paddling out, where, and when.</span></div>
+    </section>
+    <section class="how">
+      <p class="eyebrow">How it works</p>
+      <article><span class="feature-icon green">〰</span><div><h2>Post that you're surfing</h2><p>Drop a spot and a time. Your friends tap “I'm down” or “I'll film.”</p></div></article>
+      <article><span class="feature-icon amber"><svg><use href="#i-camera"/></svg></span><div><h2>Share the clips</h2><p>Raw photos and clips, filmer always credited. Everyone in the community sees them.</p></div></article>
+      <article><span class="feature-icon blue"><svg><use href="#i-chat"/></svg></span><div><h2>Talk by area</h2><p>Jump between area rooms and ask the locals how it's looking.</p></div></article>
+      <article><span class="feature-icon coral"><svg><use href="#i-calendar"/></svg></span><div><h2>Comps, cleanups, meetups</h2><p>Events by area with RSVP and add-to-calendar.</p></div></article>
+    </section>
+    <section class="invite-note"><h2>Invite-only, on purpose</h2><p>Someone you surf with brought you in. No strangers, no algorithm—just surfers who actually ride together.</p></section>
+    <section class="install-tip"><strong>One tip before you enter</strong><p>On iPhone, tap <b>Share → Add to Home Screen</b>. Salty runs like an app, with nothing to download from the App Store.</p></section>
+    <div class="landing-actions">
+      <button id="enterButton" class="primary large">Enter the community <svg><use href="#i-arrow"/></svg></button>
+      <button id="memberButton" class="text-button">Already a member? Sign in</button>
+    </div>
+  </main>
+
+  <main id="authScreen" class="auth-screen hidden">
+    <button class="round-back" data-action="back-welcome" aria-label="Back"><svg><use href="#i-back"/></svg></button>
+    <div class="auth-card">
+      <svg class="auth-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg>
+      <h1 id="authTitle">Join your crew</h1>
+      <p id="authSubtitle">Your magic link signs you in—no password or SMS.</p>
+      <form id="authForm">
+        <div id="newMemberFields">
+          <label>Name<input id="profileName" name="name" autocomplete="name" maxlength="80" required placeholder="What your crew calls you"></label>
+          <label>Phone <small>profile only, never used to sign in</small><input id="profilePhone" name="phone" autocomplete="tel" inputmode="tel" placeholder="(949) 555-0142"></label>
+          <label>Home area<select id="profileRegion" name="region"><option>California</option><option>France</option><option>Germany</option><option>Utah</option></select></label>
+        </div>
+        <label>Email<input id="authEmail" name="email" autocomplete="email" inputmode="email" type="email" required placeholder="you@example.com"></label>
+        <button class="primary" type="submit">Email me a magic link</button>
+      </form>
+      <div id="authMessage" class="auth-message hidden" role="status"></div>
+    </div>
+  </main>
+
+  <div id="app" class="app-shell hidden">
+    <aside class="side-rail" aria-label="Primary navigation">
+      <div class="rail-brand"><svg viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg><span>salty</span></div>
+      <nav id="desktopNav" class="primary-nav"></nav>
+    </aside>
+
+    <section class="phone-shell">
+      <header class="topbar">
+        <div class="toprow">
+          <div class="brand-row"><button class="icon-button" data-action="open-drawer" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button><div class="brand"><svg viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg><h1>salty</h1></div></div>
+          <div class="top-actions"><span id="streakBadge" class="streak">🔥 <b>0</b></span><button class="icon-button" data-action="coming-chat" aria-label="Direct messages"><svg><use href="#i-chat"/></svg></button></div>
+        </div>
+        <button id="locationPill" class="location-pill" data-action="toggle-regions"><svg><use href="#i-pin"/></svg><strong id="locationName">California</strong><span>▾</span><small>tap to change area</small></button>
+        <div id="regionMenu" class="region-menu"></div>
+      </header>
+
+      <div id="view-surfing" class="app-view active">
+        <div class="section-label"><span>Who's surfing</span><span id="liveCount" class="live"><i></i>0 OUT NOW</span></div>
+        <div id="sessionsFeed"></div>
+        <p class="hint">Sessions stay live until the author ends them. Change areas with the pill above.</p>
+      </div>
+
+      <div id="view-feed" class="app-view">
+        <div class="section-label"><span>Feed</span><small>photos &amp; clips · every area</small></div>
+        <button class="add-content" data-action="open-post"><svg><use href="#i-plus"/></svg>Add photo or clip</button>
+        <div id="postsFeed"></div>
+      </div>
+
+      <div id="view-chat" class="app-view"><div class="phase-card"><span>🌊</span><h2>Area chat is next</h2><p>Realtime region rooms and private DMs arrive in the next build phase.</p></div></div>
+      <div id="view-events" class="app-view"><div class="phase-card"><span>📅</span><h2>Events are next</h2><p>Regional comps, cleanups and meetups arrive after chat.</p></div></div>
+
+      <div id="view-you" class="app-view"><div id="profileView" class="profile"></div></div>
+      <div id="view-clubs" class="app-view sub-view">
+        <div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Clubs</h2></div>
+        <div class="preview-bar">ⓘ Preview — clubs are a future phase, not in the first build.</div>
+        <div class="section-label"><span>Your future clubs</span></div>
+        <article class="club-card"><span class="club-logo coral-bg">S</span><div><h3>Snake Eyes Surf Club</h3><p>Club chat, feed, events and members</p></div><b class="soon">SOON</b></article>
+        <article class="club-card"><span class="club-logo amber-bg">SO</span><div><h3>Sodium Team</h3><p>A mini-Salty for the team</p></div><b class="soon">SOON</b></article>
+      </div>
+      <div id="view-perks" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Perks &amp; discounts</h2></div><div class="support-list"><article><b>S</b><div><h3>Sodium</h3><p>Community offers are coming in the support phase.</p></div></article><article><b>SV</b><div><h3>Salty Viewfinder</h3><p>Filmer perks and crew discounts.</p></div></article><article><b>WM</b><div><h3>Water Merch</h3><p>Point-unlocked physical rewards.</p></div></article></div></div>
+      <div id="view-rules" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Community rules</h2></div><div class="copy-card"><h3>Keep the lineup good</h3><ol><li>Credit the filmer. Every time.</li><li>Share spots thoughtfully and respect locals.</li><li>No harassment, hate, or pile-ons.</li><li>Ask before sharing private details or raw footage.</li><li>Use mute quietly; report serious problems to admins.</li></ol></div></div>
+      <div id="view-settings" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Settings</h2></div><div class="copy-card"><button class="settings-row" data-action="make-invite">Invite a friend <span>›</span></button><button class="settings-row danger" data-action="sign-out">Sign out <span>›</span></button></div></div>
+      <div id="view-about" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>About Salty</h2></div><div class="copy-card about-card"><svg viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg><h2>salty</h2><p>Surf with your friends, not your feed.</p><small>Private, invite-only, and built for the crew.</small></div></div>
+
+      <button id="surfFab" class="fab" data-action="open-session"><svg><use href="#i-plus"/></svg>Go surf</button>
+      <nav id="mobileNav" class="bottom-nav" aria-label="Primary navigation"></nav>
+    </section>
+
+    <div id="drawerScrim" class="drawer-scrim" data-action="close-drawer"></div>
+    <aside id="drawer" class="drawer">
+      <div id="drawerProfile" class="drawer-profile"></div>
+      <nav>
+        <button data-view="clubs"><span>♧</span>Clubs <b class="soon">SOON</b></button>
+        <button data-view="perks"><span>◇</span>Perks &amp; discounts</button>
+        <button data-view="rules"><span>▤</span>Community rules</button>
+        <button data-view="settings"><span>⚙</span>Settings</button>
+        <button data-view="about"><span>ⓘ</span>About Salty</button>
+      </nav>
+      <strong class="drawer-foot">SALTY</strong>
+    </aside>
+
+    <div id="sheetScrim" class="sheet-scrim" data-action="close-sheet"></div>
+    <section id="sessionSheet" class="sheet" aria-modal="true" role="dialog">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <h2>Go surf</h2><p>Posts to the <b id="sessionRegionName">California</b> feed and stays live until you end it.</p>
+      <form id="sessionForm">
+        <label>Spot<input id="sessionSpot" maxlength="120" required placeholder="Start typing… Lowers, Malibu, Rincon" list="spotsList"><datalist id="spotsList"></datalist></label>
+        <label>When<div class="segmented"><button type="button" class="active" data-when="now">Now</button><button type="button" data-when="later">Pick a time</button></div><input id="sessionTime" class="hidden" type="datetime-local"></label>
+        <label class="toggle-row"><span>Want a filmer?<small>Flags your session so filmers see it</small></span><input id="wantsFilmer" type="checkbox" role="switch"></label>
+        <label>Note <small>optional</small><textarea id="sessionNote" maxlength="500" placeholder="Anything? “first one in”, “bringing the longboard”…"></textarea></label>
+        <button class="primary" type="submit">Post session</button>
+      </form>
+    </section>
+
+    <section id="postSheet" class="sheet" aria-modal="true" role="dialog">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <h2>Post to the feed</h2><p>Photo or clip—the whole community sees this, every area.</p>
+      <form id="postForm">
+        <label class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" required><svg><use href="#i-camera"/></svg><strong id="fileLabel">Add photo or clip</strong><small>clips up to 90s and 50 MB</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
+        <label>Filmer <em>required</em><input id="filmerName" maxlength="100" required placeholder="Any name—the filmer doesn't have to be a member" list="peopleList"></label>
+        <label>Surfer / shaper <small>optional</small><input id="surferName" maxlength="100" placeholder="Tag who's in it" list="peopleList"><datalist id="peopleList"></datalist></label>
+        <label>Board <small>optional</small><input id="boardName" maxlength="100" placeholder="Shortboard, twin fin, log…"></label>
+        <label>Spot <small>optional</small><input id="postSpot" maxlength="120" placeholder="Where was this?" list="spotsList"></label>
+        <label>Caption<textarea id="postCaption" maxlength="1000" placeholder="Clean left, third wave of the set…"></textarea></label>
+        <button class="primary" type="submit">Post to everyone</button>
+        <p class="upgrade-note">Large-upload runway: this uploader is isolated for a future Supabase Pro + resumable TUS upgrade. <!-- TODO(video): switch uploadMedia() to TUS and raise MAX_UPLOAD_BYTES after upgrading Supabase. --></p>
+      </form>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+  <script src="./app.js?v=2" defer></script>
+</body>
+</html>
