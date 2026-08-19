@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=5">
+  <link rel="stylesheet" href="./styles.css?v=6">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -105,7 +105,7 @@
       <div id="view-surfing" class="app-view active">
         <div class="section-label"><span>Who's surfing</span><span id="liveCount" class="live"><i></i>0 OUT NOW</span></div>
         <div id="sessionsFeed"></div>
-        <p class="hint">Sessions stay live until the author ends them. Change areas with the pill above.</p>
+        <p class="hint">Now sessions clear after 18 hours. Planned sessions stay visible through their scheduled surf.</p>
       </div>
 
       <div id="view-feed" class="app-view">
@@ -130,7 +130,7 @@
       <div id="view-settings" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Settings</h2></div><div class="copy-card"><button class="settings-row" data-action="make-invite">Invite a friend <span>›</span></button><button class="settings-row danger" data-action="sign-out">Sign out <span>›</span></button></div></div>
       <div id="view-about" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>About Salty</h2></div><div class="copy-card about-card"><svg viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg><h2>salty</h2><p>Surf with your friends, not your feed.</p><small>Private, invite-only, and built for the crew.</small></div></div>
 
-      <button id="surfFab" class="fab" data-action="open-session"><svg><use href="#i-plus"/></svg>Go surf</button>
+      <button id="surfFab" class="fab" data-action="open-session"><svg><use href="#i-plus"/></svg>Share a surf</button>
       <nav id="mobileNav" class="bottom-nav" aria-label="Primary navigation"></nav>
     </section>
 
@@ -150,13 +150,15 @@
     <div id="sheetScrim" class="sheet-scrim" data-action="close-sheet"></div>
     <section id="sessionSheet" class="sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
-      <h2>Go surf</h2><p>Posts to the <b id="sessionRegionName">California</b> feed and stays live until you end it.</p>
+      <h2>Share a surf</h2><p>Post for now or plan ahead in <b id="sessionRegionName">California</b>. It stays live through the scheduled surf.</p>
       <form id="sessionForm">
         <label>Spot<input id="sessionSpot" maxlength="120" required placeholder="Start typing… Lowers, Malibu, Rincon" list="spotsList"><datalist id="spotsList"></datalist></label>
         <label>When<div class="segmented"><button type="button" class="active" data-when="now">Now</button><button type="button" data-when="later">Pick a time</button></div><input id="sessionTime" class="hidden" type="datetime-local"></label>
-        <label class="toggle-row"><span>Want a filmer?<small>Flags your session so filmers see it</small></span><input id="wantsFilmer" type="checkbox" role="switch"></label>
+        <label>You're going to<div class="segmented"><button type="button" class="active" data-session-role="surf">Surf</button><button type="button" data-session-role="film">Film</button></div></label>
+        <label>Surfing with <small>optional</small><input id="sessionSurferName" maxlength="100" placeholder="Sam, Mateo, anyone in the crew" list="peopleList"></label>
+        <label id="wantsFilmerRow" class="toggle-row"><span>Want a filmer?<small>Flags your session so filmers see it</small></span><input id="wantsFilmer" type="checkbox" role="switch"></label>
         <label>Note <small>optional</small><textarea id="sessionNote" maxlength="500" placeholder="Anything? “first one in”, “bringing the longboard”…"></textarea></label>
-        <button class="primary" type="submit">Post session</button>
+        <button class="primary" type="submit">Share session</button>
       </form>
     </section>
 
@@ -178,6 +180,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=5" defer></script>
+  <script src="./app.js?v=6" defer></script>
 </body>
 </html>
