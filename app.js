@@ -10,6 +10,7 @@ const CONFIG = Object.freeze({
   maxAvatarBytes: 8 * 1024 * 1024,
   maxClipSeconds: 90,
 });
+const CONSENT_VERSION = '1.0';
 
 // Upgrade runway: after moving Supabase to Pro, raise maxUploadBytes and replace
 // uploadMedia() with a TUS resumable implementation. Callers do not need to change.
@@ -22,6 +23,7 @@ const state = {
   currentRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
+  consentNext: 'new',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -47,7 +49,47 @@ function applyIconTheme(theme = 'ink', announce = false) {
 }
 
 function showOnly(id) {
-  ['boot', 'welcome', 'authScreen', 'verifyScreen', 'profileSetup', 'app'].forEach(name => $(`#${name}`).classList.toggle('hidden', name !== id));
+  ['boot', 'welcome', 'consentScreen', 'authScreen', 'verifyScreen', 'profileSetup', 'app'].forEach(name => $(`#${name}`).classList.toggle('hidden', name !== id));
+}
+
+function consentStorageKey() { return `salty:consent:${CONSENT_VERSION}`; }
+
+function openConsent(next = 'new') {
+  state.consentNext = next;
+  const reviewing = next === 'settings';
+  $('#consentAcceptButton').textContent = reviewing ? 'Back to Settings' : 'I understand — enter Salty';
+  showOnly('consentScreen');
+  scrollTo({ top: 0, behavior: 'instant' });
+}
+
+async function persistConsent() {
+  const acceptance = JSON.parse(localStorage.getItem(consentStorageKey()) || 'null');
+  if (!state.session || !acceptance) return;
+  const current = state.session.user.user_metadata?.salty_consent_version;
+  if (current === CONSENT_VERSION) { localStorage.removeItem(consentStorageKey()); return; }
+  const result = await db.auth.updateUser({ data: {
+    salty_consent_version: CONSENT_VERSION,
+    salty_consented_at: acceptance.accepted_at,
+  }});
+  if (result.error) throw result.error;
+  state.session.user = result.data.user;
+  localStorage.removeItem(consentStorageKey());
+}
+
+async function acceptConsent() {
+  if (state.consentNext === 'settings') { showOnly('app'); setView('settings'); return; }
+  localStorage.setItem(consentStorageKey(), JSON.stringify({ version: CONSENT_VERSION, accepted_at: new Date().toISOString() }));
+  if (state.consentNext === 'session') {
+    try { await persistConsent(); await enterCommunity(); }
+    catch (error) { toast(readableError(error), 6000); }
+    return;
+  }
+  openAuth(state.consentNext);
+}
+
+function leaveConsent() {
+  if (state.consentNext === 'settings') { showOnly('app'); setView('settings'); }
+  else showWelcome();
 }
 
 function toast(message, timeout = 3200) {
@@ -91,7 +133,11 @@ async function init() {
     if (session) await enterCommunity();
   });
 
-  if (state.session) await enterCommunity();
+  if (state.session) {
+    const accepted = state.session.user.user_metadata?.salty_consent_version === CONSENT_VERSION;
+    if (accepted) await enterCommunity();
+    else openConsent('session');
+  }
   else showWelcome();
 
   if ('serviceWorker' in navigator && !/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
@@ -227,6 +273,7 @@ async function verifyEmailLink() {
 }
 
 async function enterCommunity() {
+  await persistConsent();
   const userId = state.session.user.id;
   let { data: profile, error } = await db.from('profiles').select('*').eq('id', userId).maybeSingle();
   if (error) { toast(readableError(error)); showWelcome(); return; }
@@ -728,6 +775,9 @@ document.addEventListener('click', async event => {
   if (!actionNode) return;
   const actions = {
     'back-welcome': showWelcome,
+    'accept-consent': acceptConsent,
+    'consent-back': leaveConsent,
+    'view-consent': () => openConsent('settings'),
     'verify-code': verifyEmailCode,
     'verify-link': verifyEmailLink,
     'open-drawer': openDrawer,
@@ -760,8 +810,8 @@ document.addEventListener('submit', async event => {
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);
 });
 
-$('#enterButton').addEventListener('click', () => openAuth('new'));
-$('#memberButton').addEventListener('click', () => openAuth('existing'));
+$('#enterButton').addEventListener('click', () => openConsent('new'));
+$('#memberButton').addEventListener('click', () => openConsent('existing'));
 $('#profileAvatar').addEventListener('change', event => {
   const file = event.target.files[0];
   if (!file) return;
