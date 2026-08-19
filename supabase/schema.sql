@@ -43,6 +43,9 @@ create table public.sessions (
   region_id uuid references public.regions(id) not null,
   when_label text,
   surf_time timestamptz,
+  author_role text not null default 'surf' check (author_role in ('surf','film')),
+  featured_surfer_name text,
+  featured_surfer_user uuid references public.profiles(id),
   wants_filmer boolean not null default false,
   note text,
   status text not null default 'active' check (status in ('active','ended','archived')),
@@ -118,10 +121,17 @@ create table public.dm_messages (
   id uuid primary key default gen_random_uuid(),
   sender uuid references public.profiles(id) on delete cascade not null,
   recipient uuid references public.profiles(id) on delete cascade not null,
-  body text not null check (char_length(trim(body)) between 1 and 2000),
+  body text check (body is null or char_length(trim(body)) between 1 and 2000),
+  attachment_path text,
+  attachment_type text check (attachment_type is null or attachment_type in ('image/jpeg','image/png','image/webp','image/gif')),
+  attachment_name text,
+  attachment_size int check (attachment_size is null or attachment_size between 1 and 10485760),
   created_at timestamptz not null default now(),
   read_at timestamptz,
-  check (sender <> recipient)
+  check (sender <> recipient),
+  check (nullif(trim(body), '') is not null or attachment_path is not null),
+  check ((attachment_path is null and attachment_type is null and attachment_name is null and attachment_size is null)
+      or (attachment_path is not null and attachment_type is not null and attachment_size is not null))
 );
 
 create table public.events (
@@ -450,7 +460,10 @@ create policy room_messages_insert_own on public.room_messages for insert with c
 create policy room_messages_update_own on public.room_messages for update using (author = auth.uid()) with check (author = auth.uid());
 create policy room_messages_delete_own on public.room_messages for delete using (author = auth.uid() or public.is_admin());
 create policy dms_read_parties on public.dm_messages for select using (public.is_member() and auth.uid() in (sender, recipient));
-create policy dms_insert_sender on public.dm_messages for insert with check (public.is_member() and sender = auth.uid());
+create policy dms_insert_sender on public.dm_messages for insert with check (
+  public.is_member() and sender = auth.uid()
+  and (attachment_path is null or split_part(attachment_path, '/', 1) = auth.uid()::text)
+);
 create policy dms_update_recipient on public.dm_messages for update using (recipient = auth.uid()) with check (recipient = auth.uid());
 create policy dms_delete_sender on public.dm_messages for delete using (sender = auth.uid());
 create policy events_read on public.events for select using (public.is_member());
@@ -486,6 +499,11 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('salty-media', 'salty-media', true, 52428800, array['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm'])
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
+-- Private DM images: one image per message, 10 MB max. Public area rooms remain text-only.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('salty-dm', 'salty-dm', false, 10485760, array['image/jpeg','image/png','image/webp','image/gif'])
+on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
 create policy salty_media_read on storage.objects for select using (bucket_id = 'salty-media');
 create policy salty_media_insert on storage.objects for insert to authenticated
 with check (bucket_id = 'salty-media' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
@@ -495,6 +513,18 @@ with check (bucket_id = 'salty-media' and owner_id = auth.uid()::text);
 create policy salty_media_delete on storage.objects for delete to authenticated
 using (bucket_id = 'salty-media' and owner_id = auth.uid()::text);
 
+create policy salty_dm_insert on storage.objects for insert to authenticated
+with check (bucket_id = 'salty-dm' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
+create policy salty_dm_read_parties on storage.objects for select to authenticated
+using (
+  bucket_id = 'salty-dm' and exists (
+    select 1 from public.dm_messages message
+    where message.attachment_path = name and auth.uid() in (message.sender, message.recipient)
+  )
+);
+create policy salty_dm_delete_sender on storage.objects for delete to authenticated
+using (bucket_id = 'salty-dm' and owner_id = auth.uid()::text);
+
 -- Realtime tables used by the later chat phase and live core/feed refreshes.
 alter publication supabase_realtime add table public.sessions, public.session_rsvps, public.posts, public.post_comments, public.post_likes, public.room_messages, public.dm_messages;
 
@@ -502,7 +532,11 @@ alter publication supabase_realtime add table public.sessions, public.session_rs
 select cron.schedule(
   'salty-nightly-session-archive',
   '15 3 * * *',
-  $$update public.sessions set status = 'archived', ended_at = coalesce(ended_at, now()) where status = 'active' and created_at < now() - interval '18 hours'$$
+  $$update public.sessions
+      set status = 'archived', ended_at = coalesce(ended_at, now())
+    where status = 'active'
+      and ((surf_time is null and created_at < now() - interval '18 hours')
+        or (surf_time is not null and surf_time < now() - interval '18 hours'))$$
 );
 
 commit;
