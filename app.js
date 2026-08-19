@@ -18,6 +18,7 @@ const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
 const state = {
   session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [],
   currentRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
+  preview: false, previewSessions: [],
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -45,8 +46,8 @@ function readableError(error) {
 }
 
 async function init() {
-  if (/^(127\.0\.0\.1|localhost)$/.test(location.hostname) && new URLSearchParams(location.search).has('preview')) {
-    runLocalPreview();
+  if (new URLSearchParams(location.search).get('preview') === '1') {
+    runPreview();
     return;
   }
   state.pendingInvite = inviteFromUrl() || localStorage.getItem('salty:invite') || '';
@@ -71,21 +72,24 @@ async function init() {
   }
 }
 
-function runLocalPreview() {
+function runPreview() {
   const userId = '11111111-1111-4111-8111-111111111111';
   const regionId = '22222222-2222-4222-8222-222222222222';
+  state.preview = true;
   state.session = { user: { id: userId } };
   state.profile = { id: userId, name: 'Cyrus V.', home_region: regionId, sponsors: ['Sodium', 'Salty Viewfinder'] };
   state.regions = [{ id: regionId, name: 'California' }, { id: 'fr', name: 'France' }, { id: 'de', name: 'Germany' }, { id: 'ut', name: 'Utah' }];
   state.currentRegion = state.regions[0];
   state.people = [{ id: userId, name: 'Cyrus V.' }, { id: 'jonah', name: 'Jonah Reyes' }, { id: 'mateo', name: 'Mateo Karras' }];
   state.spots = [{ id: 'malibu', name: 'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', region_id: regionId }];
-  state.sessions = [
+  state.previewSessions = [
     { id:'mine', author:userId, region_id:regionId, when_label:'Now', wants_filmer:true, note:'bringing the longboard', spot:{name:'Malibu'}, author_profile:{name:'Cyrus V.'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah Reyes'}},{id:'r2',user_id:'mateo',role:'film',profile:{name:'Mateo Karras'}}]},
     { id:'crew', author:'jonah', region_id:regionId, when_label:'Now', wants_filmer:true, note:null, spot:{name:'Lowers'}, author_profile:{name:'Jonah Reyes'}, session_rsvps:[] },
   ];
+  state.sessions = state.previewSessions;
   state.posts = [];
   renderChrome(); renderSessions(); renderPosts(); renderPreviewProfile(); showOnly('app');
+  $('#appPreviewBanner').classList.remove('hidden');
 }
 
 function renderPreviewProfile() {
@@ -330,7 +334,7 @@ async function loadPosts() {
 function renderPosts() {
   const feed = $('#postsFeed');
   if (!state.posts.length) {
-    feed.innerHTML = '<div class="empty"><span>FEED</span><h2>No clips yet</h2><p>Post the first photo or clip. The filmer is always credited.</p></div>';
+    feed.innerHTML = '<div class="empty"><span>FEED</span><h2>No photos or clips yet</h2><p>Share the first photo or clip. The filmer is always credited.</p></div>';
     return;
   }
   feed.innerHTML = state.posts.map(post => {
@@ -478,7 +482,15 @@ document.addEventListener('click', async event => {
   if (viewNode) setView(viewNode.dataset.view);
   if (regionNode) {
     state.currentRegion = state.regions.find(region => region.id === regionNode.dataset.region);
-    $('#regionMenu').classList.remove('open'); renderChrome(); await loadSessions();
+    $('#regionMenu').classList.remove('open'); renderChrome();
+    if (state.preview) {
+      state.sessions = state.previewSessions.filter(session => session.region_id === state.currentRegion.id);
+      renderSessions();
+    } else await loadSessions();
+  }
+  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'sign-out'].includes(actionNode?.dataset.action))) {
+    toast('Preview only — nothing saves here.');
+    return;
   }
   if (rsvpNode) await setRsvp(rsvpNode.dataset.rsvp, rsvpNode.dataset.role);
   if (endNode) await endSession(endNode.dataset.endSession);
@@ -505,6 +517,11 @@ document.addEventListener('click', async event => {
 });
 
 document.addEventListener('submit', async event => {
+  if (state.preview) {
+    event.preventDefault();
+    toast('Preview only — nothing saves here.');
+    return;
+  }
   if (event.target.id === 'authForm') await sendMagicLink(event);
   else if (event.target.id === 'sessionForm') await createSession(event);
   else if (event.target.id === 'postForm') await createPost(event);
