@@ -89,14 +89,17 @@ function runLocalPreview() {
 }
 
 function renderPreviewProfile() {
-  $('#profileView').innerHTML = `<div class="profile-head"><span class="avatar">CV</span><div><h2>Cyrus V.</h2><p>📍 California · Salty Crew</p></div></div><div class="stats"><article class="profile-card stat"><b>45</b><span>points</span></article><article class="profile-card stat"><b>3</b><span>active streak</span></article><article class="profile-card stat"><b>0</b><span>clips</span></article></div><article class="profile-card"><h3>Sponsors</h3><div class="chips"><span class="chip">Sodium</span><span class="chip">Salty Viewfinder</span></div></article><footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
+  $('#profileView').innerHTML = `<div class="profile-head"><span class="avatar">CV</span><div><h2>Cyrus V.</h2><p>California · Salty Crew</p></div></div><div class="stats"><article class="profile-card stat"><b>45</b><span>points</span></article><article class="profile-card stat"><b>3</b><span>active streak</span></article><article class="profile-card stat"><b>0</b><span>clips</span></article></div><article class="profile-card"><h3>Sponsors</h3><div class="chips"><span class="chip">Sodium</span><span class="chip">Salty Viewfinder</span></div></article><footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
   $('#streakBadge b').textContent = '3';
 }
 
 function showWelcome() {
   showOnly('welcome');
   const invited = $('.invited');
-  invited.textContent = state.pendingInvite ? "🤙 You've been invited" : '🤙 Private surf community';
+  const hasInvite = Boolean(state.pendingInvite);
+  invited.textContent = hasInvite ? "You've been invited" : 'Private surf community';
+  $('#enterButton').classList.toggle('hidden', !hasInvite);
+  $('#inviteInstruction').classList.toggle('hidden', hasInvite);
 }
 
 function openAuth(mode) {
@@ -256,7 +259,7 @@ function renderSessions() {
   $('#liveCount').innerHTML = liveNow ? `<i></i>${liveNow} OUT NOW` : 'quiet right now';
   const feed = $('#sessionsFeed');
   if (!state.sessions.length) {
-    feed.innerHTML = `<div class="empty"><span>🌊</span><h2>No one's out in ${esc(state.currentRegion.name)} yet</h2><p>Be the first to post a session. One person starts it and the area comes alive.</p></div>`;
+    feed.innerHTML = `<div class="empty"><span>QUIET</span><h2>No one's out in ${esc(state.currentRegion.name)} yet</h2><p>Be the first to post a session. One person starts it and the area comes alive.</p></div>`;
     return;
   }
   feed.innerHTML = state.sessions.map(session => {
@@ -327,7 +330,7 @@ async function loadPosts() {
 function renderPosts() {
   const feed = $('#postsFeed');
   if (!state.posts.length) {
-    feed.innerHTML = '<div class="empty"><span>🎥</span><h2>No clips yet</h2><p>Post the first photo or clip. The filmer is always credited.</p></div>';
+    feed.innerHTML = '<div class="empty"><span>FEED</span><h2>No clips yet</h2><p>Post the first photo or clip. The filmer is always credited.</p></div>';
     return;
   }
   feed.innerHTML = state.posts.map(post => {
@@ -436,7 +439,7 @@ async function renderProfile() {
   const total = (points.data || []).reduce((sum, event) => sum + event.points, 0);
   const region = state.regions.find(item => item.id === state.profile.home_region)?.name || 'Salty Crew';
   const sponsors = state.profile.sponsors?.length ? state.profile.sponsors : ['Add sponsors in the next profile update'];
-  $('#profileView').innerHTML = `<div class="profile-head"><span class="avatar">${esc(initials(state.profile.name))}</span><div><h2>${esc(state.profile.name)}</h2><p>📍 ${esc(region)} · Salty Crew</p></div></div><div class="stats"><article class="profile-card stat"><b>${formatCount(total)}</b><span>points</span></article><article class="profile-card stat"><b>${streak.data?.current_streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${posts.count || 0}</b><span>clips</span></article></div><article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('')}</div></article><article class="profile-card"><h3>Surf with most</h3><p style="color:var(--mut);font-size:13px;line-height:1.5">This list builds itself as your crew RSVPs, films and gets tagged. No follow button anywhere.</p></article><footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
+  $('#profileView').innerHTML = `<div class="profile-head"><span class="avatar">${esc(initials(state.profile.name))}</span><div><h2>${esc(state.profile.name)}</h2><p>${esc(region)} · Salty Crew</p></div></div><div class="stats"><article class="profile-card stat"><b>${formatCount(total)}</b><span>points</span></article><article class="profile-card stat"><b>${streak.data?.current_streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${posts.count || 0}</b><span>clips</span></article></div><article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('')}</div></article><article class="profile-card"><h3>Surf with most</h3><p style="color:var(--mut);font-size:13px;line-height:1.5">This list builds itself as your crew RSVPs, films and gets tagged. No follow button anywhere.</p></article><footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
   $('#streakBadge b').textContent = streak.data?.current_streak || 0;
 }
 
