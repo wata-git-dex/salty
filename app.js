@@ -35,6 +35,12 @@ const initials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map
 const formatCount = number => new Intl.NumberFormat().format(number || 0);
 const inviteFromUrl = () => new URLSearchParams(location.search).get('invite')?.trim() || '';
 const ICON_THEMES = new Set(['ink', 'amber', 'foam', 'ocean']);
+const THEME_COLORS = Object.freeze({
+  ink: '#0A141C',
+  amber: '#1B1208',
+  foam: '#EAF2F5',
+  ocean: '#071925',
+});
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -61,16 +67,29 @@ function clearPendingAuth() {
 
 function applyIconTheme(theme = 'ink', announce = false) {
   const chosen = ICON_THEMES.has(theme) ? theme : 'ink';
-  localStorage.setItem('salty:icon-theme', chosen);
-  $('#appFavicon').href = `./icon-${chosen}.svg`;
-  $('#appTouchIcon').href = `./icon-${chosen}.svg`;
-  $('#appManifest').href = chosen === 'ink' ? './manifest.webmanifest' : `./manifest-${chosen}.webmanifest`;
+  localStorage.setItem('salty:theme', chosen);
+  localStorage.removeItem('salty:icon-theme');
+  const iconPath = `./icon-${chosen}.svg`;
+  document.documentElement.dataset.theme = chosen;
+  $('#appThemeColor').content = THEME_COLORS[chosen];
+  $('#appFavicon').href = iconPath;
+  $('#appTouchIcon').href = './icon-ink.svg';
+  $('#appManifest').href = './manifest.webmanifest';
+  $$('[data-app-icon]').forEach(icon => { icon.src = iconPath; });
   $$('[data-icon-theme]').forEach(button => {
     const active = button.dataset.iconTheme === chosen;
     button.classList.toggle('active', active);
     button.setAttribute('aria-checked', String(active));
   });
-  if (announce) toast(`${chosen[0].toUpperCase()}${chosen.slice(1)} icon selected.`);
+  if (announce) {
+    const label = `${chosen[0].toUpperCase()}${chosen.slice(1)}`;
+    document.documentElement.classList.remove('theme-previewing');
+    void document.documentElement.offsetWidth;
+    document.documentElement.classList.add('theme-previewing');
+    clearTimeout(applyIconTheme.previewTimer);
+    applyIconTheme.previewTimer = setTimeout(() => document.documentElement.classList.remove('theme-previewing'), 700);
+    toast(`${label} theme applied across Salty.`, 3200);
+  }
 }
 
 function showOnly(id) {
@@ -155,7 +174,7 @@ async function init() {
   }
   if ('serviceWorker' in navigator && !/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
     try {
-      const registration = await navigator.serviceWorker.register('./sw.js', { scope: '/salty/' });
+      const registration = await navigator.serviceWorker.register('./sw.js');
       await registration.update();
     } catch (error) { console.warn('Service worker registration deferred:', error); }
   }
@@ -242,6 +261,7 @@ function openAuth(mode, keepPending = false) {
     $('#authCode').value = '';
   }
   $('#authEmail').value = state.authEmail || localStorage.getItem('salty:auth-email') || '';
+  $('#authScreen .round-back').classList.toggle('hidden', isStandalone());
   showOnly('authScreen');
 }
 
@@ -257,9 +277,10 @@ function restorePendingAuth() {
   openAuth(state.authMode, true);
   $('#authEmail').value = pending.email;
   const message = $('#authMessage');
-  message.innerHTML = `<b>Use the newest email sent to ${esc(pending.email)}</b><br>Enter its six-digit code below. Every new email cancels the older code.`;
+  message.innerHTML = `<b>Use the newest code sent to ${esc(pending.email)}</b><br>Enter it below without leaving Salty. Every new email replaces the older code.`;
   message.classList.remove('hidden');
   $('#authCodeBlock').classList.remove('hidden');
+  setTimeout(() => $('#authCode').focus({ preventScroll: true }), 50);
   return true;
 }
 
@@ -309,9 +330,10 @@ async function sendMagicLink(event) {
   }));
   startEmailCooldown(submit);
   const message = $('#authMessage');
-  message.innerHTML = `<b>Check ${esc(email)}</b><br>Enter the six-digit code from the newest Salty email here. Or use the email button as a fallback. Every new email cancels the older code.`;
+  message.innerHTML = `<b>Check ${esc(email)}</b><br>Stay in Salty and enter the six-digit code from the newest email. Every new email replaces the older code.`;
   message.classList.remove('hidden');
   $('#authCodeBlock').classList.remove('hidden');
+  setTimeout(() => $('#authCode').focus({ preventScroll: true }), 50);
 }
 
 async function verifyEmailCode() {
@@ -325,9 +347,10 @@ async function verifyEmailCode() {
   button.disabled = false; button.textContent = 'Verify code';
   if (error) {
     const message = $('#authMessage');
-    message.innerHTML = `<b>That code is not current.</b><br>Use the six-digit code from the newest Salty email. If you requested another email, the previous code stopped working.`;
+    const reason = esc(error.message || 'The code was rejected.');
+    message.innerHTML = `<b>Salty could not verify that code.</b><br>${reason}<br>Request one fresh email, stay on this screen, and use only its newest code.`;
     message.classList.remove('hidden');
-    toast('Use the newest six-digit code. Requesting another email cancels the previous one.', 7000);
+    toast('That code was rejected. Request one fresh code and enter it without opening any email link.', 7000);
     return;
   }
   state.session = data.session;
@@ -1031,6 +1054,11 @@ document.addEventListener('submit', async event => {
 
 $('#enterButton').addEventListener('click', () => openConsent('new'));
 $('#memberButton').addEventListener('click', () => openAuth('existing'));
+$('#authCode').addEventListener('keydown', async event => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  await verifyEmailCode();
+});
 $('#profileAvatar').addEventListener('change', event => {
   const file = event.target.files[0];
   if (!file) return;
@@ -1075,5 +1103,5 @@ window.addEventListener('appinstalled', () => {
   toast('Salty was added to your Home Screen.');
 });
 
-applyIconTheme(localStorage.getItem('salty:icon-theme') || 'ink');
+applyIconTheme(localStorage.getItem('salty:theme') || localStorage.getItem('salty:icon-theme') || 'ink');
 init().catch(error => { showWelcome(); toast(readableError(error), 6000); });

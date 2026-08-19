@@ -1,10 +1,10 @@
 {
-  "id": "/salty/",
+  "id": "/",
   "name": "Salty",
   "short_name": "Salty",
   "description": "Surf with your friends, not your feed.",
-  "start_url": "/salty/",
-  "scope": "/salty/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0A141C",

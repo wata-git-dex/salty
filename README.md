@@ -1,13 +1,13 @@
 # Salty
 
-Private, invite-only surf community PWA. Static HTML/CSS/vanilla JavaScript hosted at `https://wata-git-dex.github.io/salty/`, with Supabase Auth, Postgres, Realtime, and Storage.
+Private, invite-only surf community PWA. Static HTML/CSS/vanilla JavaScript hosted at `https://app.saltyviewfinder.com/` through GitHub Pages, with Supabase Auth, Postgres, Realtime, and Storage.
 
 ## First-time setup
 
 1. Open the Supabase SQL Editor and run all of `supabase/schema.sql` once.
 2. Copy the `bootstrap_invite_code` returned by the final query.
-3. In Supabase Authentication → URL Configuration, set the Site URL to `https://wata-git-dex.github.io/salty/` and add `https://wata-git-dex.github.io/salty/**` as a redirect URL.
-4. Open `https://wata-git-dex.github.io/salty/?invite=YOUR_CODE` on your phone.
+3. In Supabase Authentication → URL Configuration, set the Site URL to `https://app.saltyviewfinder.com/` and add `https://app.saltyviewfinder.com/**` as a redirect URL.
+4. Open `https://app.saltyviewfinder.com/?invite=YOUR_CODE` on your phone.
 
 ## Phone sign-in and installation
 

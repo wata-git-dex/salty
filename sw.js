@@ -1,5 +1,5 @@
-const CACHE = 'salty-shell-v17';
-const SHELL = ['./', './index.html', './styles.css?v=17', './app.js?v=17', './manifest.webmanifest', './manifest-amber.webmanifest', './manifest-foam.webmanifest', './manifest-ocean.webmanifest', './icon.svg', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg'];
+const CACHE = 'salty-shell-v19';
+const SHELL = ['./', './index.html', './styles.css?v=19', './app.js?v=19', './manifest.webmanifest', './icon.svg', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -3,20 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0A141C">
+  <meta id="appThemeColor" name="theme-color" content="#0A141C">
   <meta name="description" content="Salty — surf with your friends, not your feed.">
   <meta property="og:title" content="You're invited to Salty">
   <meta property="og:description" content="A private surf community built to help friends surf and film together more often.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://wata-git-dex.github.io/salty/">
+  <meta property="og:url" content="https://app.saltyviewfinder.com/">
   <title>Salty — surf crew</title>
   <link id="appManifest" rel="manifest" href="./manifest.webmanifest">
   <link id="appFavicon" rel="icon" href="./icon.svg" type="image/svg+xml">
   <link id="appTouchIcon" rel="apple-touch-icon" href="./icon-ink.svg">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('salty:theme')||localStorage.getItem('salty:icon-theme')||'ink'}catch(_error){}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=17">
+  <link rel="stylesheet" href="./styles.css?v=19">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -102,7 +103,7 @@
       <h1 id="authTitle">Join your crew</h1>
       <p id="authSubtitle">A six-digit email code signs you in—no password or SMS.</p>
       <form id="authForm">
-        <div id="newMemberFields" class="auth-step"><b>First, verify your email.</b><span>You'll build your full member profile immediately after opening the link.</span></div>
+        <div id="newMemberFields" class="auth-step"><b>First, verify your email.</b><span>Enter the code from your email, then build your member profile.</span></div>
         <label>Email<input id="authEmail" name="email" autocomplete="email" inputmode="email" type="email" required placeholder="you@example.com"></label>
         <button class="primary" type="submit">Email me a sign-in code</button>
       </form>
@@ -144,14 +145,14 @@
 
   <div id="app" class="app-shell hidden">
     <aside class="side-rail" aria-label="Primary navigation">
-      <div class="rail-brand"><svg viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg><span>salty</span></div>
+      <div class="rail-brand"><img data-app-icon src="./icon-ink.svg" alt=""><span>salty</span></div>
       <nav id="desktopNav" class="primary-nav"></nav>
     </aside>
 
     <section class="phone-shell">
       <header class="topbar">
         <div class="toprow">
-          <div class="brand-row"><button class="icon-button" data-action="open-drawer" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button><div class="brand"><svg viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg><h1>salty</h1></div></div>
+          <div class="brand-row"><button class="icon-button" data-action="open-drawer" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button><div class="brand"><img data-app-icon src="./icon-ink.svg" alt=""><h1>salty</h1></div></div>
           <div class="top-actions"><span id="streakBadge" class="streak" aria-label="Active streak"><svg><use href="#i-flame"/></svg><b>0</b></span><button class="icon-button" data-action="coming-chat" aria-label="Direct messages"><svg><use href="#i-chat"/></svg></button></div>
         </div>
         <div id="appPreviewBanner" class="app-preview-banner hidden">App preview · sample data · nothing saves</div>
@@ -195,8 +196,8 @@
         <div class="copy-card rules-card"><h3>Community basics</h3><ol><li>Credit the filmer, every time.</li><li>Ask before sharing someone else's private details or raw footage.</li><li>No harassment, hate, pile-ons, or unwanted promotion.</li><li>Share sensitive spots thoughtfully and respect the people who surf there.</li><li>Use mute quietly. Report serious safety or community problems to an admin.</li></ol></div>
         <div class="copy-card rules-card"><h3>Lineup rules</h3><ol><li>The surfer closest to the peak has priority. Don't drop in.</li><li>Paddle around the breaking wave, not through another surfer's line.</li><li>Hold onto your board, communicate, and help when somebody is in trouble.</li><li>Take turns. Don't snake, back-paddle, or treat every wave like it belongs to you.</li><li>Know your limits and respect local conditions, access, and the beach.</li></ol><p class="rules-credit">In the spirit of Shaun Tomson's <a href="https://shauntomson.com/" target="_blank" rel="noopener">Surfer's Code</a>: watch out for other surfers, pass along the stoke, and honor surfing.</p></div>
       </div>
-      <div id="view-settings" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Settings</h2></div><div class="copy-card icon-settings"><h3>Your Salty icon</h3><p>Pick one just for this device.</p><div class="icon-options" role="radiogroup" aria-label="Salty app icon"><button data-icon-theme="ink" role="radio"><img src="./icon-ink.svg" alt=""><span>Ink</span></button><button data-icon-theme="amber" role="radio"><img src="./icon-amber.svg" alt=""><span>Amber</span></button><button data-icon-theme="foam" role="radio"><img src="./icon-foam.svg" alt=""><span>Foam</span></button><button data-icon-theme="ocean" role="radio"><img src="./icon-ocean.svg" alt=""><span>Ocean</span></button></div><small>Already installed on iPhone? Re-add Salty to the Home Screen to apply the new icon there.</small></div><div class="copy-card"><button id="installSettingsRow" class="settings-row" data-action="show-install">Add Salty to Home Screen <span>›</span></button><button class="settings-row" data-action="make-invite">Invite a friend <span>›</span></button><button class="settings-row" data-action="view-consent">Privacy &amp; consent <span>›</span></button><button class="settings-row danger" data-action="sign-out">Sign out <span>›</span></button></div></div>
-      <div id="view-about" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>About Salty</h2></div><div class="copy-card about-card"><svg viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg><h2>salty</h2><p>Surf with your friends, not your feed.</p><small>Private, invite-only, and built for the crew.</small></div><div class="copy-card about-copy"><h3>What Salty is for</h3><p>Surfline tells you whether the waves are good. Salty tells you what your friends are doing—who's surfing, who's filming, where, and when.</p><p>Share a surf for now or plan one ahead. Friends can join, volunteer to film, and keep the plan together without an Instagram doomscroll.</p><h3>How the community works</h3><p>There are no followers and no algorithm. Membership grows through invitations from people who actually surf together. Photos and clips stay properly credited, area conversations stay useful, and members choose what they share.</p><h3>Built to stay simple</h3><p>Salty has no ads and does not sell member information. It is an independent community tool built by Salty Viewfinder, with member data protected through Supabase.</p></div></div>
+      <div id="view-settings" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Settings</h2></div><div class="copy-card icon-settings"><h3>Salty theme</h3><p>Tap one to preview and apply it across the entire app on this device.</p><div class="icon-options" role="radiogroup" aria-label="Salty color theme"><button data-icon-theme="ink" role="radio" aria-label="Use Ink theme"><img src="./icon-ink.svg" alt=""><span>Ink</span></button><button data-icon-theme="amber" role="radio" aria-label="Use Amber theme"><img src="./icon-amber.svg" alt=""><span>Amber</span></button><button data-icon-theme="foam" role="radio" aria-label="Use Foam theme"><img src="./icon-foam.svg" alt=""><span>Foam</span></button><button data-icon-theme="ocean" role="radio" aria-label="Use Ocean theme"><img src="./icon-ocean.svg" alt=""><span>Ocean</span></button></div><small>Your selected theme changes Salty's colors and logos immediately and stays saved here. The installed Home Screen icon remains the standard Salty icon.</small></div><div class="copy-card"><button id="installSettingsRow" class="settings-row" data-action="show-install">Add Salty to Home Screen <span>›</span></button><button class="settings-row" data-action="make-invite">Invite a friend <span>›</span></button><button class="settings-row" data-action="view-consent">Privacy &amp; consent <span>›</span></button><button class="settings-row danger" data-action="sign-out">Sign out <span>›</span></button></div></div>
+      <div id="view-about" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>About Salty</h2></div><div class="copy-card about-card"><img data-app-icon src="./icon-ink.svg" alt="Salty"><h2>salty</h2><p>Surf with your friends, not your feed.</p><small>Private, invite-only, and built for the crew.</small></div><div class="copy-card about-copy"><h3>What Salty is for</h3><p>Surfline tells you whether the waves are good. Salty tells you what your friends are doing—who's surfing, who's filming, where, and when.</p><p>Share a surf for now or plan one ahead. Friends can join, volunteer to film, and keep the plan together without an Instagram doomscroll.</p><h3>How the community works</h3><p>There are no followers and no algorithm. Membership grows through invitations from people who actually surf together. Photos and clips stay properly credited, area conversations stay useful, and members choose what they share.</p><h3>Built to stay simple</h3><p>Salty has no ads and does not sell member information. It is an independent community tool built by Salty Viewfinder, with member data protected through Supabase.</p></div></div>
 
       <button id="surfFab" class="fab" data-action="open-session"><svg><use href="#i-plus"/></svg>Share a surf</button>
       <nav id="mobileNav" class="bottom-nav" aria-label="Primary navigation"></nav>
@@ -261,6 +262,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=17" defer></script>
+  <script src="./app.js?v=19" defer></script>
 </body>
 </html>
