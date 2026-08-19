@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=4">
+  <link rel="stylesheet" href="./styles.css?v=5">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -52,10 +52,10 @@
     </section>
     <section class="how">
       <p class="eyebrow">How it works</p>
-      <article><span class="feature-icon green">〰</span><div><h2>Post that you're surfing</h2><p>Drop a spot and a time. Your friends tap “I'm down” or “I'll film.”</p></div></article>
-      <article><span class="feature-icon amber"><svg><use href="#i-camera"/></svg></span><div><h2>Share the clips</h2><p>Raw photos and clips, filmer always credited. Everyone in the community sees them.</p></div></article>
+      <article><span class="feature-icon green">〰</span><div><h2>Share when you're surfing</h2><p>Drop a spot and a time to surf with friends or get clips. Your crew can tap “I'm down” or “I'll film.”</p></div></article>
+      <article><span class="feature-icon amber"><svg><use href="#i-camera"/></svg></span><div><h2>Share clips and photos</h2><p>Raw photos and clips, filmer always credited. Everyone in the community sees them.</p></div></article>
       <article><span class="feature-icon blue"><svg><use href="#i-chat"/></svg></span><div><h2>Talk by area</h2><p>Jump between area rooms and ask the locals how it's looking.</p></div></article>
-      <article><span class="feature-icon coral"><svg><use href="#i-calendar"/></svg></span><div><h2>Comps, cleanups, meetups</h2><p>Events by area with RSVP and add-to-calendar.</p></div></article>
+      <article><span class="feature-icon coral"><svg><use href="#i-calendar"/></svg></span><div><h2>Comps, movie nights, meetups</h2><p>Events by area with RSVP and add-to-calendar.</p></div></article>
     </section>
     <section class="invite-note"><h2>Invite-only, on purpose</h2><p>Someone you surf with brought you in. No strangers, no algorithm—just surfers who actually ride together.</p></section>
     <section class="install-tip"><strong>One tip before you enter</strong><p>On iPhone, tap <b>Share → Add to Home Screen</b>. Salty runs like an app, with nothing to download from the App Store.</p></section>
@@ -97,6 +97,7 @@
           <div class="brand-row"><button class="icon-button" data-action="open-drawer" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button><div class="brand"><svg viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg><h1>salty</h1></div></div>
           <div class="top-actions"><span id="streakBadge" class="streak">Streak <b>0</b></span><button class="icon-button" data-action="coming-chat" aria-label="Direct messages"><svg><use href="#i-chat"/></svg></button></div>
         </div>
+        <div id="appPreviewBanner" class="app-preview-banner hidden">App preview · sample data · nothing saves</div>
         <button id="locationPill" class="location-pill" data-action="toggle-regions"><svg><use href="#i-pin"/></svg><strong id="locationName">California</strong><span>▾</span><small>tap to change area</small></button>
         <div id="regionMenu" class="region-menu"></div>
       </header>
@@ -114,7 +115,7 @@
       </div>
 
       <div id="view-chat" class="app-view"><div class="phase-card"><span>CHAT</span><h2>Area chat is next</h2><p>Realtime region rooms and private DMs arrive in the next build phase.</p></div></div>
-      <div id="view-events" class="app-view"><div class="phase-card"><span>EVENTS</span><h2>Events are next</h2><p>Regional comps, cleanups and meetups arrive after chat.</p></div></div>
+      <div id="view-events" class="app-view"><div class="phase-card"><span>EVENTS</span><h2>Events are next</h2><p>Regional comps, movie nights and meetups arrive after chat.</p></div></div>
 
       <div id="view-you" class="app-view"><div id="profileView" class="profile"></div></div>
       <div id="view-clubs" class="app-view sub-view">
@@ -177,6 +178,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=3" defer></script>
+  <script src="./app.js?v=5" defer></script>
 </body>
 </html>
