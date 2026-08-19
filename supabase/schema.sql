@@ -1,0 +1,515 @@
+-- Salty — complete initial database schema
+-- Run this entire file once in the Supabase SQL Editor before testing the app.
+
+begin;
+
+create extension if not exists pgcrypto;
+create extension if not exists pg_cron;
+
+-- Reference tables must exist before profiles can reference them.
+create table public.regions (
+  id uuid primary key default gen_random_uuid(),
+  name text unique not null
+);
+
+create table public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  name text not null check (char_length(trim(name)) between 1 and 80),
+  phone text,
+  home_region uuid references public.regions(id),
+  sponsors text[] not null default '{}',
+  is_admin boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create table public.spots (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(trim(name)) between 1 and 120),
+  region_id uuid references public.regions(id),
+  created_by uuid references public.profiles(id),
+  created_at timestamptz not null default now(),
+  unique (name, region_id)
+);
+
+create table public.brands (
+  id uuid primary key default gen_random_uuid(),
+  name text unique not null
+);
+
+create table public.sessions (
+  id uuid primary key default gen_random_uuid(),
+  author uuid references public.profiles(id) on delete cascade not null,
+  spot_id uuid references public.spots(id),
+  region_id uuid references public.regions(id) not null,
+  when_label text,
+  surf_time timestamptz,
+  wants_filmer boolean not null default false,
+  note text,
+  status text not null default 'active' check (status in ('active','ended','archived')),
+  created_at timestamptz not null default now(),
+  ended_at timestamptz,
+  check ((status = 'active' and ended_at is null) or status <> 'active')
+);
+
+create table public.session_rsvps (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid references public.sessions(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  role text not null check (role in ('surf','film')),
+  created_at timestamptz not null default now(),
+  unique (session_id, user_id)
+);
+
+create table public.posts (
+  id uuid primary key default gen_random_uuid(),
+  author uuid references public.profiles(id) on delete cascade not null,
+  media_url text not null,
+  media_path text not null,
+  media_type text not null check (media_type in ('clip','photo')),
+  filmer_name text not null check (char_length(trim(filmer_name)) > 0),
+  filmer_user uuid references public.profiles(id),
+  surfer_name text,
+  board text,
+  spot_id uuid references public.spots(id),
+  caption text,
+  created_at timestamptz not null default now()
+);
+
+create table public.post_tags (
+  post_id uuid references public.posts(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  role text not null check (role in ('surfer','filmer','shaper')),
+  primary key (post_id, user_id, role)
+);
+
+create table public.post_comments (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid references public.posts(id) on delete cascade not null,
+  author uuid references public.profiles(id) on delete cascade not null,
+  body text not null check (char_length(trim(body)) between 1 and 1000),
+  created_at timestamptz not null default now()
+);
+
+create table public.post_likes (
+  post_id uuid references public.posts(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  primary key (post_id, user_id)
+);
+
+create table public.connections (
+  id uuid primary key default gen_random_uuid(),
+  user_a uuid references public.profiles(id) on delete cascade not null,
+  user_b uuid references public.profiles(id) on delete cascade not null,
+  source text not null check (source in ('rsvp','tag','dm')),
+  created_at timestamptz not null default now(),
+  check (user_a < user_b),
+  unique (user_a, user_b)
+);
+
+create table public.room_messages (
+  id uuid primary key default gen_random_uuid(),
+  region_id uuid references public.regions(id) on delete cascade not null,
+  author uuid references public.profiles(id) on delete cascade not null,
+  body text not null check (char_length(trim(body)) between 1 and 2000),
+  created_at timestamptz not null default now()
+);
+
+create table public.dm_messages (
+  id uuid primary key default gen_random_uuid(),
+  sender uuid references public.profiles(id) on delete cascade not null,
+  recipient uuid references public.profiles(id) on delete cascade not null,
+  body text not null check (char_length(trim(body)) between 1 and 2000),
+  created_at timestamptz not null default now(),
+  read_at timestamptz,
+  check (sender <> recipient)
+);
+
+create table public.events (
+  id uuid primary key default gen_random_uuid(),
+  author uuid references public.profiles(id) on delete cascade not null,
+  region_id uuid references public.regions(id) on delete cascade not null,
+  title text not null,
+  spot_id uuid references public.spots(id),
+  start_time timestamptz,
+  description text,
+  created_at timestamptz not null default now()
+);
+
+create table public.event_rsvps (
+  event_id uuid references public.events(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  created_at timestamptz not null default now(),
+  primary key (event_id, user_id)
+);
+
+create table public.points_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  action text not null check (action in ('post_session','rsvp','post_clip','comment','attend_event','daily_active')),
+  points int not null check (points > 0),
+  created_at timestamptz not null default now()
+);
+
+create unique index one_daily_active_per_user
+  on public.points_events (user_id, action, ((created_at at time zone 'UTC')::date))
+  where action = 'daily_active';
+
+create table public.streaks (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  last_active_date date,
+  current_streak int not null default 0 check (current_streak >= 0)
+);
+
+create table public.rewards (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  points_cost int not null check (points_cost >= 0),
+  type text not null check (type in ('discount','physical','entry'))
+);
+
+create table public.reward_claims (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  reward_id uuid references public.rewards(id) on delete cascade not null,
+  status text not null default 'claimed' check (status in ('claimed','fulfilled','cancelled')),
+  created_at timestamptz not null default now()
+);
+
+create table public.invites (
+  id uuid primary key default gen_random_uuid(),
+  code text unique not null,
+  created_by uuid references public.profiles(id) on delete set null,
+  max_uses int not null default 1 check (max_uses > 0),
+  use_count int not null default 0 check (use_count >= 0 and use_count <= max_uses),
+  used_by uuid references public.profiles(id) on delete set null,
+  expires_at timestamptz,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table public.mutes (
+  muter uuid references public.profiles(id) on delete cascade not null,
+  muted uuid references public.profiles(id) on delete cascade not null,
+  primary key (muter, muted),
+  check (muter <> muted)
+);
+
+create table public.reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter uuid references public.profiles(id) on delete cascade not null,
+  target_type text not null check (target_type in ('post','profile','message','event')),
+  target_id uuid not null,
+  reason text not null check (char_length(trim(reason)) between 1 and 1000),
+  created_at timestamptz not null default now()
+);
+
+insert into public.regions (name) values ('California'),('France'),('Germany'),('Utah')
+on conflict (name) do nothing;
+
+insert into public.brands (name) values ('Sodium'),('Salty Viewfinder'),('Water Merch'),('Snake Eyes')
+on conflict (name) do nothing;
+
+insert into public.rewards (name, points_cost, type) values
+  ('Sodium — 20% off', 0, 'discount'),
+  ('Salty Viewfinder — 15% off', 0, 'discount'),
+  ('Water Merch community hoodie', 1500, 'physical'),
+  ('Snake Eyes — 10% off fins', 0, 'discount');
+
+-- One multi-use bootstrap invite. The final SELECT prints it after the transaction.
+insert into public.invites (code, max_uses)
+values ('SALTY-' || upper(encode(gen_random_bytes(5), 'hex')), 25);
+
+-- Membership helpers. SECURITY DEFINER avoids recursive RLS checks.
+create or replace function public.is_member(uid uuid default auth.uid())
+returns boolean language sql stable security definer set search_path = public
+as $$ select exists (select 1 from public.profiles where id = uid) $$;
+
+create or replace function public.is_admin(uid uuid default auth.uid())
+returns boolean language sql stable security definer set search_path = public
+as $$ select exists (select 1 from public.profiles where id = uid and is_admin) $$;
+
+create or replace function public.invite_is_valid(invite_code text)
+returns boolean language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.invites
+    where upper(code) = upper(trim(invite_code))
+      and revoked_at is null
+      and (expires_at is null or expires_at > now())
+      and use_count < max_uses
+  )
+$$;
+
+create or replace function public.redeem_invite(
+  invite_code text,
+  profile_name text default null,
+  profile_phone text default null,
+  profile_region text default null
+) returns public.profiles
+language plpgsql security definer set search_path = public
+as $$
+declare
+  invite_row public.invites;
+  region_uuid uuid;
+  result public.profiles;
+  resolved_name text;
+  resolved_phone text;
+begin
+  if auth.uid() is null then raise exception 'Authentication required'; end if;
+
+  select * into result from public.profiles where id = auth.uid();
+  if found then return result; end if;
+
+  select * into invite_row from public.invites
+   where upper(code) = upper(trim(invite_code))
+     and revoked_at is null
+     and (expires_at is null or expires_at > now())
+     and use_count < max_uses
+   for update;
+  if not found then raise exception 'This invite is invalid, expired, or already used'; end if;
+
+  resolved_name := coalesce(nullif(trim(profile_name), ''), nullif(trim(auth.jwt() -> 'user_metadata' ->> 'name'), ''));
+  resolved_phone := coalesce(nullif(trim(profile_phone), ''), nullif(trim(auth.jwt() -> 'user_metadata' ->> 'phone'), ''));
+  if resolved_name is null then raise exception 'A profile name is required'; end if;
+
+  select id into region_uuid from public.regions
+   where lower(name) = lower(coalesce(profile_region, auth.jwt() -> 'user_metadata' ->> 'home_region', 'California'))
+   limit 1;
+
+  insert into public.profiles (id, name, phone, home_region)
+  values (auth.uid(), resolved_name, resolved_phone, region_uuid)
+  returning * into result;
+
+  update public.invites
+     set use_count = use_count + 1,
+         used_by = case when max_uses = 1 then auth.uid() else used_by end
+   where id = invite_row.id;
+
+  return result;
+end $$;
+
+create or replace function public.create_invite(invite_max_uses int default 1)
+returns text language plpgsql security definer set search_path = public
+as $$
+declare new_code text;
+begin
+  if not public.is_member() then raise exception 'Community membership required'; end if;
+  if invite_max_uses < 1 or invite_max_uses > 25 then raise exception 'max uses must be between 1 and 25'; end if;
+  new_code := 'SALTY-' || upper(encode(gen_random_bytes(5), 'hex'));
+  insert into public.invites (code, created_by, max_uses) values (new_code, auth.uid(), invite_max_uses);
+  return new_code;
+end $$;
+
+create or replace function public.upsert_connection(first_user uuid, second_user uuid, connection_source text)
+returns void language plpgsql security definer set search_path = public
+as $$
+begin
+  if first_user is null or second_user is null or first_user = second_user then return; end if;
+  insert into public.connections (user_a, user_b, source)
+  values (least(first_user, second_user), greatest(first_user, second_user), connection_source)
+  on conflict (user_a, user_b) do nothing;
+end $$;
+
+create or replace function public.connection_from_rsvp()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+declare session_author uuid;
+begin
+  select author into session_author from public.sessions where id = new.session_id;
+  perform public.upsert_connection(session_author, new.user_id, 'rsvp');
+  return new;
+end $$;
+
+create or replace function public.connection_from_tag()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+declare post_author uuid;
+begin
+  select author into post_author from public.posts where id = new.post_id;
+  perform public.upsert_connection(post_author, new.user_id, 'tag');
+  return new;
+end $$;
+
+create or replace function public.connection_from_dm()
+returns trigger language plpgsql security definer set search_path = public
+as $$ begin perform public.upsert_connection(new.sender, new.recipient, 'dm'); return new; end $$;
+
+create trigger session_rsvp_connection after insert on public.session_rsvps
+for each row execute function public.connection_from_rsvp();
+create trigger post_tag_connection after insert on public.post_tags
+for each row execute function public.connection_from_tag();
+create trigger dm_connection after insert on public.dm_messages
+for each row execute function public.connection_from_dm();
+
+create or replace function public.record_activity(activity_user uuid, activity_action text, activity_points int)
+returns void language plpgsql security definer set search_path = public
+as $$
+declare today date := (now() at time zone 'UTC')::date;
+begin
+  insert into public.points_events (user_id, action, points)
+  values (activity_user, activity_action, activity_points);
+
+  insert into public.points_events (user_id, action, points)
+  values (activity_user, 'daily_active', 5)
+  on conflict do nothing;
+
+  insert into public.streaks (user_id, last_active_date, current_streak)
+  values (activity_user, today, 1)
+  on conflict (user_id) do update set
+    current_streak = case
+      when streaks.last_active_date = today then streaks.current_streak
+      when streaks.last_active_date >= today - 7 then streaks.current_streak + 1
+      else 1 end,
+    last_active_date = today;
+end $$;
+
+create or replace function public.points_from_action()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+declare activity_user uuid; activity_action text; activity_points int;
+begin
+  case tg_table_name
+    when 'sessions' then activity_user := new.author; activity_action := 'post_session'; activity_points := 10;
+    when 'session_rsvps' then activity_user := new.user_id; activity_action := 'rsvp'; activity_points := 5;
+    when 'posts' then activity_user := new.author; activity_action := 'post_clip'; activity_points := 15;
+    when 'post_comments' then activity_user := new.author; activity_action := 'comment'; activity_points := 3;
+    when 'event_rsvps' then activity_user := new.user_id; activity_action := 'attend_event'; activity_points := 10;
+    else return new;
+  end case;
+  perform public.record_activity(activity_user, activity_action, activity_points);
+  return new;
+end $$;
+
+create trigger points_session after insert on public.sessions for each row execute function public.points_from_action();
+create trigger points_rsvp after insert on public.session_rsvps for each row execute function public.points_from_action();
+create trigger points_post after insert on public.posts for each row execute function public.points_from_action();
+create trigger points_comment after insert on public.post_comments for each row execute function public.points_from_action();
+create trigger points_event_rsvp after insert on public.event_rsvps for each row execute function public.points_from_action();
+
+-- Every table has RLS enabled. Policies use membership, ownership, and relationship checks.
+alter table public.regions enable row level security;
+alter table public.profiles enable row level security;
+alter table public.spots enable row level security;
+alter table public.brands enable row level security;
+alter table public.sessions enable row level security;
+alter table public.session_rsvps enable row level security;
+alter table public.posts enable row level security;
+alter table public.post_tags enable row level security;
+alter table public.post_comments enable row level security;
+alter table public.post_likes enable row level security;
+alter table public.connections enable row level security;
+alter table public.room_messages enable row level security;
+alter table public.dm_messages enable row level security;
+alter table public.events enable row level security;
+alter table public.event_rsvps enable row level security;
+alter table public.points_events enable row level security;
+alter table public.streaks enable row level security;
+alter table public.rewards enable row level security;
+alter table public.reward_claims enable row level security;
+alter table public.invites enable row level security;
+alter table public.mutes enable row level security;
+alter table public.reports enable row level security;
+
+create policy regions_read on public.regions for select using (public.is_member());
+create policy regions_admin_write on public.regions for all using (public.is_admin()) with check (public.is_admin());
+create policy profiles_read on public.profiles for select using (public.is_member());
+create policy profiles_update_own on public.profiles for update using (id = auth.uid()) with check (id = auth.uid() and is_admin = public.is_admin());
+create policy profiles_admin_delete on public.profiles for delete using (public.is_admin());
+create policy spots_read on public.spots for select using (public.is_member());
+create policy spots_insert on public.spots for insert with check (public.is_member() and created_by = auth.uid());
+create policy spots_update_own on public.spots for update using (created_by = auth.uid()) with check (created_by = auth.uid());
+create policy spots_delete_own on public.spots for delete using (created_by = auth.uid() or public.is_admin());
+create policy brands_read on public.brands for select using (public.is_member());
+create policy brands_insert on public.brands for insert with check (public.is_member());
+create policy brands_admin_change on public.brands for all using (public.is_admin()) with check (public.is_admin());
+create policy sessions_read on public.sessions for select using (public.is_member());
+create policy sessions_insert_own on public.sessions for insert with check (public.is_member() and author = auth.uid());
+create policy sessions_update_own on public.sessions for update using (author = auth.uid()) with check (author = auth.uid());
+create policy sessions_delete_own on public.sessions for delete using (author = auth.uid() or public.is_admin());
+create policy session_rsvps_read on public.session_rsvps for select using (public.is_member());
+create policy session_rsvps_insert_own on public.session_rsvps for insert with check (public.is_member() and user_id = auth.uid());
+create policy session_rsvps_update_own on public.session_rsvps for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy session_rsvps_delete_own on public.session_rsvps for delete using (user_id = auth.uid());
+create policy posts_read on public.posts for select using (public.is_member());
+create policy posts_insert_own on public.posts for insert with check (public.is_member() and author = auth.uid());
+create policy posts_update_own on public.posts for update using (author = auth.uid()) with check (author = auth.uid());
+create policy posts_delete_own on public.posts for delete using (author = auth.uid() or public.is_admin());
+create policy post_tags_read on public.post_tags for select using (public.is_member());
+create policy post_tags_insert_by_post_author on public.post_tags for insert with check (exists (select 1 from public.posts p where p.id = post_id and p.author = auth.uid()));
+create policy post_tags_delete_by_post_author on public.post_tags for delete using (exists (select 1 from public.posts p where p.id = post_id and p.author = auth.uid()));
+create policy comments_read on public.post_comments for select using (public.is_member());
+create policy comments_insert_own on public.post_comments for insert with check (public.is_member() and author = auth.uid());
+create policy comments_update_own on public.post_comments for update using (author = auth.uid()) with check (author = auth.uid());
+create policy comments_delete_own on public.post_comments for delete using (author = auth.uid() or public.is_admin());
+create policy likes_read on public.post_likes for select using (public.is_member());
+create policy likes_insert_own on public.post_likes for insert with check (public.is_member() and user_id = auth.uid());
+create policy likes_delete_own on public.post_likes for delete using (user_id = auth.uid());
+create policy connections_read_parties on public.connections for select using (public.is_member() and auth.uid() in (user_a, user_b));
+create policy room_messages_read on public.room_messages for select using (public.is_member());
+create policy room_messages_insert_own on public.room_messages for insert with check (public.is_member() and author = auth.uid());
+create policy room_messages_update_own on public.room_messages for update using (author = auth.uid()) with check (author = auth.uid());
+create policy room_messages_delete_own on public.room_messages for delete using (author = auth.uid() or public.is_admin());
+create policy dms_read_parties on public.dm_messages for select using (public.is_member() and auth.uid() in (sender, recipient));
+create policy dms_insert_sender on public.dm_messages for insert with check (public.is_member() and sender = auth.uid());
+create policy dms_update_recipient on public.dm_messages for update using (recipient = auth.uid()) with check (recipient = auth.uid());
+create policy dms_delete_sender on public.dm_messages for delete using (sender = auth.uid());
+create policy events_read on public.events for select using (public.is_member());
+create policy events_insert_own on public.events for insert with check (public.is_member() and author = auth.uid());
+create policy events_update_own on public.events for update using (author = auth.uid()) with check (author = auth.uid());
+create policy events_delete_own on public.events for delete using (author = auth.uid() or public.is_admin());
+create policy event_rsvps_read on public.event_rsvps for select using (public.is_member());
+create policy event_rsvps_insert_own on public.event_rsvps for insert with check (public.is_member() and user_id = auth.uid());
+create policy event_rsvps_delete_own on public.event_rsvps for delete using (user_id = auth.uid());
+create policy points_read_own on public.points_events for select using (user_id = auth.uid() or public.is_admin());
+create policy streaks_read_members on public.streaks for select using (public.is_member());
+create policy rewards_read on public.rewards for select using (public.is_member());
+create policy rewards_admin_write on public.rewards for all using (public.is_admin()) with check (public.is_admin());
+create policy reward_claims_read_own on public.reward_claims for select using (user_id = auth.uid() or public.is_admin());
+create policy reward_claims_insert_own on public.reward_claims for insert with check (public.is_member() and user_id = auth.uid());
+create policy reward_claims_admin_update on public.reward_claims for update using (public.is_admin()) with check (public.is_admin());
+create policy invites_read_creator on public.invites for select using (created_by = auth.uid() or used_by = auth.uid() or public.is_admin());
+create policy mutes_read_own on public.mutes for select using (muter = auth.uid());
+create policy mutes_insert_own on public.mutes for insert with check (public.is_member() and muter = auth.uid());
+create policy mutes_delete_own on public.mutes for delete using (muter = auth.uid());
+create policy reports_insert_own on public.reports for insert with check (public.is_member() and reporter = auth.uid());
+create policy reports_read_admin on public.reports for select using (public.is_admin());
+create policy reports_update_admin on public.reports for update using (public.is_admin()) with check (public.is_admin());
+
+grant execute on function public.invite_is_valid(text) to anon, authenticated;
+grant execute on function public.redeem_invite(text,text,text,text) to authenticated;
+grant execute on function public.create_invite(int) to authenticated;
+grant execute on function public.is_member(uuid), public.is_admin(uuid) to anon, authenticated;
+revoke execute on function public.upsert_connection(uuid,uuid,text), public.record_activity(uuid,text,int) from public, anon, authenticated;
+
+-- Media bucket and ownership-scoped writes. Public URLs are intentional because the feed is community-global.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('salty-media', 'salty-media', true, 52428800, array['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm'])
+on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+create policy salty_media_read on storage.objects for select using (bucket_id = 'salty-media');
+create policy salty_media_insert on storage.objects for insert to authenticated
+with check (bucket_id = 'salty-media' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
+create policy salty_media_update on storage.objects for update to authenticated
+using (bucket_id = 'salty-media' and owner_id = auth.uid()::text)
+with check (bucket_id = 'salty-media' and owner_id = auth.uid()::text);
+create policy salty_media_delete on storage.objects for delete to authenticated
+using (bucket_id = 'salty-media' and owner_id = auth.uid()::text);
+
+-- Realtime tables used by the later chat phase and live core/feed refreshes.
+alter publication supabase_realtime add table public.sessions, public.session_rsvps, public.posts, public.post_comments, public.post_likes, public.room_messages, public.dm_messages;
+
+-- Nightly stale-session safety net. Unschedule an old Salty job if this script is adapted/re-run.
+select cron.schedule(
+  'salty-nightly-session-archive',
+  '15 3 * * *',
+  $$update public.sessions set status = 'archived', ended_at = coalesce(ended_at, now()) where status = 'active' and created_at < now() - interval '18 hours'$$
+);
+
+commit;
+
+-- Copy this generated value: it is the first invite code for phone testing.
+select code as bootstrap_invite_code, max_uses
+from public.invites
+where created_by is null
+order by created_at desc
+limit 1;
