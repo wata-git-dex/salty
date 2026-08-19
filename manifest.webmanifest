@@ -1,0 +1,15 @@
+{
+  "id": "/salty/",
+  "name": "Salty",
+  "short_name": "Salty",
+  "description": "Surf with your friends, not your feed.",
+  "start_url": "/salty/",
+  "scope": "/salty/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0A141C",
+  "theme_color": "#0A141C",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
