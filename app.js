@@ -9,6 +9,7 @@ const CONFIG = Object.freeze({
   maxUploadBytes: 50 * 1024 * 1024,
   maxAvatarBytes: 8 * 1024 * 1024,
   maxClipSeconds: 90,
+  emailOtpDigits: 8,
 });
 const CONSENT_VERSION = '1.0';
 const PENDING_AUTH_KEY = 'salty:pending-auth';
@@ -21,8 +22,8 @@ const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
 });
 
 const state = {
-  session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [],
-  currentRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
+  session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [],
+  currentRegion: null, eventRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
   consentNext: 'new', sessionPeople: [], editingSessionId: null, installPrompt: null,
@@ -254,7 +255,7 @@ function openAuth(mode, keepPending = false) {
   }
   $('#newMemberFields').classList.toggle('hidden', !isNew);
   $('#authTitle').textContent = isNew ? 'Join your crew' : 'Welcome back';
-  $('#authSubtitle').textContent = isNew ? 'One email code verifies you. Then you finish your profile and stay signed in.' : 'Use the email connected to your Salty profile. You only need this on a new device or after signing out.';
+  $('#authSubtitle').textContent = isNew ? 'Continue with Google or use one email code. Then finish your profile and stay signed in.' : 'Continue with Google, or use the email connected to your Salty profile. You only need this on a new device or after signing out.';
   if (!keepPending) {
     $('#authMessage').classList.add('hidden');
     $('#authCodeBlock').classList.add('hidden');
@@ -330,17 +331,56 @@ async function sendMagicLink(event) {
   }));
   startEmailCooldown(submit);
   const message = $('#authMessage');
-  message.innerHTML = `<b>Check ${esc(email)}</b><br>Stay in Salty and enter the six-digit code from the newest email. Every new email replaces the older code.`;
+  message.innerHTML = `<b>Check ${esc(email)}</b><br>Stay in Salty and enter the full ${CONFIG.emailOtpDigits}-digit code from the newest email. Every new email replaces the older code.`;
   message.classList.remove('hidden');
   $('#authCodeBlock').classList.remove('hidden');
   setTimeout(() => $('#authCode').focus({ preventScroll: true }), 50);
+}
+
+async function signInWithGoogle() {
+  const isNew = state.authMode === 'new';
+  const button = $('#googleAuthButton');
+  const originalLabel = button.innerHTML;
+  button.disabled = true;
+  button.textContent = 'Opening Google…';
+
+  if (isNew) {
+    const { data: valid, error: inviteError } = await db.rpc('invite_is_valid', { invite_code: state.pendingInvite });
+    if (inviteError || !valid) {
+      button.disabled = false;
+      button.innerHTML = originalLabel;
+      toast(inviteError ? readableError(inviteError) : 'That invite is invalid or has expired.');
+      return;
+    }
+  }
+
+  const redirect = new URL('./', location.href);
+  redirect.search = '';
+  redirect.hash = '';
+  redirect.searchParams.set('auth', 'google');
+  if (isNew) redirect.searchParams.set('invite', state.pendingInvite);
+  const { error } = await db.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: redirect.href },
+  });
+  if (error) {
+    button.disabled = false;
+    button.innerHTML = originalLabel;
+    const message = $('#authMessage');
+    message.textContent = readableError(error);
+    message.classList.remove('hidden');
+    toast(readableError(error), 6000);
+  }
 }
 
 async function verifyEmailCode() {
   const email = (state.authEmail || localStorage.getItem('salty:auth-email') || $('#authEmail').value).trim().toLowerCase();
   const token = $('#authCode').value.replace(/\D/g, '');
   if (!email) { toast('Enter your email and request a new sign-in email first.'); return; }
-  if (!/^\d{6}$/.test(token)) { toast('Enter the six-digit code from the email.'); return; }
+  if (!new RegExp(`^\\d{${CONFIG.emailOtpDigits}}$`).test(token)) {
+    toast(`Enter the full ${CONFIG.emailOtpDigits}-digit code from the email.`);
+    return;
+  }
   const button = $('[data-action="verify-code"]');
   button.disabled = true; button.textContent = 'Verifying…';
   const { data, error } = await db.auth.verifyOtp({ email, token, type: 'email' });
@@ -373,7 +413,7 @@ async function verifyEmailLink() {
   });
   if (error) {
     button.disabled = false; button.textContent = 'Try again';
-    message.innerHTML = `${esc(readableError(error))}<br>Return to Salty and request a fresh email, or use the six-digit code from that email.`;
+    message.innerHTML = `${esc(readableError(error))}<br>Return to Salty and request a fresh email, or use the full ${CONFIG.emailOtpDigits}-digit code from that email.`;
     message.classList.remove('hidden');
     return;
   }
@@ -442,9 +482,10 @@ async function loadApp() {
   state.spots = spotsResult.data;
   state.people = peopleResult.data;
   state.currentRegion = state.regions.find(region => region.id === state.profile.home_region) || state.regions.find(region => region.name === 'California') || state.regions[0];
+  state.eventRegion = state.currentRegion;
   await loadAvatarUrls();
   renderChrome();
-  await Promise.all([loadSessions(), loadPosts(), renderProfile()]);
+  await Promise.all([loadSessions(), loadPosts(), loadEvents(), renderProfile()]);
   renderMembers();
   subscribeRealtime();
 }
@@ -596,6 +637,7 @@ function renderChrome() {
   $('#locationsList').innerHTML = [...new Set(regionSpots.map(spot => spot.general_location).filter(Boolean))].sort().map(location => `<option value="${esc(location)}"></option>`).join('');
   $('#peopleList').innerHTML = state.people.map(person => `<option value="${esc(person.name)}"></option>`).join('');
   $('#drawerProfile').innerHTML = `${avatarMarkup(state.profile)}<div><h3>${esc(state.profile.name)}</h3><p>${esc(state.currentRegion.name)} · Salty Crew</p></div>`;
+  renderEventRegions();
 }
 
 function setView(view) {
@@ -617,6 +659,96 @@ async function loadSessions() {
   if (result.error) { toast(readableError(result.error)); return; }
   state.sessions = result.data || [];
   renderSessions();
+}
+
+function renderEventRegions() {
+  const target = $('#eventRegions');
+  if (!target || !state.eventRegion) return;
+  target.innerHTML = activeRegions().map(region => `<button data-event-region="${region.id}" class="${region.id === state.eventRegion.id ? 'active' : ''}">${esc(region.name)}</button>`).join('');
+  $('#eventRegionName').textContent = state.eventRegion.name;
+}
+
+async function loadEvents() {
+  if (!state.eventRegion) return;
+  const result = await db.from('events')
+    .select('*,spot:spots(*),author_profile:profiles!events_author_fkey(id,name),event_rsvps(user_id,profile:profiles!event_rsvps_user_id_fkey(id,name))')
+    .eq('region_id', state.eventRegion.id).order('start_time', { ascending: true });
+  if (result.error) { toast(readableError(result.error)); return; }
+  state.events = result.data || [];
+  renderEvents();
+}
+
+function eventDate(value) {
+  if (!value) return 'Time coming soon';
+  return new Intl.DateTimeFormat([], { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }).format(new Date(value));
+}
+
+function renderEvents() {
+  const feed = $('#eventsFeed');
+  if (!feed || !state.eventRegion) return;
+  if (!state.events.length) {
+    feed.innerHTML = `<div class="empty"><span>EVENTS</span><h2>No events in ${esc(state.eventRegion.name)} yet</h2><p>Add a comp, movie night, or meetup and the crew can RSVP.</p></div>`;
+    return;
+  }
+  feed.innerHTML = state.events.map(item => {
+    const going = item.event_rsvps || [];
+    const mine = going.some(rsvp => rsvp.user_id === state.profile.id);
+    const crew = going.slice(0, 4).map(rsvp => avatarMarkup(rsvp.profile, 'event-avatar')).join('');
+    const spot = item.spot?.name || '';
+    const location = item.spot?.general_location || '';
+    const place = [spot, location].filter(Boolean).join(' · ');
+    return `<article class="event-card"><i class="stripe"></i><div class="event-heading"><span class="event-icon"><svg><use href="#i-calendar"/></svg></span><div><h2>${esc(item.title)}</h2><p>${esc(eventDate(item.start_time))}${place ? ` · ${esc(place)}` : ''}</p></div></div>${item.description ? `<p class="event-description">${esc(item.description)}</p>` : ''}<div class="event-going"><div class="event-stack">${crew}</div><b>${going.length} going</b></div><div class="card-actions"><button class="small-action surf ${mine ? 'on' : ''}" data-event-rsvp="${item.id}"><svg><use href="#i-check"/></svg>${mine ? 'Going ✓' : 'RSVP'}</button><button class="small-action" data-event-calendar="${item.id}"><svg><use href="#i-calendar"/></svg>Add to calendar</button></div></article>`;
+  }).join('');
+}
+
+async function createEvent(event) {
+  event.preventDefault();
+  const submit = $('#eventForm button[type="submit"]');
+  submit.disabled = true;
+  try {
+    const start = new Date($('#eventTime').value);
+    if (!Number.isFinite(start.getTime()) || start <= new Date()) throw new Error('Pick a future date and time.');
+    const spotName = $('#eventSpot').value.trim();
+    const location = $('#eventLocation').value.trim();
+    const spot = spotName ? await ensureSpot(spotName, location, state.eventRegion.id) : null;
+    const result = await db.from('events').insert({
+      author: state.profile.id,
+      region_id: state.eventRegion.id,
+      title: $('#eventTitle').value.trim(),
+      spot_id: spot?.id || null,
+      start_time: start.toISOString(),
+      description: $('#eventDescription').value.trim() || null,
+    });
+    if (result.error) throw result.error;
+    $('#eventForm').reset(); closeSheet(); await loadEvents(); toast('Event shared with the crew.');
+  } catch (error) { toast(readableError(error), 5000); }
+  finally { submit.disabled = false; }
+}
+
+async function toggleEventRsvp(eventId) {
+  const item = state.events.find(event => event.id === eventId);
+  const mine = item?.event_rsvps?.some(rsvp => rsvp.user_id === state.profile.id);
+  const result = mine
+    ? await db.from('event_rsvps').delete().eq('event_id', eventId).eq('user_id', state.profile.id)
+    : await db.from('event_rsvps').insert({ event_id: eventId, user_id: state.profile.id });
+  if (result.error) { toast(readableError(result.error)); return; }
+  await loadEvents(); await renderProfile();
+}
+
+function addEventToCalendar(eventId) {
+  const item = state.events.find(event => event.id === eventId);
+  if (!item?.start_time) { toast('This event does not have a date yet.'); return; }
+  const clean = value => String(value || '').replace(/([,;\\])/g, '\\$1').replace(/\n/g, '\\n');
+  const stamp = date => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const start = new Date(item.start_time);
+  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  const place = [item.spot?.name, item.spot?.general_location].filter(Boolean).join(', ');
+  const body = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Salty//Events//EN','BEGIN:VEVENT',`UID:${item.id}@saltyviewfinder.com`,`DTSTAMP:${stamp(new Date())}`,`DTSTART:${stamp(start)}`,`DTEND:${stamp(end)}`,`SUMMARY:${clean(item.title)}`,`DESCRIPTION:${clean(item.description)}`,`LOCATION:${clean(place)}`,'END:VEVENT','END:VCALENDAR'].join('\r\n');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([body], { type:'text/calendar;charset=utf-8' }));
+  link.download = `${item.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'salty-event'}.ics`;
+  link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  toast('Calendar event ready.');
 }
 
 function sessionWhen(session) {
@@ -939,6 +1071,8 @@ function subscribeRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, async () => await loadPosts())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'post_likes' }, async () => await loadPosts())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'post_comments' }, async () => await loadPosts())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, async () => await loadEvents())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'event_rsvps' }, async () => await loadEvents())
     .subscribe();
 }
 
@@ -977,6 +1111,9 @@ document.addEventListener('click', async event => {
   const sessionRoleNode = event.target.closest('[data-session-role]');
   const memberNode = event.target.closest('[data-member]');
   const iconThemeNode = event.target.closest('[data-icon-theme]');
+  const eventRegionNode = event.target.closest('[data-event-region]');
+  const eventRsvpNode = event.target.closest('[data-event-rsvp]');
+  const eventCalendarNode = event.target.closest('[data-event-calendar]');
   if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
   if (viewNode) setView(viewNode.dataset.view);
   if (memberNode) openMember(memberNode.dataset.member);
@@ -992,6 +1129,11 @@ document.addEventListener('click', async event => {
       renderSessions();
     } else await loadSessions();
   }
+  if (eventRegionNode) {
+    state.eventRegion = state.regions.find(region => region.id === eventRegionNode.dataset.eventRegion);
+    renderEventRegions();
+    if (!state.preview) await loadEvents();
+  }
   if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'edit-profile', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
@@ -1000,6 +1142,8 @@ document.addEventListener('click', async event => {
   if (editSessionNode) openSessionComposer(editSessionNode.dataset.editSession);
   if (endNode) await endSession(endNode.dataset.endSession);
   if (likeNode) await toggleLike(likeNode.dataset.like);
+  if (eventRsvpNode) await toggleEventRsvp(eventRsvpNode.dataset.eventRsvp);
+  if (eventCalendarNode) addEventToCalendar(eventCalendarNode.dataset.eventCalendar);
   if (whenNode) {
     $$('[data-when]').forEach(button => button.classList.toggle('active', button === whenNode));
     $('#sessionTime').classList.toggle('hidden', whenNode.dataset.when !== 'later');
@@ -1016,6 +1160,7 @@ document.addEventListener('click', async event => {
     'accept-consent': acceptConsent,
     'consent-back': leaveConsent,
     'view-consent': () => openConsent('settings'),
+    'google-auth': signInWithGoogle,
     'verify-code': verifyEmailCode,
     'verify-link': verifyEmailLink,
     'open-drawer': openDrawer,
@@ -1024,6 +1169,7 @@ document.addEventListener('click', async event => {
     'open-session': () => openSessionComposer(),
     'add-session-person': addSessionPerson,
     'open-post': () => openSheet('postSheet'),
+    'open-event': () => openSheet('eventSheet'),
     'show-install': showInstallInstructions,
     'dismiss-install': dismissInstallNudge,
     'native-install': runNativeInstall,
@@ -1049,6 +1195,7 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'profileForm') await completeProfile(event);
   else if (event.target.id === 'sessionForm') await createSession(event);
   else if (event.target.id === 'postForm') await createPost(event);
+  else if (event.target.id === 'eventForm') await createEvent(event);
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);
 });
 

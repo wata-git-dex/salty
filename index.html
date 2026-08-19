@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=19">
+  <link rel="stylesheet" href="./styles.css?v=22">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -101,15 +101,17 @@
     <div class="auth-card">
       <svg class="auth-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg>
       <h1 id="authTitle">Join your crew</h1>
-      <p id="authSubtitle">A six-digit email code signs you in—no password or SMS.</p>
+      <p id="authSubtitle">Continue with Google or use one email code.</p>
+      <div id="newMemberFields" class="auth-step"><b>First, verify who you are.</b><span>Use Google or verify your email, then build your member profile.</span></div>
+      <button id="googleAuthButton" class="oauth-button" type="button" data-action="google-auth"><span class="oauth-g" aria-hidden="true">G</span><span>Continue with Google</span></button>
+      <div class="auth-divider" aria-hidden="true"><span>or use email</span></div>
       <form id="authForm">
-        <div id="newMemberFields" class="auth-step"><b>First, verify your email.</b><span>Enter the code from your email, then build your member profile.</span></div>
         <label>Email<input id="authEmail" name="email" autocomplete="email" inputmode="email" type="email" required placeholder="you@example.com"></label>
         <button class="primary" type="submit">Email me a sign-in code</button>
       </form>
       <div id="authMessage" class="auth-message hidden" role="status"></div>
       <div id="authCodeBlock" class="auth-code hidden">
-        <label>Six-digit code<input id="authCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"></label>
+        <label>Eight-digit code<input id="authCode" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" enterkeyhint="done" maxlength="8" placeholder="00000000"></label>
         <button class="secondary-button" type="button" data-action="verify-code">Verify code</button>
       </div>
     </div>
@@ -178,7 +180,7 @@
       </div>
 
       <div id="view-chat" class="app-view"><div class="phase-card"><span>CHAT</span><h2>Area chat is next</h2><p>Realtime region rooms and private DMs arrive in the next build phase.</p></div></div>
-      <div id="view-events" class="app-view"><div class="phase-card"><span>EVENTS</span><h2>Events are next</h2><p>Regional comps, movie nights and meetups arrive after chat.</p></div></div>
+      <div id="view-events" class="app-view"><div id="eventRegions" class="event-regions"></div><button class="add-content" data-action="open-event"><svg><use href="#i-plus"/></svg>Add an event</button><div id="eventsFeed"></div></div>
 
       <div id="view-you" class="app-view"><div id="profileView" class="profile"></div></div>
       <div id="view-members" class="app-view sub-view"><div class="backbar"><button data-view="you"><svg><use href="#i-back"/></svg></button><h2>Members</h2></div><div id="membersList" class="members-list"></div></div>
@@ -249,6 +251,19 @@
       </form>
     </section>
 
+    <section id="eventSheet" class="sheet" aria-modal="true" role="dialog">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <h2>Add an event</h2><p>Comps, movie nights, and meetups for <b id="eventRegionName">your area</b>.</p>
+      <form id="eventForm">
+        <label>Event name<input id="eventTitle" maxlength="160" required placeholder="Friday night surf movie"></label>
+        <label>Date and time<input id="eventTime" type="datetime-local" required></label>
+        <label>Spot or venue <small>optional</small><input id="eventSpot" maxlength="120" placeholder="Old Man's or Salty HQ" list="spotsList"></label>
+        <label>General location <small>optional</small><input id="eventLocation" maxlength="160" placeholder="San Onofre" list="locationsList"></label>
+        <label>Description<textarea id="eventDescription" maxlength="1200" placeholder="What should the crew know?"></textarea></label>
+        <button class="primary" type="submit">Share event</button>
+      </form>
+    </section>
+
     <section id="installSheet" class="sheet install-sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <div class="install-app-mark"><img src="./icon-ink.svg" alt="Salty app icon"></div>
@@ -262,6 +277,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=19" defer></script>
+  <script src="./app.js?v=22" defer></script>
 </body>
 </html>
