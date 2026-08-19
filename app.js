@@ -11,6 +11,8 @@ const CONFIG = Object.freeze({
   maxClipSeconds: 90,
 });
 const CONSENT_VERSION = '1.0';
+const PENDING_AUTH_KEY = 'salty:pending-auth';
+const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
 
 // Upgrade runway: after moving Supabase to Pro, raise maxUploadBytes and replace
 // uploadMedia() with a TUS resumable implementation. Callers do not need to change.
@@ -23,7 +25,7 @@ const state = {
   currentRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
-  consentNext: 'new',
+  consentNext: 'new', sessionPeople: [], editingSessionId: null, installPrompt: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -33,6 +35,29 @@ const initials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map
 const formatCount = number => new Intl.NumberFormat().format(number || 0);
 const inviteFromUrl = () => new URLSearchParams(location.search).get('invite')?.trim() || '';
 const ICON_THEMES = new Set(['ink', 'amber', 'foam', 'ocean']);
+
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function readPendingAuth() {
+  try {
+    const pending = JSON.parse(localStorage.getItem(PENDING_AUTH_KEY) || 'null');
+    if (!pending?.email || Date.now() - pending.sentAt > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(PENDING_AUTH_KEY);
+      return null;
+    }
+    return pending;
+  } catch (_error) {
+    localStorage.removeItem(PENDING_AUTH_KEY);
+    return null;
+  }
+}
+
+function clearPendingAuth() {
+  localStorage.removeItem(PENDING_AUTH_KEY);
+  localStorage.removeItem('salty:auth-email');
+}
 
 function applyIconTheme(theme = 'ink', announce = false) {
   const chosen = ICON_THEMES.has(theme) ? theme : 'ink';
@@ -118,7 +143,7 @@ function startEmailCooldown(button, seconds = 60) {
     if (remaining > 0) { button.textContent = `Email sent · resend in ${remaining}s`; return; }
     clearInterval(startEmailCooldown.timer);
     button.disabled = false;
-    button.textContent = 'Email me a magic link';
+    button.textContent = 'Email me a sign-in code';
   }, 1000);
 }
 
@@ -127,6 +152,12 @@ async function init() {
   if (params.get('preview') === '1') {
     runPreview();
     return;
+  }
+  if ('serviceWorker' in navigator && !/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
+    try {
+      const registration = await navigator.serviceWorker.register('./sw.js', { scope: '/salty/' });
+      await registration.update();
+    } catch (error) { console.warn('Service worker registration deferred:', error); }
   }
   state.pendingInvite = inviteFromUrl() || localStorage.getItem('salty:invite') || '';
   if (state.pendingInvite) localStorage.setItem('salty:invite', state.pendingInvite);
@@ -144,10 +175,9 @@ async function init() {
   if (error) toast(readableError(error));
   state.session = data?.session || null;
 
-  db.auth.onAuthStateChange(async (_event, session) => {
-    if (session?.user?.id === state.session?.user?.id) return;
+  db.auth.onAuthStateChange((event, session) => {
     state.session = session;
-    if (session) await enterCommunity();
+    if (event === 'SIGNED_OUT') setTimeout(showWelcome, 0);
   });
 
   if (state.session) {
@@ -155,12 +185,8 @@ async function init() {
     if (accepted) await enterCommunity();
     else openConsent('session');
   }
-  else showWelcome();
+  else if (!restorePendingAuth()) showWelcome();
 
-  if ('serviceWorker' in navigator && !/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
-    try { await navigator.serviceWorker.register('./sw.js', { scope: '/salty/' }); }
-    catch (error) { console.warn('Service worker registration deferred:', error); }
-  }
 }
 
 function runPreview() {
@@ -172,10 +198,10 @@ function runPreview() {
   state.regions = [{ id: regionId, name: 'California' }, { id: 'fr', name: 'France' }, { id: 'de', name: 'Germany' }, { id: 'ut', name: 'Utah' }];
   state.currentRegion = state.regions[0];
   state.people = [state.profile, { id: 'jonah', name: 'Jonah Reyes', nickname:'Jo', home_region:regionId, sponsors:['Snake Eyes'], onboarding_complete:true }, { id: 'mateo', name: 'Mateo Karras', nickname:null, home_region:regionId, sponsors:[], onboarding_complete:true }];
-  state.spots = [{ id: 'malibu', name: 'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', region_id: regionId }];
+  state.spots = [{ id: 'malibu', name: 'Malibu', general_location:'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', general_location:'San Clemente', region_id: regionId }];
   state.previewSessions = [
-    { id:'mine', author:userId, region_id:regionId, author_role:'film', featured_surfer_name:'Sam', when_label:'Now', wants_filmer:false, note:'bringing the long lens', spot:{name:'Malibu'}, author_profile:{name:'Cyrus V.'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah Reyes'}}]},
-    { id:'crew', author:'jonah', region_id:regionId, author_role:'surf', featured_surfer_name:null, when_label:'Scheduled', surf_time:new Date(Date.now() + 3 * 86400000).toISOString(), wants_filmer:true, note:'sunrise window', spot:{name:'Lowers'}, author_profile:{name:'Jonah Reyes'}, session_rsvps:[] },
+    { id:'mine', author:userId, region_id:regionId, author_role:'film', participant_names:['Sam'], when_label:'Now', wants_filmer:false, note:'bringing the long lens', spot:{name:'Malibu',general_location:'Malibu'}, author_profile:{name:'Cyrus V.'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah Reyes'}}]},
+    { id:'crew', author:'jonah', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 3 * 86400000).toISOString(), wants_filmer:true, note:'sunrise window', spot:{name:'Lowers',general_location:'San Clemente'}, author_profile:{name:'Jonah Reyes'}, session_rsvps:[] },
   ];
   state.sessions = state.previewSessions;
   state.posts = [];
@@ -189,13 +215,18 @@ function renderPreviewProfile() {
 }
 
 function showWelcome() {
+  if (isStandalone()) {
+    openAuth('existing');
+    $('#authSubtitle').textContent = 'This saved app is not signed in yet. Verify once on this phone and it will open straight into Salty after that.';
+    return;
+  }
   showOnly('welcome');
   const hasInvite = Boolean(state.pendingInvite);
   $('#enterButton').classList.toggle('hidden', !hasInvite);
   $('#inviteInstruction').classList.toggle('hidden', hasInvite);
 }
 
-function openAuth(mode) {
+function openAuth(mode, keepPending = false) {
   state.authMode = mode;
   const isNew = mode === 'new';
   if (isNew && !state.pendingInvite) {
@@ -204,16 +235,37 @@ function openAuth(mode) {
   }
   $('#newMemberFields').classList.toggle('hidden', !isNew);
   $('#authTitle').textContent = isNew ? 'Join your crew' : 'Welcome back';
-  $('#authSubtitle').textContent = isNew ? 'One email link verifies you. Then you finish your profile and stay signed in.' : 'Use the email connected to your Salty profile. You only need this on a new device or after signing out.';
-  $('#authMessage').classList.add('hidden');
-  $('#authCodeBlock').classList.add('hidden');
-  $('#authCode').value = '';
+  $('#authSubtitle').textContent = isNew ? 'One email code verifies you. Then you finish your profile and stay signed in.' : 'Use the email connected to your Salty profile. You only need this on a new device or after signing out.';
+  if (!keepPending) {
+    $('#authMessage').classList.add('hidden');
+    $('#authCodeBlock').classList.add('hidden');
+    $('#authCode').value = '';
+  }
+  $('#authEmail').value = state.authEmail || localStorage.getItem('salty:auth-email') || '';
   showOnly('authScreen');
+}
+
+function restorePendingAuth() {
+  const pending = readPendingAuth();
+  if (!pending) return false;
+  state.authEmail = pending.email;
+  state.authMode = pending.mode === 'new' ? 'new' : 'existing';
+  if (pending.invite) {
+    state.pendingInvite = pending.invite;
+    localStorage.setItem('salty:invite', pending.invite);
+  }
+  openAuth(state.authMode, true);
+  $('#authEmail').value = pending.email;
+  const message = $('#authMessage');
+  message.innerHTML = `<b>Use the newest email sent to ${esc(pending.email)}</b><br>Enter its six-digit code below. Every new email cancels the older code.`;
+  message.classList.remove('hidden');
+  $('#authCodeBlock').classList.remove('hidden');
+  return true;
 }
 
 async function sendMagicLink(event) {
   event.preventDefault();
-  const email = $('#authEmail').value.trim();
+  const email = $('#authEmail').value.trim().toLowerCase();
   state.authEmail = email;
   localStorage.setItem('salty:auth-email', email);
   const isNew = state.authMode === 'new';
@@ -224,7 +276,7 @@ async function sendMagicLink(event) {
   if (isNew) {
     const { data: valid, error: inviteError } = await db.rpc('invite_is_valid', { invite_code: state.pendingInvite });
     if (inviteError || !valid) {
-      submit.disabled = false; submit.textContent = 'Email me a magic link';
+      submit.disabled = false; submit.textContent = 'Email me a sign-in code';
       toast(inviteError ? readableError(inviteError) : 'That invite is invalid or has expired.');
       return;
     }
@@ -240,7 +292,7 @@ async function sendMagicLink(event) {
       shouldCreateUser: isNew,
     },
   });
-  submit.disabled = false; submit.textContent = 'Email me a magic link';
+  submit.disabled = false; submit.textContent = 'Email me a sign-in code';
   if (error) {
     const copy = readableError(error);
     const message = $('#authMessage');
@@ -249,25 +301,37 @@ async function sendMagicLink(event) {
     toast(copy, 6000);
     return;
   }
+  localStorage.setItem(PENDING_AUTH_KEY, JSON.stringify({
+    email,
+    mode: isNew ? 'new' : 'existing',
+    invite: isNew ? state.pendingInvite : '',
+    sentAt: Date.now(),
+  }));
   startEmailCooldown(submit);
   const message = $('#authMessage');
-  message.innerHTML = `<b>Check ${esc(email)}</b><br>Tap the button in the email, then tap “Verify and open Salty.” If email opens in a different browser, enter its six-digit code below.`;
+  message.innerHTML = `<b>Check ${esc(email)}</b><br>Enter the six-digit code from the newest Salty email here. Or use the email button as a fallback. Every new email cancels the older code.`;
   message.classList.remove('hidden');
   $('#authCodeBlock').classList.remove('hidden');
 }
 
 async function verifyEmailCode() {
-  const email = state.authEmail || localStorage.getItem('salty:auth-email') || $('#authEmail').value.trim();
-  const token = $('#authCode').value.trim();
+  const email = (state.authEmail || localStorage.getItem('salty:auth-email') || $('#authEmail').value).trim().toLowerCase();
+  const token = $('#authCode').value.replace(/\D/g, '');
   if (!email) { toast('Enter your email and request a new sign-in email first.'); return; }
   if (!/^\d{6}$/.test(token)) { toast('Enter the six-digit code from the email.'); return; }
   const button = $('[data-action="verify-code"]');
   button.disabled = true; button.textContent = 'Verifying…';
   const { data, error } = await db.auth.verifyOtp({ email, token, type: 'email' });
   button.disabled = false; button.textContent = 'Verify code';
-  if (error) { toast(readableError(error), 6000); return; }
+  if (error) {
+    const message = $('#authMessage');
+    message.innerHTML = `<b>That code is not current.</b><br>Use the six-digit code from the newest Salty email. If you requested another email, the previous code stopped working.`;
+    message.classList.remove('hidden');
+    toast('Use the newest six-digit code. Requesting another email cancels the previous one.', 7000);
+    return;
+  }
   state.session = data.session;
-  localStorage.removeItem('salty:auth-email');
+  clearPendingAuth();
   await enterCommunity();
 }
 
@@ -291,7 +355,7 @@ async function verifyEmailLink() {
     return;
   }
   state.session = data.session;
-  localStorage.removeItem('salty:auth-email');
+  clearPendingAuth();
   await enterCommunity();
 }
 
@@ -332,8 +396,9 @@ async function enterCommunity() {
   }
   await loadApp();
   showOnly('app');
-  localStorage.removeItem('salty:auth-email');
+  clearPendingAuth();
   cleanAuthUrl();
+  offerInstallAfterAuth();
 }
 
 async function loadApp() {
@@ -358,6 +423,46 @@ async function loadApp() {
 function cleanAuthUrl() {
   if (!location.hash && !location.search) return;
   history.replaceState({}, '', location.pathname);
+}
+
+function offerInstallAfterAuth() {
+  const installed = isStandalone();
+  $('#installSettingsRow').classList.toggle('hidden', installed);
+  $('#installNudge').classList.toggle('hidden', installed || Boolean(localStorage.getItem(INSTALL_DISMISSED_KEY)));
+}
+
+function showInstallInstructions() {
+  if (isStandalone()) {
+    toast('Salty is already installed on this phone.');
+    return;
+  }
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const steps = ios
+    ? ['Stay on this signed-in Salty screen.', 'Tap the Share button in your browser.', 'Choose “Add to Home Screen,” then tap “Add.”', 'Open Salty from the new Home Screen icon.']
+    : ['Stay on this signed-in Salty screen.', 'Open your browser menu and choose “Install app” or “Add to Home Screen.”', 'Confirm the installation, then open Salty from its icon.'];
+  $('#installSteps').innerHTML = steps.map(step => `<li>${esc(step)}</li>`).join('');
+  $('#nativeInstallButton').classList.toggle('hidden', !state.installPrompt);
+  openSheet('installSheet');
+}
+
+function dismissInstallNudge() {
+  localStorage.setItem(INSTALL_DISMISSED_KEY, '1');
+  $('#installNudge').classList.add('hidden');
+}
+
+async function runNativeInstall() {
+  if (!state.installPrompt) {
+    showInstallInstructions();
+    return;
+  }
+  state.installPrompt.prompt();
+  const choice = await state.installPrompt.userChoice;
+  state.installPrompt = null;
+  if (choice.outcome === 'accepted') {
+    localStorage.setItem(INSTALL_DISMISSED_KEY, '1');
+    closeSheet();
+    $('#installNudge').classList.add('hidden');
+  }
 }
 
 async function showProfileSetup() {
@@ -409,7 +514,7 @@ async function completeProfile(event) {
     if (result.error) throw result.error;
     state.profile = result.data;
     $('#profileForm').reset();
-    await loadApp(); showOnly('app'); cleanAuthUrl(); toast('Profile saved. Welcome to Salty.');
+    await loadApp(); showOnly('app'); cleanAuthUrl(); offerInstallAfterAuth(); toast('Profile saved. Welcome to Salty.');
   } catch (error) { toast(readableError(error), 6000); }
   finally { submit.disabled = false; submit.textContent = state.profile.onboarding_complete ? 'Save changes' : 'Save profile and enter Salty'; }
 }
@@ -437,9 +542,15 @@ function avatarMarkup(profile, className = 'avatar') {
 }
 
 const navItems = [
-  ['surfing', 'i-surf', 'Surfing'], ['feed', 'i-feed', 'Feed'], ['chat', 'i-chat', 'Chat'],
-  ['events', 'i-calendar', 'Events'], ['you', 'i-user', 'You'],
+  ['surfing', 'i-surf', 'Surfing'], ['feed', 'i-wave', 'Stoke'], ['chat', 'i-chat', 'Chat'],
+  ['events', 'i-calendar', 'Events'], ['you', 'i-user', 'Profile'],
 ];
+
+function activeRegions() {
+  const memberRegionIds = new Set(state.people.map(person => person.home_region).filter(Boolean));
+  if (state.profile?.home_region) memberRegionIds.add(state.profile.home_region);
+  return state.regions.filter(region => memberRegionIds.has(region.id));
+}
 
 function renderNav(target) {
   target.innerHTML = navItems.map(([view, icon, label]) => `<button data-view="${view}" class="${state.view === view ? 'active' : ''}"><svg><use href="#${icon}"/></svg>${label}</button>`).join('');
@@ -449,8 +560,11 @@ function renderChrome() {
   renderNav($('#mobileNav')); renderNav($('#desktopNav'));
   $('#locationName').textContent = state.currentRegion.name;
   $('#sessionRegionName').textContent = state.currentRegion.name;
-  $('#regionMenu').innerHTML = state.regions.map(region => `<button data-region="${region.id}" class="${region.id === state.currentRegion.id ? 'active' : ''}">${esc(region.name)} <small>view sessions</small></button>`).join('');
-  $('#spotsList').innerHTML = state.spots.map(spot => `<option value="${esc(spot.name)}"></option>`).join('');
+  const visibleRegions = activeRegions();
+  $('#regionMenu').innerHTML = visibleRegions.map(region => `<button data-region="${region.id}" class="${region.id === state.currentRegion.id ? 'active' : ''}">${esc(region.name)} <small>view sessions</small></button>`).join('');
+  const regionSpots = state.spots.filter(spot => spot.region_id === state.currentRegion.id);
+  $('#spotsList').innerHTML = regionSpots.map(spot => `<option value="${esc(spot.name)}"></option>`).join('');
+  $('#locationsList').innerHTML = [...new Set(regionSpots.map(spot => spot.general_location).filter(Boolean))].sort().map(location => `<option value="${esc(location)}"></option>`).join('');
   $('#peopleList').innerHTML = state.people.map(person => `<option value="${esc(person.name)}"></option>`).join('');
   $('#drawerProfile').innerHTML = `${avatarMarkup(state.profile)}<div><h3>${esc(state.profile.name)}</h3><p>${esc(state.currentRegion.name)} · Salty Crew</p></div>`;
 }
@@ -469,7 +583,7 @@ function setView(view) {
 
 async function loadSessions() {
   const result = await db.from('sessions')
-    .select('*,spot:spots(id,name),author_profile:profiles!sessions_author_fkey(id,name),session_rsvps(id,user_id,role,profile:profiles!session_rsvps_user_id_fkey(id,name))')
+    .select('*,spot:spots(*),author_profile:profiles!sessions_author_fkey(id,name),session_rsvps(id,user_id,role,profile:profiles!session_rsvps_user_id_fkey(id,name))')
     .eq('region_id', state.currentRegion.id).eq('status', 'active').order('created_at', { ascending: false });
   if (result.error) { toast(readableError(result.error)); return; }
   state.sessions = result.data || [];
@@ -479,6 +593,12 @@ async function loadSessions() {
 function sessionWhen(session) {
   if (session.when_label === 'Now' || !session.surf_time) return 'out now';
   return new Intl.DateTimeFormat([], { weekday:'short', hour:'numeric', minute:'2-digit' }).format(new Date(session.surf_time));
+}
+
+function spotMapUrl(spot) {
+  if (!spot?.general_location) return '';
+  const query = [spot.name, spot.general_location].filter(Boolean).join(', ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
 function renderSessions() {
@@ -498,52 +618,111 @@ function renderSessions() {
   feed.innerHTML = orderedSessions.map(session => {
     const mine = session.author === state.profile.id;
     const myRsvp = session.session_rsvps.find(rsvp => rsvp.user_id === state.profile.id);
-    const surfers = [session.featured_surfer_name, ...session.session_rsvps.filter(rsvp => rsvp.role === 'surf').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
+    const surfers = [...(session.participant_names || []), session.featured_surfer_name, ...session.session_rsvps.filter(rsvp => rsvp.role === 'surf').map(rsvp => rsvp.profile?.name)]
+      .filter(Boolean)
+      .filter((name, index, names) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
     const filmers = session.session_rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name).filter((name, index, names) => name && names.indexOf(name) === index);
     const crewSummary = [surfers.length ? `<b>${esc(surfers.join(', '))}</b> surfing` : '', filmers.length ? `<b>${esc(filmers.join(', '))}</b> filming` : ''].filter(Boolean).join(' · ');
     const authorRole = session.author_role === 'film' ? 'filming' : 'surfing';
     const actions = mine
-      ? `<button class="small-action end" data-end-session="${session.id}"><svg><use href="#i-close"/></svg>End session</button>`
+      ? `<button class="small-action edit" data-edit-session="${session.id}">Edit surf</button><button class="small-action end" data-end-session="${session.id}"><svg><use href="#i-close"/></svg>End session</button>`
       : `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-check"/></svg>${myRsvp?.role === 'surf' ? "You're in" : "I'm down"}</button><button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : "I'll film"}</button>`;
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i><div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you started this session' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag">Wants filmer</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p><div class="card-actions">${actions}</div></article>`;
+    const mapUrl = spotMapUrl(session.spot);
+    const location = session.spot?.general_location ? `<a class="spot-location" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}</a>` : '';
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i><div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you started this session' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag">Wants filmer</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p><div class="card-actions">${actions}</div></article>`;
   }).join('');
 }
 
-async function ensureSpot(name, regionId) {
+async function ensureSpot(name, generalLocation, regionId) {
   const cleanName = name.trim();
-  let spot = state.spots.find(item => item.name.toLowerCase() === cleanName.toLowerCase() && item.region_id === regionId);
+  const cleanLocation = generalLocation.trim();
+  let spot = state.spots.find(item => item.name.toLowerCase() === cleanName.toLowerCase()
+    && item.region_id === regionId
+    && (!cleanLocation || (item.general_location || '').toLowerCase() === cleanLocation.toLowerCase()));
   if (spot) return spot;
-  const result = await db.from('spots').insert({ name: cleanName, region_id: regionId, created_by: state.profile.id }).select().single();
+  const result = await db.from('spots').insert({ name: cleanName, general_location: cleanLocation || null, region_id: regionId, created_by: state.profile.id }).select().single();
   if (result.error) throw result.error;
   state.spots.push(result.data);
   renderChrome();
   return result.data;
 }
 
+function renderSessionPeopleChips() {
+  $('#sessionPeopleChips').innerHTML = state.sessionPeople.map((name, index) => `<button type="button" data-remove-session-person="${index}">${esc(name)}<span>×</span></button>`).join('');
+}
+
+function addSessionPerson(rawName = $('#sessionPersonInput').value) {
+  const names = rawName.split(',').map(name => name.trim()).filter(Boolean);
+  names.forEach(name => {
+    if (state.sessionPeople.length >= 20) return;
+    if (!state.sessionPeople.some(existing => existing.toLowerCase() === name.toLowerCase()) && name.toLowerCase() !== state.profile.name.toLowerCase()) state.sessionPeople.push(name);
+  });
+  $('#sessionPersonInput').value = '';
+  renderSessionPeopleChips();
+}
+
+function resetSessionComposer() {
+  state.editingSessionId = null;
+  state.sessionPeople = [];
+  $('#sessionForm').reset();
+  $('#sessionSheetTitle').textContent = 'Share a surf';
+  $('#sessionSubmit').textContent = 'Share session';
+  $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === 'now'));
+  $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === 'surf'));
+  $('#sessionTime').classList.add('hidden');
+  $('#wantsFilmerRow').classList.remove('hidden');
+  renderSessionPeopleChips();
+}
+
+function openSessionComposer(sessionId = null) {
+  resetSessionComposer();
+  const session = sessionId ? state.sessions.find(item => item.id === sessionId && item.author === state.profile.id) : null;
+  if (session) {
+    state.editingSessionId = session.id;
+    state.sessionPeople = [...(session.participant_names || (session.featured_surfer_name ? [session.featured_surfer_name] : []))];
+    $('#sessionSheetTitle').textContent = 'Edit surf';
+    $('#sessionSubmit').textContent = 'Save changes';
+    $('#sessionSpot').value = session.spot?.name || '';
+    $('#sessionLocation').value = session.spot?.general_location || '';
+    const later = session.when_label !== 'Now';
+    $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === (later ? 'later' : 'now')));
+    $('#sessionTime').classList.toggle('hidden', !later);
+    if (session.surf_time) {
+      const localDate = new Date(new Date(session.surf_time).getTime() - new Date(session.surf_time).getTimezoneOffset() * 60000);
+      $('#sessionTime').value = localDate.toISOString().slice(0, 16);
+    }
+    $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === session.author_role));
+    $('#wantsFilmerRow').classList.toggle('hidden', session.author_role === 'film');
+    $('#wantsFilmer').checked = session.wants_filmer;
+    $('#sessionNote').value = session.note || '';
+    renderSessionPeopleChips();
+  }
+  openSheet('sessionSheet');
+}
+
 async function createSession(event) {
   event.preventDefault();
   const submit = $('#sessionForm button[type="submit"]'); submit.disabled = true;
   try {
-    const spot = await ensureSpot($('#sessionSpot').value, state.currentRegion.id);
+    if ($('#sessionPersonInput').value.trim()) addSessionPerson();
+    const spot = await ensureSpot($('#sessionSpot').value, $('#sessionLocation').value, state.currentRegion.id);
     const later = $('[data-when="later"]').classList.contains('active');
     const surfTime = later ? $('#sessionTime').value : null;
     if (later && !surfTime) throw new Error('Pick a date and time.');
     if (surfTime && new Date(surfTime) <= new Date()) throw new Error('Pick a future date and time.');
-    const featuredSurferName = $('#sessionSurferName').value.trim();
-    const featuredSurfer = featuredSurferName ? matchingPerson(featuredSurferName) : null;
-    const result = await db.from('sessions').insert({
+    const payload = {
       author: state.profile.id, spot_id: spot.id, region_id: state.currentRegion.id,
       when_label: later ? 'Scheduled' : 'Now', surf_time: surfTime ? new Date(surfTime).toISOString() : null,
       author_role: $('[data-session-role].active').dataset.sessionRole,
-      featured_surfer_name: featuredSurferName || null, featured_surfer_user: featuredSurfer?.id || null,
+      featured_surfer_name: null, featured_surfer_user: null, participant_names: state.sessionPeople,
       wants_filmer: $('#wantsFilmer').checked, note: $('#sessionNote').value.trim() || null,
-    });
+    };
+    const result = state.editingSessionId
+      ? await db.from('sessions').update(payload).eq('id', state.editingSessionId).eq('author', state.profile.id)
+      : await db.from('sessions').insert(payload);
     if (result.error) throw result.error;
-    $('#sessionForm').reset();
-    $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === 'now'));
-    $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === 'surf'));
-    $('#sessionTime').classList.add('hidden'); $('#wantsFilmerRow').classList.remove('hidden');
-    closeSheet(); await loadSessions(); await renderProfile(); toast('Your session is live.');
+    const edited = Boolean(state.editingSessionId);
+    resetSessionComposer(); closeSheet(); await loadSessions(); await renderProfile(); toast(edited ? 'Surf updated.' : 'Your session is live.');
   } catch (error) { toast(readableError(error)); }
   finally { submit.disabled = false; }
 }
@@ -565,7 +744,7 @@ async function endSession(sessionId) {
 
 async function loadPosts() {
   const result = await db.from('posts')
-    .select('*,spot:spots(id,name),author_profile:profiles!posts_author_fkey(id,name),post_likes(user_id),post_comments(id,body,created_at,author_profile:profiles!post_comments_author_fkey(id,name))')
+    .select('*,spot:spots(*),author_profile:profiles!posts_author_fkey(id,name),post_likes(user_id),post_comments(id,body,created_at,author_profile:profiles!post_comments_author_fkey(id,name))')
     .order('created_at', { ascending: false }).limit(50);
   if (result.error) { toast(readableError(result.error)); return; }
   state.posts = result.data || [];
@@ -575,7 +754,7 @@ async function loadPosts() {
 function renderPosts() {
   const feed = $('#postsFeed');
   if (!state.posts.length) {
-    feed.innerHTML = '<div class="empty"><span>FEED</span><h2>No photos or clips yet</h2><p>Share the first photo or clip. The filmer is always credited.</p></div>';
+    feed.innerHTML = '<div class="empty"><span>STOKE</span><h2>No photos or clips yet</h2><p>Share the first photo or clip. The filmer is always credited.</p></div>';
     return;
   }
   feed.innerHTML = state.posts.map(post => {
@@ -632,7 +811,7 @@ async function createPost(event) {
     const mediaUrl = await uploadMedia(file, path);
     progress.value = 82;
     const spotName = $('#postSpot').value.trim();
-    const spot = spotName ? await ensureSpot(spotName, state.currentRegion.id) : null;
+    const spot = spotName ? await ensureSpot(spotName, $('#postLocation').value, state.currentRegion.id) : null;
     const filmerName = $('#filmerName').value.trim();
     const surferName = $('#surferName').value.trim();
     const filmer = matchingPerson(filmerName);
@@ -652,7 +831,7 @@ async function createPost(event) {
       if (tagsResult.error) throw tagsResult.error;
     }
     progress.value = 100; $('#postForm').reset(); $('#fileLabel').textContent = 'Add photo or clip'; closeSheet();
-    await loadPosts(); await renderProfile(); toast('Posted to the whole community.');
+    await loadPosts(); await renderProfile(); toast('Shared with the whole community.');
   } catch (error) { toast(readableError(error), 5000); }
   finally { submit.disabled = false; progress.classList.add('hidden'); progress.value = 0; }
 }
@@ -736,7 +915,7 @@ function subscribeRealtime() {
 
 function openDrawer() { $('#drawer').classList.add('open'); $('#drawerScrim').classList.add('open'); }
 function closeDrawer() { $('#drawer').classList.remove('open'); $('#drawerScrim').classList.remove('open'); }
-function openSheet(id) { $(`#${id}`).classList.add('open'); $('#sheetScrim').classList.add('open'); }
+function openSheet(id) { const sheet = $(`#${id}`); sheet.scrollTop = 0; sheet.classList.add('open'); $('#sheetScrim').classList.add('open'); }
 function closeSheet() { $$('.sheet').forEach(sheet => sheet.classList.remove('open')); $('#sheetScrim').classList.remove('open'); }
 
 async function shareInvite() {
@@ -762,6 +941,8 @@ document.addEventListener('click', async event => {
   const regionNode = event.target.closest('[data-region]');
   const rsvpNode = event.target.closest('[data-rsvp]');
   const endNode = event.target.closest('[data-end-session]');
+  const editSessionNode = event.target.closest('[data-edit-session]');
+  const removeSessionPersonNode = event.target.closest('[data-remove-session-person]');
   const likeNode = event.target.closest('[data-like]');
   const whenNode = event.target.closest('[data-when]');
   const sessionRoleNode = event.target.closest('[data-session-role]');
@@ -770,6 +951,10 @@ document.addEventListener('click', async event => {
   if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
   if (viewNode) setView(viewNode.dataset.view);
   if (memberNode) openMember(memberNode.dataset.member);
+  if (removeSessionPersonNode) {
+    state.sessionPeople.splice(Number(removeSessionPersonNode.dataset.removeSessionPerson), 1);
+    renderSessionPeopleChips();
+  }
   if (regionNode) {
     state.currentRegion = state.regions.find(region => region.id === regionNode.dataset.region);
     $('#regionMenu').classList.remove('open'); renderChrome();
@@ -783,6 +968,7 @@ document.addEventListener('click', async event => {
     return;
   }
   if (rsvpNode) await setRsvp(rsvpNode.dataset.rsvp, rsvpNode.dataset.role);
+  if (editSessionNode) openSessionComposer(editSessionNode.dataset.editSession);
   if (endNode) await endSession(endNode.dataset.endSession);
   if (likeNode) await toggleLike(likeNode.dataset.like);
   if (whenNode) {
@@ -806,8 +992,12 @@ document.addEventListener('click', async event => {
     'open-drawer': openDrawer,
     'close-drawer': closeDrawer,
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
-    'open-session': () => openSheet('sessionSheet'),
+    'open-session': () => openSessionComposer(),
+    'add-session-person': addSessionPerson,
     'open-post': () => openSheet('postSheet'),
+    'show-install': showInstallInstructions,
+    'dismiss-install': dismissInstallNudge,
+    'native-install': runNativeInstall,
     'close-sheet': closeSheet,
     'go-surfing': () => setView('surfing'),
     'coming-chat': () => toast('DMs arrive in the next phase.'),
@@ -815,7 +1005,7 @@ document.addEventListener('click', async event => {
     'share-invite': shareInvite,
     'edit-profile': showProfileSetup,
     'cancel-profile': () => showOnly('app'),
-    'sign-out': async () => { await db.auth.signOut(); location.href = './'; },
+    'sign-out': async () => { clearPendingAuth(); await db.auth.signOut(); location.href = './'; },
   };
   if (actions[actionNode.dataset.action]) await actions[actionNode.dataset.action]();
 });
@@ -847,6 +1037,36 @@ $('#mediaFile').addEventListener('change', async event => {
   $('#fileLabel').textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB`;
   try { await validateMedia(file); }
   catch (error) { toast(readableError(error), 5000); event.target.value = ''; $('#fileLabel').textContent = 'Add photo or clip'; }
+});
+
+function fillKnownSpotLocation(spotInput, locationInput) {
+  const name = spotInput.value.trim().toLowerCase();
+  if (!name || locationInput.value.trim()) return;
+  const matches = state.spots.filter(spot => spot.region_id === state.currentRegion?.id && spot.name.toLowerCase() === name);
+  if (matches.length === 1 && matches[0].general_location) locationInput.value = matches[0].general_location;
+}
+
+$('#sessionSpot').addEventListener('change', () => fillKnownSpotLocation($('#sessionSpot'), $('#sessionLocation')));
+$('#postSpot').addEventListener('change', () => fillKnownSpotLocation($('#postSpot'), $('#postLocation')));
+$('#sessionPersonInput').addEventListener('keydown', event => {
+  if (event.key !== 'Enter' && event.key !== ',') return;
+  event.preventDefault();
+  addSessionPerson();
+});
+
+window.addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  state.installPrompt = event;
+  if (state.session) offerInstallAfterAuth();
+});
+
+window.addEventListener('appinstalled', () => {
+  state.installPrompt = null;
+  localStorage.setItem(INSTALL_DISMISSED_KEY, '1');
+  $('#installNudge').classList.add('hidden');
+  $('#installSettingsRow').classList.add('hidden');
+  closeSheet();
+  toast('Salty was added to your Home Screen.');
 });
 
 applyIconTheme(localStorage.getItem('salty:icon-theme') || 'ink');
