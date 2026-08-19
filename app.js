@@ -5,20 +5,22 @@ const CONFIG = Object.freeze({
   supabaseUrl: 'https://maihhnwrstewzapsvrec.supabase.co',
   supabaseKey: 'sb_publishable_YtVKcZqgPalUaYOHpoSV1w_86he5PDV',
   mediaBucket: 'salty-media',
+  avatarBucket: 'salty-avatars',
   maxUploadBytes: 50 * 1024 * 1024,
+  maxAvatarBytes: 8 * 1024 * 1024,
   maxClipSeconds: 90,
 });
 
 // Upgrade runway: after moving Supabase to Pro, raise maxUploadBytes and replace
 // uploadMedia() with a TUS resumable implementation. Callers do not need to change.
 const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
-  auth: { persistSession: true, detectSessionInUrl: true, flowType: 'pkce' },
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
 });
 
 const state = {
   session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [],
   currentRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
-  preview: false, previewSessions: [],
+  preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -29,7 +31,7 @@ const formatCount = number => new Intl.NumberFormat().format(number || 0);
 const inviteFromUrl = () => new URLSearchParams(location.search).get('invite')?.trim() || '';
 
 function showOnly(id) {
-  ['boot', 'welcome', 'authScreen', 'app'].forEach(name => $(`#${name}`).classList.toggle('hidden', name !== id));
+  ['boot', 'welcome', 'authScreen', 'profileSetup', 'app'].forEach(name => $(`#${name}`).classList.toggle('hidden', name !== id));
 }
 
 function toast(message, timeout = 3200) {
@@ -77,10 +79,10 @@ function runPreview() {
   const regionId = '22222222-2222-4222-8222-222222222222';
   state.preview = true;
   state.session = { user: { id: userId } };
-  state.profile = { id: userId, name: 'Cyrus V.', home_region: regionId, sponsors: ['Sodium', 'Salty Viewfinder'] };
+  state.profile = { id: userId, name: 'Cyrus V.', nickname: 'Cy', phone: '(949) 555-0142', home_region: regionId, sponsors: ['Sodium', 'Salty Viewfinder'], social_url:'https://instagram.com/', avatar_path:null, onboarding_complete:true };
   state.regions = [{ id: regionId, name: 'California' }, { id: 'fr', name: 'France' }, { id: 'de', name: 'Germany' }, { id: 'ut', name: 'Utah' }];
   state.currentRegion = state.regions[0];
-  state.people = [{ id: userId, name: 'Cyrus V.' }, { id: 'jonah', name: 'Jonah Reyes' }, { id: 'mateo', name: 'Mateo Karras' }];
+  state.people = [state.profile, { id: 'jonah', name: 'Jonah Reyes', nickname:'Jo', home_region:regionId, sponsors:['Snake Eyes'], onboarding_complete:true }, { id: 'mateo', name: 'Mateo Karras', nickname:null, home_region:regionId, sponsors:[], onboarding_complete:true }];
   state.spots = [{ id: 'malibu', name: 'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', region_id: regionId }];
   state.previewSessions = [
     { id:'mine', author:userId, region_id:regionId, author_role:'film', featured_surfer_name:'Sam', when_label:'Now', wants_filmer:false, note:'bringing the long lens', spot:{name:'Malibu'}, author_profile:{name:'Cyrus V.'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah Reyes'}}]},
@@ -88,12 +90,12 @@ function runPreview() {
   ];
   state.sessions = state.previewSessions;
   state.posts = [];
-  renderChrome(); renderSessions(); renderPosts(); renderPreviewProfile(); showOnly('app');
+  renderChrome(); renderSessions(); renderPosts(); renderPreviewProfile(); renderMembers(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
 
 function renderPreviewProfile() {
-  $('#profileView').innerHTML = `<div class="profile-head"><span class="avatar">CV</span><div><h2>Cyrus V.</h2><p>California · Salty Crew</p></div></div><div class="stats"><article class="profile-card stat"><b>45</b><span>points</span></article><article class="profile-card stat"><b>3</b><span>active streak</span></article><article class="profile-card stat"><b>0</b><span>clips</span></article></div><article class="profile-card"><h3>Sponsors</h3><div class="chips"><span class="chip">Sodium</span><span class="chip">Salty Viewfinder</span></div></article><footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
+  $('#profileView').innerHTML = profileMarkup(state.profile, { points:45, streak:3, clips:0, own:true });
   $('#streakBadge b').textContent = '3';
 }
 
@@ -114,9 +116,8 @@ function openAuth(mode) {
     return;
   }
   $('#newMemberFields').classList.toggle('hidden', !isNew);
-  $$('#newMemberFields input').forEach(input => { input.required = isNew && input.id === 'profileName'; });
   $('#authTitle').textContent = isNew ? 'Join your crew' : 'Welcome back';
-  $('#authSubtitle').textContent = isNew ? 'Your magic link signs you in—no password or SMS.' : 'Enter the email connected to your Salty profile.';
+  $('#authSubtitle').textContent = isNew ? 'One email link verifies you. Then you finish your profile and stay signed in.' : 'Use the email connected to your Salty profile. You only need this on a new device or after signing out.';
   $('#authMessage').classList.add('hidden');
   showOnly('authScreen');
 }
@@ -124,9 +125,6 @@ function openAuth(mode) {
 async function sendMagicLink(event) {
   event.preventDefault();
   const email = $('#authEmail').value.trim();
-  const name = $('#profileName').value.trim();
-  const phone = $('#profilePhone').value.trim();
-  const homeRegion = $('#profileRegion').value;
   const isNew = state.authMode === 'new';
   const submit = $('#authForm button[type="submit"]');
   submit.disabled = true;
@@ -139,7 +137,6 @@ async function sendMagicLink(event) {
       toast(inviteError ? readableError(inviteError) : 'That invite is invalid or has expired.');
       return;
     }
-    localStorage.setItem('salty:onboarding', JSON.stringify({ name, phone, homeRegion }));
   }
 
   const redirect = new URL('./', location.href);
@@ -150,13 +147,12 @@ async function sendMagicLink(event) {
     options: {
       emailRedirectTo: redirect.href,
       shouldCreateUser: isNew,
-      data: isNew ? { name, phone, home_region: homeRegion } : undefined,
     },
   });
   submit.disabled = false; submit.textContent = 'Email me a magic link';
   if (error) { toast(readableError(error)); return; }
   const message = $('#authMessage');
-  message.innerHTML = `<b>Check ${esc(email)}</b><br>Tap the magic link on this device to enter Salty.`;
+  message.innerHTML = `<b>Check ${esc(email)}</b><br>Open the link on this phone. After this first verification, Salty keeps you signed in unless you explicitly sign out or clear browser data.`;
   message.classList.remove('hidden');
 }
 
@@ -166,12 +162,11 @@ async function enterCommunity() {
   if (error) { toast(readableError(error)); showWelcome(); return; }
 
   if (!profile && state.pendingInvite) {
-    const saved = JSON.parse(localStorage.getItem('salty:onboarding') || '{}');
     const redeemed = await db.rpc('redeem_invite', {
       invite_code: state.pendingInvite,
-      profile_name: saved.name || null,
-      profile_phone: saved.phone || null,
-      profile_region: saved.homeRegion || null,
+      profile_name: null,
+      profile_phone: null,
+      profile_region: null,
     });
     if (redeemed.error) {
       toast(readableError(redeemed.error), 6000);
@@ -180,7 +175,6 @@ async function enterCommunity() {
       return;
     }
     profile = redeemed.data;
-    localStorage.removeItem('salty:onboarding');
     localStorage.removeItem('salty:invite');
   }
 
@@ -192,15 +186,20 @@ async function enterCommunity() {
   }
 
   state.profile = profile;
+  if (!profile.onboarding_complete) {
+    await showProfileSetup();
+    return;
+  }
   await loadApp();
   showOnly('app');
+  cleanAuthUrl();
 }
 
 async function loadApp() {
   const [regionsResult, spotsResult, peopleResult] = await Promise.all([
     db.from('regions').select('*').order('name'),
     db.from('spots').select('*').order('name'),
-    db.from('profiles').select('id,name,home_region,sponsors').order('name'),
+    db.from('profiles').select('id,name,nickname,home_region,sponsors,social_url,avatar_path,onboarding_complete').eq('onboarding_complete', true).order('name'),
   ]);
   const firstError = regionsResult.error || spotsResult.error || peopleResult.error;
   if (firstError) throw firstError;
@@ -208,9 +207,92 @@ async function loadApp() {
   state.spots = spotsResult.data;
   state.people = peopleResult.data;
   state.currentRegion = state.regions.find(region => region.id === state.profile.home_region) || state.regions.find(region => region.name === 'California') || state.regions[0];
+  await loadAvatarUrls();
   renderChrome();
   await Promise.all([loadSessions(), loadPosts(), renderProfile()]);
+  renderMembers();
   subscribeRealtime();
+}
+
+function cleanAuthUrl() {
+  if (!location.hash && !location.search) return;
+  history.replaceState({}, '', location.pathname);
+}
+
+async function showProfileSetup() {
+  const regionsResult = await db.from('regions').select('*').order('name');
+  if (regionsResult.error) throw regionsResult.error;
+  state.regions = regionsResult.data || [];
+  $('#setupRegion').innerHTML = state.regions.map(region => `<option value="${region.id}">${esc(region.name)}</option>`).join('');
+  $('#setupName').value = state.profile.name || '';
+  $('#setupNickname').value = state.profile.nickname || '';
+  $('#setupPhone').value = state.profile.phone || '';
+  $('#setupRegion').value = state.profile.home_region || state.regions[0]?.id || '';
+  $('#setupSponsors').value = (state.profile.sponsors || []).join(', ');
+  $('#setupSocial').value = state.profile.social_url || '';
+  $('#profileAvatar').required = !state.profile.avatar_path;
+  $('#profileSetupTitle').textContent = state.profile.onboarding_complete ? 'Edit your profile' : 'Build your profile';
+  $('#profileSetupBack').classList.toggle('hidden', !state.profile.onboarding_complete);
+  $('#profileSubmit').textContent = state.profile.onboarding_complete ? 'Save changes' : 'Save profile and enter Salty';
+  $('#avatarPreview').textContent = state.profile.avatar_path ? 'CHANGE PHOTO' : 'ADD PHOTO';
+  if (state.profile.avatar_path) {
+    const signed = await db.storage.from(CONFIG.avatarBucket).createSignedUrl(state.profile.avatar_path, 3600);
+    if (!signed.error) $('#avatarPreview').innerHTML = `<img src="${esc(signed.data.signedUrl)}" alt="Current profile photo">`;
+  }
+  showOnly('profileSetup');
+}
+
+async function completeProfile(event) {
+  event.preventDefault();
+  const submit = $('#profileForm button[type="submit"]');
+  submit.disabled = true; submit.textContent = 'Saving…';
+  let avatarPath = state.profile.avatar_path;
+  try {
+    const avatar = $('#profileAvatar').files[0];
+    if (!avatarPath && !avatar) throw new Error('Add a profile photo.');
+    if (avatar) {
+      if (!['image/jpeg','image/png','image/webp'].includes(avatar.type)) throw new Error('Use a JPG, PNG, or WebP profile photo.');
+      if (avatar.size > CONFIG.maxAvatarBytes) throw new Error('Profile photos must be 8 MB or smaller.');
+      const extension = avatar.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg';
+      avatarPath = `${state.profile.id}/avatar-${Date.now()}.${extension}`;
+      const upload = await db.storage.from(CONFIG.avatarBucket).upload(avatarPath, avatar, { contentType: avatar.type, upsert: false });
+      if (upload.error) throw upload.error;
+    }
+    const updates = {
+      name: $('#setupName').value.trim(), nickname: $('#setupNickname').value.trim() || null,
+      phone: $('#setupPhone').value.trim(), home_region: $('#setupRegion').value,
+      sponsors: $('#setupSponsors').value.split(',').map(item => item.trim()).filter(Boolean).slice(0, 12),
+      social_url: normalizeSocialUrl($('#setupSocial').value), avatar_path: avatarPath, onboarding_complete: true,
+    };
+    const result = await db.from('profiles').update(updates).eq('id', state.profile.id).select().single();
+    if (result.error) throw result.error;
+    state.profile = result.data;
+    $('#profileForm').reset();
+    await loadApp(); showOnly('app'); cleanAuthUrl(); toast('Profile saved. Welcome to Salty.');
+  } catch (error) { toast(readableError(error), 6000); }
+  finally { submit.disabled = false; submit.textContent = state.profile.onboarding_complete ? 'Save changes' : 'Save profile and enter Salty'; }
+}
+
+function normalizeSocialUrl(value) {
+  const clean = value.trim();
+  if (!clean) return null;
+  if (/^@[a-z0-9._]+$/i.test(clean)) return `https://instagram.com/${clean.slice(1)}`;
+  if (!/^https?:\/\//i.test(clean)) return `https://${clean}`;
+  return clean;
+}
+
+async function loadAvatarUrls() {
+  const profiles = [state.profile, ...state.people].filter((profile, index, list) => profile?.avatar_path && list.findIndex(item => item?.id === profile.id) === index);
+  const entries = await Promise.all(profiles.map(async profile => {
+    const result = await db.storage.from(CONFIG.avatarBucket).createSignedUrl(profile.avatar_path, 3600);
+    return [profile.id, result.error ? null : result.data.signedUrl];
+  }));
+  state.avatarUrls = Object.fromEntries(entries);
+}
+
+function avatarMarkup(profile, className = 'avatar') {
+  const url = state.avatarUrls[profile?.id];
+  return url ? `<span class="${className}"><img src="${esc(url)}" alt="${esc(profile.name)}"></span>` : `<span class="${className}">${esc(initials(profile?.name))}</span>`;
 }
 
 const navItems = [
@@ -229,7 +311,7 @@ function renderChrome() {
   $('#regionMenu').innerHTML = state.regions.map(region => `<button data-region="${region.id}" class="${region.id === state.currentRegion.id ? 'active' : ''}">${esc(region.name)} <small>view sessions</small></button>`).join('');
   $('#spotsList').innerHTML = state.spots.map(spot => `<option value="${esc(spot.name)}"></option>`).join('');
   $('#peopleList').innerHTML = state.people.map(person => `<option value="${esc(person.name)}"></option>`).join('');
-  $('#drawerProfile').innerHTML = `<span class="avatar">${esc(initials(state.profile.name))}</span><div><h3>${esc(state.profile.name)}</h3><p>${esc(state.currentRegion.name)} · Salty Crew</p></div>`;
+  $('#drawerProfile').innerHTML = `${avatarMarkup(state.profile)}<div><h3>${esc(state.profile.name)}</h3><p>${esc(state.currentRegion.name)} · Salty Crew</p></div>`;
 }
 
 function setView(view) {
@@ -282,7 +364,7 @@ function renderSessions() {
     const actions = mine
       ? `<button class="small-action end" data-end-session="${session.id}"><svg><use href="#i-close"/></svg>End session</button>`
       : `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-check"/></svg>${myRsvp?.role === 'surf' ? "You're in" : "I'm down"}</button><button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : "I'll film"}</button>`;
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i><div class="card-head"><span class="avatar">${esc(initials(session.author_profile?.name))}</span><div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you started this session' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag">Wants filmer</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p><div class="card-actions">${actions}</div></article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i><div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you started this session' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag">Wants filmer</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p><div class="card-actions">${actions}</div></article>`;
   }).join('');
 }
 
@@ -459,10 +541,45 @@ async function renderProfile() {
     db.from('posts').select('id', { count: 'exact', head: true }).eq('author', state.profile.id),
   ]);
   const total = (points.data || []).reduce((sum, event) => sum + event.points, 0);
-  const region = state.regions.find(item => item.id === state.profile.home_region)?.name || 'Salty Crew';
-  const sponsors = state.profile.sponsors?.length ? state.profile.sponsors : ['Add sponsors in the next profile update'];
-  $('#profileView').innerHTML = `<div class="profile-head"><span class="avatar">${esc(initials(state.profile.name))}</span><div><h2>${esc(state.profile.name)}</h2><p>${esc(region)} · Salty Crew</p></div></div><div class="stats"><article class="profile-card stat"><b>${formatCount(total)}</b><span>points</span></article><article class="profile-card stat"><b>${streak.data?.current_streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${posts.count || 0}</b><span>clips</span></article></div><article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('')}</div></article><article class="profile-card"><h3>Surf with most</h3><p style="color:var(--mut);font-size:13px;line-height:1.5">This list builds itself as your crew RSVPs, films and gets tagged. No follow button anywhere.</p></article><footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
+  $('#profileView').innerHTML = profileMarkup(state.profile, { points:total, streak:streak.data?.current_streak || 0, clips:posts.count || 0, own:true });
   $('#streakBadge b').textContent = streak.data?.current_streak || 0;
+}
+
+function profileMarkup(profile, stats = {}) {
+  const region = state.regions.find(item => item.id === profile.home_region)?.name || 'Salty Crew';
+  const sponsors = profile.sponsors?.length ? profile.sponsors : [];
+  const nickname = profile.nickname ? `<p class="nickname">“${esc(profile.nickname)}”</p>` : '';
+  const socialUrl = safeExternalUrl(profile.social_url);
+  const social = socialUrl ? `<a class="profile-link" href="${esc(socialUrl)}" target="_blank" rel="noopener">Social profile ↗</a>` : '';
+  const controls = stats.own
+    ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Salty</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
+    : `<div class="profile-actions"><button class="primary" data-action="coming-chat">Message ${esc(profile.name)}</button></div>`;
+  return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Salty Crew</p></div></div>${stats.own ? `<div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.clips || 0}</b><span>clips</span></article></div>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${controls}<footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
+}
+
+function safeExternalUrl(value) {
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+  } catch (_error) { return null; }
+}
+
+function renderMembers() {
+  const list = $('#membersList');
+  if (!list) return;
+  list.innerHTML = state.people.map(profile => {
+    const region = state.regions.find(item => item.id === profile.home_region)?.name || 'Salty Crew';
+    const nickname = profile.nickname ? ` · “${esc(profile.nickname)}”` : '';
+    return `<button class="member-row" data-member="${profile.id}">${avatarMarkup(profile)}<span><b>${esc(profile.name)}</b><small>${esc(region)}${nickname}</small></span><i>›</i></button>`;
+  }).join('');
+}
+
+function openMember(profileId) {
+  const profile = state.people.find(person => person.id === profileId);
+  if (!profile) return;
+  state.selectedMember = profile;
+  $('#memberProfile').innerHTML = profileMarkup(profile, { own:profile.id === state.profile.id });
+  setView(profile.id === state.profile.id ? 'you' : 'member');
 }
 
 function subscribeRealtime() {
@@ -481,12 +598,21 @@ function closeDrawer() { $('#drawer').classList.remove('open'); $('#drawerScrim'
 function openSheet(id) { $(`#${id}`).classList.add('open'); $('#sheetScrim').classList.add('open'); }
 function closeSheet() { $$('.sheet').forEach(sheet => sheet.classList.remove('open')); $('#sheetScrim').classList.remove('open'); }
 
-async function makeInvite() {
+async function shareInvite() {
   const result = await db.rpc('create_invite', { invite_max_uses: 1 });
   if (result.error) { toast(readableError(result.error)); return; }
   const url = new URL('./', location.href); url.searchParams.set('invite', result.data);
-  try { await navigator.clipboard.writeText(url.href); toast('Invite link copied.'); }
-  catch (_error) { prompt('Copy this invite link:', url.href); }
+  const shareData = {
+    title: "You're invited to Salty",
+    text: `I'm inviting you to Salty, a private surf community. Hopefully it helps us surf more together.`,
+    url: url.href,
+  };
+  try {
+    if (navigator.share) await navigator.share(shareData);
+    else { await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`); toast('Invite message and link copied.'); }
+  } catch (error) {
+    if (error?.name !== 'AbortError') prompt('Copy this invite:', `${shareData.text}\n${shareData.url}`);
+  }
 }
 
 document.addEventListener('click', async event => {
@@ -498,7 +624,9 @@ document.addEventListener('click', async event => {
   const likeNode = event.target.closest('[data-like]');
   const whenNode = event.target.closest('[data-when]');
   const sessionRoleNode = event.target.closest('[data-session-role]');
+  const memberNode = event.target.closest('[data-member]');
   if (viewNode) setView(viewNode.dataset.view);
+  if (memberNode) openMember(memberNode.dataset.member);
   if (regionNode) {
     state.currentRegion = state.regions.find(region => region.id === regionNode.dataset.region);
     $('#regionMenu').classList.remove('open'); renderChrome();
@@ -507,7 +635,7 @@ document.addEventListener('click', async event => {
       renderSessions();
     } else await loadSessions();
   }
-  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'edit-profile', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -535,7 +663,10 @@ document.addEventListener('click', async event => {
     'close-sheet': closeSheet,
     'go-surfing': () => setView('surfing'),
     'coming-chat': () => toast('DMs arrive in the next phase.'),
-    'make-invite': makeInvite,
+    'make-invite': shareInvite,
+    'share-invite': shareInvite,
+    'edit-profile': showProfileSetup,
+    'cancel-profile': () => showOnly('app'),
     'sign-out': async () => { await db.auth.signOut(); location.href = './'; },
   };
   if (actions[actionNode.dataset.action]) await actions[actionNode.dataset.action]();
@@ -548,6 +679,7 @@ document.addEventListener('submit', async event => {
     return;
   }
   if (event.target.id === 'authForm') await sendMagicLink(event);
+  else if (event.target.id === 'profileForm') await completeProfile(event);
   else if (event.target.id === 'sessionForm') await createSession(event);
   else if (event.target.id === 'postForm') await createPost(event);
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);
@@ -555,6 +687,12 @@ document.addEventListener('submit', async event => {
 
 $('#enterButton').addEventListener('click', () => openAuth('new'));
 $('#memberButton').addEventListener('click', () => openAuth('existing'));
+$('#profileAvatar').addEventListener('change', event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const previewUrl = URL.createObjectURL(file);
+  $('#avatarPreview').innerHTML = `<img src="${esc(previewUrl)}" alt="Selected profile photo">`;
+});
 $('#mediaFile').addEventListener('change', async event => {
   const file = event.target.files[0];
   if (!file) return;
