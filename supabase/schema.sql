@@ -15,9 +15,13 @@ create table public.regions (
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null check (char_length(trim(name)) between 1 and 80),
+  nickname text check (nickname is null or char_length(trim(nickname)) between 1 and 50),
   phone text,
   home_region uuid references public.regions(id),
   sponsors text[] not null default '{}',
+  social_url text,
+  avatar_path text,
+  onboarding_complete boolean not null default false,
   is_admin boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -278,7 +282,12 @@ begin
    for update;
   if not found then raise exception 'This invite is invalid, expired, or already used'; end if;
 
-  resolved_name := coalesce(nullif(trim(profile_name), ''), nullif(trim(auth.jwt() -> 'user_metadata' ->> 'name'), ''));
+  resolved_name := coalesce(
+    nullif(trim(profile_name), ''),
+    nullif(trim(auth.jwt() -> 'user_metadata' ->> 'name'), ''),
+    nullif(split_part(coalesce(auth.jwt() ->> 'email', ''), '@', 1), ''),
+    'New member'
+  );
   resolved_phone := coalesce(nullif(trim(profile_phone), ''), nullif(trim(auth.jwt() -> 'user_metadata' ->> 'phone'), ''));
   if resolved_name is null then raise exception 'A profile name is required'; end if;
 
@@ -504,6 +513,11 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('salty-dm', 'salty-dm', false, 10485760, array['image/jpeg','image/png','image/webp','image/gif'])
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
+-- Member-only profile images, 8 MB max.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('salty-avatars', 'salty-avatars', false, 8388608, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
 create policy salty_media_read on storage.objects for select using (bucket_id = 'salty-media');
 create policy salty_media_insert on storage.objects for insert to authenticated
 with check (bucket_id = 'salty-media' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
@@ -524,6 +538,16 @@ using (
 );
 create policy salty_dm_delete_sender on storage.objects for delete to authenticated
 using (bucket_id = 'salty-dm' and owner_id = auth.uid()::text);
+
+create policy salty_avatars_read_members on storage.objects for select to authenticated
+using (bucket_id = 'salty-avatars' and public.is_member());
+create policy salty_avatars_insert_own on storage.objects for insert to authenticated
+with check (bucket_id = 'salty-avatars' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
+create policy salty_avatars_update_own on storage.objects for update to authenticated
+using (bucket_id = 'salty-avatars' and owner_id = auth.uid()::text)
+with check (bucket_id = 'salty-avatars' and owner_id = auth.uid()::text);
+create policy salty_avatars_delete_own on storage.objects for delete to authenticated
+using (bucket_id = 'salty-avatars' and owner_id = auth.uid()::text);
 
 -- Realtime tables used by the later chat phase and live core/feed refreshes.
 alter publication supabase_realtime add table public.sessions, public.session_rsvps, public.posts, public.post_comments, public.post_likes, public.room_messages, public.dm_messages;
