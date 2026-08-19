@@ -21,6 +21,7 @@ const state = {
   session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [],
   currentRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
+  authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -29,9 +30,24 @@ const esc = (value = '') => String(value).replace(/[&<>'"]/g, char => ({'&':'&am
 const initials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 const formatCount = number => new Intl.NumberFormat().format(number || 0);
 const inviteFromUrl = () => new URLSearchParams(location.search).get('invite')?.trim() || '';
+const ICON_THEMES = new Set(['ink', 'amber', 'foam', 'ocean']);
+
+function applyIconTheme(theme = 'ink', announce = false) {
+  const chosen = ICON_THEMES.has(theme) ? theme : 'ink';
+  localStorage.setItem('salty:icon-theme', chosen);
+  $('#appFavicon').href = `./icon-${chosen}.svg`;
+  $('#appTouchIcon').href = `./icon-${chosen}.svg`;
+  $('#appManifest').href = chosen === 'ink' ? './manifest.webmanifest' : `./manifest-${chosen}.webmanifest`;
+  $$('[data-icon-theme]').forEach(button => {
+    const active = button.dataset.iconTheme === chosen;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-checked', String(active));
+  });
+  if (announce) toast(`${chosen[0].toUpperCase()}${chosen.slice(1)} icon selected.`);
+}
 
 function showOnly(id) {
-  ['boot', 'welcome', 'authScreen', 'profileSetup', 'app'].forEach(name => $(`#${name}`).classList.toggle('hidden', name !== id));
+  ['boot', 'welcome', 'authScreen', 'verifyScreen', 'profileSetup', 'app'].forEach(name => $(`#${name}`).classList.toggle('hidden', name !== id));
 }
 
 function toast(message, timeout = 3200) {
@@ -48,12 +64,22 @@ function readableError(error) {
 }
 
 async function init() {
-  if (new URLSearchParams(location.search).get('preview') === '1') {
+  const params = new URLSearchParams(location.search);
+  if (params.get('preview') === '1') {
     runPreview();
     return;
   }
   state.pendingInvite = inviteFromUrl() || localStorage.getItem('salty:invite') || '';
   if (state.pendingInvite) localStorage.setItem('salty:invite', state.pendingInvite);
+  state.pendingTokenHash = params.get('token_hash') || '';
+  state.pendingTokenType = params.get('type') || 'email';
+
+  // The email opens this neutral screen first. Verification only happens after
+  // the person taps the button, so inbox link scanners cannot spend the token.
+  if (state.pendingTokenHash) {
+    showOnly('verifyScreen');
+    return;
+  }
 
   const { data, error } = await db.auth.getSession();
   if (error) toast(readableError(error));
@@ -119,12 +145,16 @@ function openAuth(mode) {
   $('#authTitle').textContent = isNew ? 'Join your crew' : 'Welcome back';
   $('#authSubtitle').textContent = isNew ? 'One email link verifies you. Then you finish your profile and stay signed in.' : 'Use the email connected to your Salty profile. You only need this on a new device or after signing out.';
   $('#authMessage').classList.add('hidden');
+  $('#authCodeBlock').classList.add('hidden');
+  $('#authCode').value = '';
   showOnly('authScreen');
 }
 
 async function sendMagicLink(event) {
   event.preventDefault();
   const email = $('#authEmail').value.trim();
+  state.authEmail = email;
+  localStorage.setItem('salty:auth-email', email);
   const isNew = state.authMode === 'new';
   const submit = $('#authForm button[type="submit"]');
   submit.disabled = true;
@@ -152,8 +182,48 @@ async function sendMagicLink(event) {
   submit.disabled = false; submit.textContent = 'Email me a magic link';
   if (error) { toast(readableError(error)); return; }
   const message = $('#authMessage');
-  message.innerHTML = `<b>Check ${esc(email)}</b><br>Open the link on this phone. After this first verification, Salty keeps you signed in unless you explicitly sign out or clear browser data.`;
+  message.innerHTML = `<b>Check ${esc(email)}</b><br>Tap the button in the email, then tap “Verify and open Salty.” If email opens in a different browser, enter its six-digit code below.`;
   message.classList.remove('hidden');
+  $('#authCodeBlock').classList.remove('hidden');
+}
+
+async function verifyEmailCode() {
+  const email = state.authEmail || localStorage.getItem('salty:auth-email') || $('#authEmail').value.trim();
+  const token = $('#authCode').value.trim();
+  if (!email) { toast('Enter your email and request a new sign-in email first.'); return; }
+  if (!/^\d{6}$/.test(token)) { toast('Enter the six-digit code from the email.'); return; }
+  const button = $('[data-action="verify-code"]');
+  button.disabled = true; button.textContent = 'Verifying…';
+  const { data, error } = await db.auth.verifyOtp({ email, token, type: 'email' });
+  button.disabled = false; button.textContent = 'Verify code';
+  if (error) { toast(readableError(error), 6000); return; }
+  state.session = data.session;
+  localStorage.removeItem('salty:auth-email');
+  await enterCommunity();
+}
+
+async function verifyEmailLink() {
+  const button = $('#verifyLinkButton');
+  const message = $('#verifyMessage');
+  if (!state.pendingTokenHash) {
+    message.textContent = 'This sign-in link is incomplete. Go back to Salty and request a new email.';
+    message.classList.remove('hidden');
+    return;
+  }
+  button.disabled = true; button.textContent = 'Verifying…';
+  const { data, error } = await db.auth.verifyOtp({
+    token_hash: state.pendingTokenHash,
+    type: state.pendingTokenType,
+  });
+  if (error) {
+    button.disabled = false; button.textContent = 'Try again';
+    message.innerHTML = `${esc(readableError(error))}<br>Return to Salty and request a fresh email, or use the six-digit code from that email.`;
+    message.classList.remove('hidden');
+    return;
+  }
+  state.session = data.session;
+  localStorage.removeItem('salty:auth-email');
+  await enterCommunity();
 }
 
 async function enterCommunity() {
@@ -192,6 +262,7 @@ async function enterCommunity() {
   }
   await loadApp();
   showOnly('app');
+  localStorage.removeItem('salty:auth-email');
   cleanAuthUrl();
 }
 
@@ -625,6 +696,8 @@ document.addEventListener('click', async event => {
   const whenNode = event.target.closest('[data-when]');
   const sessionRoleNode = event.target.closest('[data-session-role]');
   const memberNode = event.target.closest('[data-member]');
+  const iconThemeNode = event.target.closest('[data-icon-theme]');
+  if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
   if (viewNode) setView(viewNode.dataset.view);
   if (memberNode) openMember(memberNode.dataset.member);
   if (regionNode) {
@@ -655,6 +728,8 @@ document.addEventListener('click', async event => {
   if (!actionNode) return;
   const actions = {
     'back-welcome': showWelcome,
+    'verify-code': verifyEmailCode,
+    'verify-link': verifyEmailLink,
     'open-drawer': openDrawer,
     'close-drawer': closeDrawer,
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
@@ -701,4 +776,5 @@ $('#mediaFile').addEventListener('change', async event => {
   catch (error) { toast(readableError(error), 5000); event.target.value = ''; $('#fileLabel').textContent = 'Add photo or clip'; }
 });
 
+applyIconTheme(localStorage.getItem('salty:icon-theme') || 'ink');
 init().catch(error => { showWelcome(); toast(readableError(error), 6000); });
