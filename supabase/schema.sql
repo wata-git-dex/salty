@@ -29,11 +29,14 @@ create table public.profiles (
 create table public.spots (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(trim(name)) between 1 and 120),
+  general_location text check (general_location is null or char_length(trim(general_location)) between 1 and 160),
   region_id uuid references public.regions(id),
   created_by uuid references public.profiles(id),
-  created_at timestamptz not null default now(),
-  unique (name, region_id)
+  created_at timestamptz not null default now()
 );
+
+create unique index spots_name_location_region_key
+  on public.spots (region_id, lower(name), lower(coalesce(general_location, '')));
 
 create table public.brands (
   id uuid primary key default gen_random_uuid(),
@@ -50,6 +53,7 @@ create table public.sessions (
   author_role text not null default 'surf' check (author_role in ('surf','film')),
   featured_surfer_name text,
   featured_surfer_user uuid references public.profiles(id),
+  participant_names text[] not null default '{}',
   wants_filmer boolean not null default false,
   note text,
   status text not null default 'active' check (status in ('active','ended','archived')),
