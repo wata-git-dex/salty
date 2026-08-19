@@ -332,7 +332,7 @@ async function verifyEmailCode() {
   }
   state.session = data.session;
   clearPendingAuth();
-  await enterCommunity();
+  await finishAuthentication();
 }
 
 async function verifyEmailLink() {
@@ -356,7 +356,13 @@ async function verifyEmailLink() {
   }
   state.session = data.session;
   clearPendingAuth();
-  await enterCommunity();
+  await finishAuthentication();
+}
+
+async function finishAuthentication() {
+  const accepted = state.session?.user?.user_metadata?.salty_consent_version === CONSENT_VERSION;
+  if (accepted) await enterCommunity();
+  else openConsent('session');
 }
 
 async function enterCommunity() {
@@ -1024,7 +1030,7 @@ document.addEventListener('submit', async event => {
 });
 
 $('#enterButton').addEventListener('click', () => openConsent('new'));
-$('#memberButton').addEventListener('click', () => openConsent('existing'));
+$('#memberButton').addEventListener('click', () => openAuth('existing'));
 $('#profileAvatar').addEventListener('change', event => {
   const file = event.target.files[0];
   if (!file) return;
