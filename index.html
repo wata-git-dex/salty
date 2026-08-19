@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=7">
+  <link rel="stylesheet" href="./styles.css?v=8">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -82,6 +82,20 @@
         <button class="primary" type="submit">Email me a magic link</button>
       </form>
       <div id="authMessage" class="auth-message hidden" role="status"></div>
+      <div id="authCodeBlock" class="auth-code hidden">
+        <label>Six-digit code<input id="authCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"></label>
+        <button class="secondary-button" type="button" data-action="verify-code">Verify code</button>
+      </div>
+    </div>
+  </main>
+
+  <main id="verifyScreen" class="auth-screen hidden">
+    <div class="auth-card verify-card">
+      <svg class="auth-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg>
+      <h1>Open Salty</h1>
+      <p>One last tap verifies this sign-in. Afterward, this browser stays signed in.</p>
+      <button id="verifyLinkButton" class="primary" data-action="verify-link">Verify and open Salty</button>
+      <div id="verifyMessage" class="auth-message hidden" role="status"></div>
     </div>
   </main>
 
@@ -201,6 +215,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=7" defer></script>
+  <script src="./app.js?v=8" defer></script>
 </body>
 </html>
