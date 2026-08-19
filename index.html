@@ -10,12 +10,13 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://wata-git-dex.github.io/salty/">
   <title>Salty — surf crew</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link id="appManifest" rel="manifest" href="./manifest.webmanifest">
+  <link id="appFavicon" rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link id="appTouchIcon" rel="apple-touch-icon" href="./icon-ink.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=8">
+  <link rel="stylesheet" href="./styles.css?v=9">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -161,7 +162,7 @@
       </div>
       <div id="view-perks" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Perks &amp; discounts</h2></div><div class="support-list"><article><b>S</b><div><h3>Sodium</h3><p>Community offers are coming in the support phase.</p></div></article><article><b>SV</b><div><h3>Salty Viewfinder</h3><p>Filmer perks and crew discounts.</p></div></article><article><b>WM</b><div><h3>Water Merch</h3><p>Point-unlocked physical rewards.</p></div></article></div></div>
       <div id="view-rules" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Community rules</h2></div><div class="copy-card"><h3>Keep the lineup good</h3><ol><li>Credit the filmer. Every time.</li><li>Share spots thoughtfully and respect locals.</li><li>No harassment, hate, or pile-ons.</li><li>Ask before sharing private details or raw footage.</li><li>Use mute quietly; report serious problems to admins.</li></ol></div></div>
-      <div id="view-settings" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Settings</h2></div><div class="copy-card"><button class="settings-row" data-action="make-invite">Invite a friend <span>›</span></button><button class="settings-row danger" data-action="sign-out">Sign out <span>›</span></button></div></div>
+      <div id="view-settings" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Settings</h2></div><div class="copy-card icon-settings"><h3>Your Salty icon</h3><p>Pick one just for this device.</p><div class="icon-options" role="radiogroup" aria-label="Salty app icon"><button data-icon-theme="ink" role="radio"><img src="./icon-ink.svg" alt=""><span>Ink</span></button><button data-icon-theme="amber" role="radio"><img src="./icon-amber.svg" alt=""><span>Amber</span></button><button data-icon-theme="foam" role="radio"><img src="./icon-foam.svg" alt=""><span>Foam</span></button><button data-icon-theme="ocean" role="radio"><img src="./icon-ocean.svg" alt=""><span>Ocean</span></button></div><small>Already installed on iPhone? Re-add Salty to the Home Screen to apply the new icon there.</small></div><div class="copy-card"><button class="settings-row" data-action="make-invite">Invite a friend <span>›</span></button><button class="settings-row danger" data-action="sign-out">Sign out <span>›</span></button></div></div>
       <div id="view-about" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>About Salty</h2></div><div class="copy-card about-card"><svg viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="8" stroke-linecap="round"/></svg><h2>salty</h2><p>Surf with your friends, not your feed.</p><small>Private, invite-only, and built for the crew.</small></div></div>
 
       <button id="surfFab" class="fab" data-action="open-session"><svg><use href="#i-plus"/></svg>Share a surf</button>
@@ -215,6 +216,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=8" defer></script>
+  <script src="./app.js?v=9" defer></script>
 </body>
 </html>
