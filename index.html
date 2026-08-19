@@ -5,13 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0A141C">
   <meta name="description" content="Salty — surf with your friends, not your feed.">
+  <meta property="og:title" content="You're invited to Salty">
+  <meta property="og:description" content="A private surf community built to help friends surf and film together more often.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://wata-git-dex.github.io/salty/">
   <title>Salty — surf crew</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=6">
+  <link rel="stylesheet" href="./styles.css?v=7">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -73,15 +77,29 @@
       <h1 id="authTitle">Join your crew</h1>
       <p id="authSubtitle">Your magic link signs you in—no password or SMS.</p>
       <form id="authForm">
-        <div id="newMemberFields">
-          <label>Name<input id="profileName" name="name" autocomplete="name" maxlength="80" required placeholder="What your crew calls you"></label>
-          <label>Phone <small>profile only, never used to sign in</small><input id="profilePhone" name="phone" autocomplete="tel" inputmode="tel" placeholder="(949) 555-0142"></label>
-          <label>Home area<select id="profileRegion" name="region"><option>California</option><option>France</option><option>Germany</option><option>Utah</option></select></label>
-        </div>
+        <div id="newMemberFields" class="auth-step"><b>First, verify your email.</b><span>You'll build your full member profile immediately after opening the link.</span></div>
         <label>Email<input id="authEmail" name="email" autocomplete="email" inputmode="email" type="email" required placeholder="you@example.com"></label>
         <button class="primary" type="submit">Email me a magic link</button>
       </form>
       <div id="authMessage" class="auth-message hidden" role="status"></div>
+    </div>
+  </main>
+
+  <main id="profileSetup" class="auth-screen hidden">
+    <button id="profileSetupBack" class="round-back hidden" data-action="cancel-profile" aria-label="Back"><svg><use href="#i-back"/></svg></button>
+    <div class="auth-card profile-setup-card">
+      <h1 id="profileSetupTitle">Build your profile</h1>
+      <p>Finish this once, then Salty keeps you signed in on this phone.</p>
+      <form id="profileForm">
+        <label class="avatar-upload"><input id="profileAvatar" type="file" accept="image/jpeg,image/png,image/webp"><span id="avatarPreview" class="avatar-preview">ADD PHOTO</span><b>Profile photo</b><small>Required · JPG, PNG or WebP · 8 MB max</small></label>
+        <label>Name<input id="setupName" autocomplete="name" maxlength="80" required placeholder="Your name"></label>
+        <label>Nickname <small>optional</small><input id="setupNickname" maxlength="50" placeholder="What else does the crew call you?"></label>
+        <label>Phone<input id="setupPhone" autocomplete="tel" inputmode="tel" required placeholder="(949) 555-0142"></label>
+        <label>Home area<select id="setupRegion" required></select></label>
+        <label>Sponsors <small>optional · separate with commas</small><input id="setupSponsors" maxlength="300" placeholder="Sodium, Snake Eyes"></label>
+        <label>Instagram or social link <small>optional</small><input id="setupSocial" maxlength="300" inputmode="url" placeholder="https://instagram.com/yourname"></label>
+        <button id="profileSubmit" class="primary" type="submit">Save profile and enter Salty</button>
+      </form>
     </div>
   </main>
 
@@ -118,6 +136,8 @@
       <div id="view-events" class="app-view"><div class="phase-card"><span>EVENTS</span><h2>Events are next</h2><p>Regional comps, movie nights and meetups arrive after chat.</p></div></div>
 
       <div id="view-you" class="app-view"><div id="profileView" class="profile"></div></div>
+      <div id="view-members" class="app-view sub-view"><div class="backbar"><button data-view="you"><svg><use href="#i-back"/></svg></button><h2>Members</h2></div><div id="membersList" class="members-list"></div></div>
+      <div id="view-member" class="app-view sub-view"><div class="backbar"><button data-view="members"><svg><use href="#i-back"/></svg></button><h2>Member profile</h2></div><div id="memberProfile" class="profile"></div></div>
       <div id="view-clubs" class="app-view sub-view">
         <div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Clubs</h2></div>
         <div class="preview-bar">ⓘ Preview — clubs are a future phase, not in the first build.</div>
@@ -138,6 +158,7 @@
     <aside id="drawer" class="drawer">
       <div id="drawerProfile" class="drawer-profile"></div>
       <nav>
+        <button data-view="members"><span>◎</span>Members</button>
         <button data-view="clubs"><span>♧</span>Clubs <b class="soon">SOON</b></button>
         <button data-view="perks"><span>◇</span>Perks &amp; discounts</button>
         <button data-view="rules"><span>▤</span>Community rules</button>
@@ -180,6 +201,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=6" defer></script>
+  <script src="./app.js?v=7" defer></script>
 </body>
 </html>
