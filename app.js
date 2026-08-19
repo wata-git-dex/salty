@@ -102,7 +102,24 @@ function toast(message, timeout = 3200) {
 
 function readableError(error) {
   console.error(error);
+  if (error?.status === 429 || /rate limit/i.test(error?.message || '')) {
+    return 'Salty’s email service is cooling down after too many test emails. Wait about an hour, then request one fresh email.';
+  }
   return error?.message || 'Something went sideways. Please try again.';
+}
+
+function startEmailCooldown(button, seconds = 60) {
+  clearInterval(startEmailCooldown.timer);
+  let remaining = seconds;
+  button.disabled = true;
+  button.textContent = `Email sent · resend in ${remaining}s`;
+  startEmailCooldown.timer = setInterval(() => {
+    remaining -= 1;
+    if (remaining > 0) { button.textContent = `Email sent · resend in ${remaining}s`; return; }
+    clearInterval(startEmailCooldown.timer);
+    button.disabled = false;
+    button.textContent = 'Email me a magic link';
+  }, 1000);
 }
 
 async function init() {
@@ -226,7 +243,15 @@ async function sendMagicLink(event) {
     },
   });
   submit.disabled = false; submit.textContent = 'Email me a magic link';
-  if (error) { toast(readableError(error)); return; }
+  if (error) {
+    const copy = readableError(error);
+    const message = $('#authMessage');
+    message.textContent = copy;
+    message.classList.remove('hidden');
+    toast(copy, 6000);
+    return;
+  }
+  startEmailCooldown(submit);
   const message = $('#authMessage');
   message.innerHTML = `<b>Check ${esc(email)}</b><br>Tap the button in the email, then tap “Verify and open Salty.” If email opens in a different browser, enter its six-digit code below.`;
   message.classList.remove('hidden');
