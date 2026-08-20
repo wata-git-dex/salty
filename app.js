@@ -6,8 +6,10 @@ const CONFIG = Object.freeze({
   supabaseKey: 'sb_publishable_YtVKcZqgPalUaYOHpoSV1w_86he5PDV',
   mediaBucket: 'salty-media',
   avatarBucket: 'salty-avatars',
+  chatBucket: 'salty-chat',
   maxUploadBytes: 50 * 1024 * 1024,
   maxAvatarBytes: 8 * 1024 * 1024,
+  maxChatPhotoBytes: 10 * 1024 * 1024,
   maxClipSeconds: 90,
   emailOtpDigits: 8,
 });
@@ -23,7 +25,8 @@ const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
 
 const state = {
   session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [], perks: [],
-  currentRegion: null, eventRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
+  roomMessages: [], dmMessages: [], dmThreads: [], chatPhotoUrls: {}, activeDmMember: null,
+  currentRegion: null, eventRegion: null, chatRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
   consentNext: 'new', sessionPeople: [], editingSessionId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
@@ -218,6 +221,7 @@ function runPreview() {
   state.regions = [{ id: regionId, name: 'California' }, { id: 'fr', name: 'France' }, { id: 'de', name: 'Germany' }, { id: 'ut', name: 'Utah' }];
   state.currentRegion = state.regions[0];
   state.eventRegion = state.currentRegion;
+  state.chatRegion = state.currentRegion;
   state.people = [state.profile, { id: 'jonah', name: 'Jonah Reyes', nickname:'Jo', home_region:regionId, sponsors:['Snake Eyes'], onboarding_complete:true }, { id: 'mateo', name: 'Mateo Karras', nickname:null, home_region:regionId, sponsors:[], onboarding_complete:true }];
   state.spots = [{ id: 'malibu', name: 'Malibu', general_location:'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', general_location:'San Clemente', region_id: regionId }];
   state.previewSessions = [
@@ -230,7 +234,13 @@ function runPreview() {
     { id:'sv', name:'Saltyviewfinder Store Discount', brand_name:'Saltyviewfinder', offer_text:'Salty member discount', description:'Sodium merch, prints, and more.', store_url:'https://saltyviewfinder.com', active:true },
     { id:'wata', name:'WATA Store Discount', brand_name:'WATA', offer_text:'Salty member discount', description:'Support WATA and save on store gear.', store_url:'https://cleanwata.org', active:true },
   ];
-  renderChrome(); renderSessions(); renderPosts(); renderPerks(); renderPreviewProfile(); renderMembers(); showOnly('app');
+  state.roomMessages = [
+    { id:'chat-1', region_id:regionId, author:'jonah', body:'Waist high at first point. Crowd is pretty mellow.', created_at:new Date(Date.now() - 22 * 60000).toISOString() },
+    { id:'chat-2', region_id:regionId, author:userId, body:'I can film for an hour around 7.', created_at:new Date(Date.now() - 8 * 60000).toISOString() },
+  ];
+  state.dmMessages = [{ id:'dm-1', sender:'jonah', recipient:userId, body:'Want to hit Lowers Friday?', created_at:new Date(Date.now() - 35 * 60000).toISOString(), read_at:null }];
+  state.dmThreads = [{ memberId:'jonah', message:state.dmMessages[0] }];
+  renderChrome(); renderSessions(); renderPosts(); renderPerks(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
 
@@ -488,9 +498,10 @@ async function loadApp() {
   state.people = peopleResult.data;
   state.currentRegion = state.regions.find(region => region.id === state.profile.home_region) || state.regions.find(region => region.name === 'California') || state.regions[0];
   state.eventRegion = state.currentRegion;
+  state.chatRegion = state.currentRegion;
   await loadAvatarUrls();
   renderChrome();
-  await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), renderProfile()]);
+  await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadRoomMessages(), loadDmInbox(), renderProfile()]);
   renderMembers();
   subscribeRealtime();
 }
@@ -643,6 +654,8 @@ function renderChrome() {
   $('#peopleList').innerHTML = state.people.map(person => `<option value="${esc(person.name)}"></option>`).join('');
   $('#drawerProfile').innerHTML = `${avatarMarkup(state.profile)}<div><h3>${esc(state.profile.name)}</h3><p>${esc(state.currentRegion.name)} · Salty Crew</p></div>`;
   renderEventRegions();
+  renderChatRegions();
+  renderDmPeople();
 }
 
 function setView(view) {
@@ -655,6 +668,8 @@ function setView(view) {
   if (!coreView) $$('.primary-nav button,.bottom-nav button').forEach(button => button.classList.remove('active'));
   closeDrawer();
   scrollTo({ top: 0, behavior: 'smooth' });
+  if (!state.preview && view === 'chat') loadRoomMessages();
+  if (!state.preview && view === 'dms') loadDmInbox();
 }
 
 async function loadSessions() {
@@ -671,6 +686,200 @@ function renderEventRegions() {
   if (!target || !state.eventRegion) return;
   target.innerHTML = activeRegions().map(region => `<button data-event-region="${region.id}" class="${region.id === state.eventRegion.id ? 'active' : ''}">${esc(region.name)}</button>`).join('');
   $('#eventRegionName').textContent = state.eventRegion.name;
+}
+
+function renderChatRegions() {
+  const target = $('#chatRegions');
+  if (!target || !state.chatRegion) return;
+  target.innerHTML = activeRegions().map(region => `<button data-chat-region="${region.id}" class="${region.id === state.chatRegion.id ? 'active' : ''}">${esc(region.name)}</button>`).join('');
+  $('#chatRoomTitle').textContent = state.chatRegion.name;
+}
+
+function messageTime(value) {
+  const date = new Date(value);
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  return new Intl.DateTimeFormat(undefined, sameDay ? { hour:'numeric', minute:'2-digit' } : { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }).format(date);
+}
+
+function speakerHue(id = '') {
+  return [...String(id)].reduce((total, char) => total + char.charCodeAt(0), 0) % 360;
+}
+
+function memberById(id) {
+  return id === state.profile?.id ? state.profile : state.people.find(person => person.id === id);
+}
+
+async function loadRoomMessages() {
+  if (!state.chatRegion) return;
+  const result = await db.from('room_messages').select('*').eq('region_id', state.chatRegion.id)
+    .order('created_at', { ascending:false }).limit(150);
+  if (result.error) { toast(readableError(result.error)); return; }
+  state.roomMessages = (result.data || []).reverse();
+  const photoMessages = state.roomMessages.filter(message => message.attachment_path);
+  const signedEntries = await Promise.all(photoMessages.map(async message => {
+    const signed = await db.storage.from(CONFIG.chatBucket).createSignedUrl(message.attachment_path, 3600);
+    return [message.id, signed.error ? null : signed.data.signedUrl];
+  }));
+  state.chatPhotoUrls = Object.fromEntries(signedEntries);
+  renderRoomMessages();
+}
+
+function renderRoomMessages() {
+  const list = $('#roomMessages');
+  if (!list || !state.chatRegion) return;
+  const messages = state.roomMessages.filter(message => message.region_id === state.chatRegion.id);
+  if (!messages.length) {
+    list.innerHTML = `<div class="empty chat-empty"><span>${esc(state.chatRegion.name)}</span><h2>Start the conversation</h2><p>Ask how it looks, coordinate a surf, or share a photo from the beach.</p></div>`;
+    return;
+  }
+  list.innerHTML = messages.map(message => {
+    const profile = memberById(message.author) || { id:message.author, name:'Salty member' };
+    const own = message.author === state.profile.id;
+    const photo = state.chatPhotoUrls[message.id];
+    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.author)}">${own ? '' : avatarMarkup(profile, 'message-avatar')}<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time></div><div class="message-bubble">${photo ? `<img src="${esc(photo)}" alt="Photo shared by ${esc(profile.name)}">` : ''}${message.body ? `<p>${esc(message.body)}</p>` : ''}</div></div></article>`;
+  }).join('');
+  requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+}
+
+async function sendRoomMessage(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const body = $('#roomMessageBody').value.trim();
+  const file = $('#roomPhoto').files[0];
+  if (!body && !file) { toast('Write a message or choose a photo.'); return; }
+  if (file && !['image/jpeg','image/png','image/webp','image/gif'].includes(file.type)) { toast('Community chat accepts photos only—no video.'); return; }
+  if (file && file.size > CONFIG.maxChatPhotoBytes) { toast('Chat photos must be 10 MB or smaller.'); return; }
+  const submit = $('button[type="submit"]', form); submit.disabled = true;
+  let attachmentPath = null;
+  try {
+    if (file) {
+      const safeName = file.name.replace(/[^a-z0-9._-]+/gi, '-').slice(-100);
+      attachmentPath = `${state.profile.id}/${crypto.randomUUID()}-${safeName}`;
+      const upload = await db.storage.from(CONFIG.chatBucket).upload(attachmentPath, file, { contentType:file.type, upsert:false });
+      if (upload.error) throw upload.error;
+    }
+    const result = await db.from('room_messages').insert({
+      region_id:state.chatRegion.id, author:state.profile.id, body:body || null,
+      attachment_path:attachmentPath, attachment_type:file?.type || null,
+      attachment_name:file?.name || null, attachment_size:file?.size || null,
+    });
+    if (result.error) throw result.error;
+    form.reset(); $('#roomPhotoName').textContent = ''; $('#roomPhotoName').classList.add('hidden');
+    await loadRoomMessages();
+  } catch (error) {
+    if (attachmentPath) await db.storage.from(CONFIG.chatBucket).remove([attachmentPath]);
+    toast(readableError(error), 5000);
+  } finally { submit.disabled = false; }
+}
+
+function renderDmPeople() {
+  const target = $('#dmPeople');
+  if (!target) return;
+  target.innerHTML = state.people.filter(person => person.id !== state.profile.id).map(person => {
+    const region = state.regions.find(item => item.id === person.home_region)?.name || 'Salty Crew';
+    return `<button class="member-row" data-dm-member="${person.id}">${avatarMarkup(person)}<span><b>${esc(person.name)}</b><small>${esc(region)}</small></span><i>›</i></button>`;
+  }).join('');
+}
+
+async function loadDmInbox() {
+  const userId = state.profile.id;
+  const result = await db.from('dm_messages').select('*')
+    .or(`sender.eq.${userId},recipient.eq.${userId}`).order('created_at', { ascending:false }).limit(500);
+  if (result.error) { toast(readableError(result.error)); return; }
+  state.dmMessages = result.data || [];
+  const threads = new Map();
+  state.dmMessages.forEach(message => {
+    const otherId = message.sender === userId ? message.recipient : message.sender;
+    if (!threads.has(otherId)) threads.set(otherId, message);
+  });
+  state.dmThreads = [...threads.entries()].map(([memberId, message]) => ({ memberId, message }));
+  renderDmInbox();
+}
+
+function updateUnreadBadge() {
+  const count = state.dmMessages.filter(message => message.recipient === state.profile.id && !message.read_at).length;
+  const badge = $('#dmUnreadBadge');
+  badge.textContent = count > 99 ? '99+' : String(count);
+  badge.classList.toggle('hidden', count === 0);
+}
+
+function renderDmInbox() {
+  const target = $('#dmThreads');
+  if (!target) return;
+  updateUnreadBadge();
+  if (!state.dmThreads.length) {
+    target.innerHTML = `<div class="empty dm-empty"><span>PRIVATE MESSAGES</span><h2>No messages yet</h2><p>Choose a member below to start a text-only conversation.</p></div>`;
+    renderDmPeople();
+    return;
+  }
+  target.innerHTML = state.dmThreads.map(thread => {
+    const person = memberById(thread.memberId) || { id:thread.memberId, name:'Salty member' };
+    const unread = thread.message.recipient === state.profile.id && !thread.message.read_at;
+    const prefix = thread.message.sender === state.profile.id ? 'You: ' : '';
+    return `<button class="dm-thread ${unread ? 'unread' : ''}" data-dm-member="${thread.memberId}">${avatarMarkup(person)}<span><b>${esc(person.name)}</b><p>${esc(prefix + thread.message.body)}</p></span><time>${esc(messageTime(thread.message.created_at))}</time>${unread ? '<i></i>' : ''}</button>`;
+  }).join('');
+  renderDmPeople();
+}
+
+async function openDm(memberId) {
+  const person = memberById(memberId);
+  if (!person || person.id === state.profile.id) return;
+  state.activeDmMember = person;
+  $('#dmPerson').innerHTML = `${avatarMarkup(person, 'message-avatar')}<div><b>${esc(person.name)}</b><small>Private · text only</small></div>`;
+  setView('dm');
+  if (state.preview) { renderDmConversation(); return; }
+  await loadDmConversation();
+}
+
+async function loadDmConversation() {
+  if (!state.activeDmMember) return;
+  const mine = state.profile.id;
+  const theirs = state.activeDmMember.id;
+  const result = await db.from('dm_messages').select('*')
+    .or(`and(sender.eq.${mine},recipient.eq.${theirs}),and(sender.eq.${theirs},recipient.eq.${mine})`)
+    .order('created_at', { ascending:true }).limit(250);
+  if (result.error) { toast(readableError(result.error)); return; }
+  state.dmMessages = result.data || [];
+  const unread = state.dmMessages.filter(message => message.sender === theirs && message.recipient === mine && !message.read_at);
+  if (unread.length) {
+    const marked = await db.rpc('mark_dm_read', { other_user:theirs });
+    if (!marked.error) state.dmMessages.forEach(message => { if (message.sender === theirs && message.recipient === mine) message.read_at ||= new Date().toISOString(); });
+  }
+  renderDmConversation();
+  await loadDmInbox();
+}
+
+function renderDmConversation() {
+  const list = $('#dmMessages');
+  if (!list || !state.activeDmMember) return;
+  const mine = state.profile.id;
+  const theirs = state.activeDmMember.id;
+  const messages = state.dmMessages.filter(message => (message.sender === mine && message.recipient === theirs) || (message.sender === theirs && message.recipient === mine));
+  if (!messages.length) {
+    list.innerHTML = `<div class="empty chat-empty"><span>PRIVATE</span><h2>Message ${esc(state.activeDmMember.name)}</h2><p>DMs are text only. Photos and clips stay out of private messages.</p></div>`;
+    return;
+  }
+  list.innerHTML = messages.map(message => {
+    const own = message.sender === mine;
+    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.sender)}">${own ? '' : avatarMarkup(state.activeDmMember, 'message-avatar')}<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(state.activeDmMember.name)}</b><time>${esc(messageTime(message.created_at))}</time></div><div class="message-bubble"><p>${esc(message.body)}</p></div></div></article>`;
+  }).join('');
+  requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+}
+
+async function sendDmMessage(event) {
+  event.preventDefault();
+  if (!state.activeDmMember) return;
+  const body = $('#dmMessageBody').value.trim();
+  if (!body) return;
+  const submit = $('button[type="submit"]', event.currentTarget); submit.disabled = true;
+  try {
+    const result = await db.from('dm_messages').insert({ sender:state.profile.id, recipient:state.activeDmMember.id, body });
+    if (result.error) throw result.error;
+    event.currentTarget.reset();
+    await loadDmConversation();
+  } catch (error) { toast(readableError(error), 5000); }
+  finally { submit.disabled = false; }
 }
 
 async function loadEvents() {
@@ -1199,7 +1408,7 @@ function profileMarkup(profile, stats = {}) {
   const social = socialUrl ? `<a class="profile-link" href="${esc(socialUrl)}" target="_blank" rel="noopener">Social profile ↗</a>` : '';
   const controls = stats.own
     ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Salty</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
-    : `<div class="profile-actions"><button class="primary" data-action="coming-chat">Message ${esc(profile.name)}</button></div>`;
+    : `<div class="profile-actions"><button class="primary" data-dm-member="${profile.id}">Message ${esc(profile.name)}</button></div>`;
   return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Salty Crew</p></div></div>${stats.own ? `<div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.clips || 0}</b><span>clips</span></article></div>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${controls}<footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
 }
 
@@ -1239,6 +1448,11 @@ function subscribeRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, async () => await loadEvents())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'event_rsvps' }, async () => await loadEvents())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'rewards' }, async () => await loadPerks())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_messages' }, async () => await loadRoomMessages())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_messages' }, async () => {
+      if (state.activeDmMember && state.view === 'dm') await loadDmConversation();
+      else await loadDmInbox();
+    })
     .subscribe();
 }
 
@@ -1283,9 +1497,12 @@ document.addEventListener('click', async event => {
   const editEventNode = event.target.closest('[data-edit-event]');
   const editPerkNode = event.target.closest('[data-edit-perk]');
   const copyPerkNode = event.target.closest('[data-copy-perk]');
+  const chatRegionNode = event.target.closest('[data-chat-region]');
+  const dmMemberNode = event.target.closest('[data-dm-member]');
   if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
   if (viewNode) setView(viewNode.dataset.view);
   if (memberNode) openMember(memberNode.dataset.member);
+  if (dmMemberNode) await openDm(dmMemberNode.dataset.dmMember);
   if (removeSessionPersonNode) {
     state.sessionPeople.splice(Number(removeSessionPersonNode.dataset.removeSessionPerson), 1);
     renderSessionPeopleChips();
@@ -1302,6 +1519,12 @@ document.addEventListener('click', async event => {
     state.eventRegion = state.regions.find(region => region.id === eventRegionNode.dataset.eventRegion);
     renderEventRegions();
     if (!state.preview) await loadEvents();
+  }
+  if (chatRegionNode) {
+    state.chatRegion = state.regions.find(region => region.id === chatRegionNode.dataset.chatRegion);
+    renderChatRegions();
+    if (state.preview) renderRoomMessages();
+    else await loadRoomMessages();
   }
   if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'edit-profile', 'delete-perk', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
@@ -1355,7 +1578,7 @@ document.addEventListener('click', async event => {
     'native-install': runNativeInstall,
     'close-sheet': closeSheet,
     'go-surfing': () => setView('surfing'),
-    'coming-chat': () => toast('DMs arrive in the next phase.'),
+    'open-dms': () => setView('dms'),
     'make-invite': shareInvite,
     'share-invite': shareInvite,
     'edit-profile': showProfileSetup,
@@ -1377,6 +1600,8 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'postForm') await createPost(event);
   else if (event.target.id === 'eventForm') await createEvent(event);
   else if (event.target.id === 'perkForm') await savePerk(event);
+  else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
+  else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);
 });
 
@@ -1399,6 +1624,21 @@ $('#mediaFile').addEventListener('change', async event => {
   $('#fileLabel').textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB`;
   try { await validateMedia(file); }
   catch (error) { toast(readableError(error), 5000); event.target.value = ''; $('#fileLabel').textContent = 'Add photo or clip'; }
+});
+
+$('#roomPhoto').addEventListener('change', event => {
+  const file = event.target.files[0];
+  const label = $('#roomPhotoName');
+  if (!file) { label.textContent = ''; label.classList.add('hidden'); return; }
+  if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type)) {
+    event.target.value = ''; label.textContent = ''; label.classList.add('hidden');
+    toast('Community chat accepts photos only—no video.'); return;
+  }
+  if (file.size > CONFIG.maxChatPhotoBytes) {
+    event.target.value = ''; label.textContent = ''; label.classList.add('hidden');
+    toast('Chat photos must be 10 MB or smaller.'); return;
+  }
+  label.textContent = file.name; label.classList.remove('hidden');
 });
 
 function fillKnownSpotLocation(spotInput, locationInput) {
