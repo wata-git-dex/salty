@@ -14,7 +14,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
 });
 const CONSENT_VERSION = '1.0';
-const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V3_5.pdf';
+const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V4.pdf';
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
 
@@ -226,8 +226,8 @@ function runPreview() {
   state.people = [state.profile, { id: 'jonah', name: 'Jonah Reyes', nickname:'Jo', home_region:regionId, sponsors:['Snake Eyes'], onboarding_complete:true }, { id: 'mateo', name: 'Mateo Karras', nickname:null, home_region:regionId, sponsors:[], onboarding_complete:true }];
   state.spots = [{ id: 'malibu', name: 'Malibu', general_location:'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', general_location:'San Clemente', region_id: regionId }];
   state.previewSessions = [
-    { id:'mine', author:userId, region_id:regionId, author_role:'film', participant_names:['Sam'], when_label:'Now', wants_filmer:false, note:'bringing the long lens', spot:{name:'Malibu',general_location:'Malibu'}, author_profile:{name:'Cyrus V.'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah Reyes'}}]},
-    { id:'crew', author:'jonah', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 3 * 86400000).toISOString(), wants_filmer:true, note:'sunrise window', spot:{name:'Lowers',general_location:'San Clemente'}, author_profile:{name:'Jonah Reyes'}, session_rsvps:[] },
+    { id:'mine', author:userId, region_id:regionId, author_role:'surf', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 86400000).toISOString(), wants_filmer:false, note:'morning glass before the wind', spot:{name:"Old Man's",general_location:'San Onofre'}, author_profile:{name:'Cyrus'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah'}}]},
+    { id:'crew', author:'jonah', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 3 * 86400000).toISOString(), wants_filmer:true, note:'sunrise window', spot:{name:'Lowers',general_location:'San Clemente'}, author_profile:{name:'Jonah'}, session_rsvps:[] },
   ];
   state.sessions = state.previewSessions;
   state.posts = [];
@@ -1177,19 +1177,21 @@ function renderSessions() {
   feed.innerHTML = orderedSessions.map(session => {
     const mine = session.author === state.profile.id;
     const myRsvp = session.session_rsvps.find(rsvp => rsvp.user_id === state.profile.id);
-    const surfers = [...(session.participant_names || []), session.featured_surfer_name, ...session.session_rsvps.filter(rsvp => rsvp.role === 'surf').map(rsvp => rsvp.profile?.name)]
+    const surfers = [session.author_role === 'surf' ? session.author_profile?.name : null, ...(session.participant_names || []), session.featured_surfer_name, ...session.session_rsvps.filter(rsvp => rsvp.role === 'surf').map(rsvp => rsvp.profile?.name)]
       .filter(Boolean)
       .filter((name, index, names) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
-    const filmers = session.session_rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name).filter((name, index, names) => name && names.indexOf(name) === index);
+    const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...session.session_rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
     const crewSummary = [surfers.length ? `<b>${esc(surfers.join(', '))}</b> surfing` : '', filmers.length ? `<b>${esc(filmers.join(', '))}</b> filming` : ''].filter(Boolean).join(' · ');
     const authorRole = session.author_role === 'film' ? 'filming' : 'surfing';
     const edit = mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="Edit surf"><svg><use href="#i-edit"/></svg></button>` : '';
     const actions = mine
-      ? `<button class="small-action finish" data-end-session="${session.id}"><svg><use href="#i-check"/></svg>Surf finished</button>`
-      : `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-check"/></svg>${myRsvp?.role === 'surf' ? "You're in" : "I'm down"}</button><button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : "I'll film"}</button>`;
+      ? (session.when_label === 'Now'
+        ? `<button class="small-action finish" data-end-session="${session.id}"><svg><use href="#i-check"/></svg>Surf finished</button>`
+        : `<button class="small-action start" data-start-session="${session.id}"><svg><use href="#i-surf"/></svg>Start session</button>`)
+      : `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : "I'm surfing"}</button><button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : "I'm filming"}</button>`;
     const mapUrl = spotMapUrl(session.spot);
     const location = session.spot?.general_location ? `<a class="spot-location" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}</a>` : '';
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i>${edit}<div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you started this session' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag">Wants filmer</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p><div class="card-actions">${actions}</div></article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i>${edit}<div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you shared this surf' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag"><svg><use href="#i-camera"/></svg>Looking for clips</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p><div class="card-actions">${actions}</div></article>`;
   }).join('');
 }
 
@@ -1288,11 +1290,17 @@ async function createSession(event) {
     const spot = await ensureSpot($('#sessionSpot').value, $('#sessionLocation').value, state.currentRegion.id);
     const later = $('[data-when="later"]').classList.contains('active');
     const surfTime = later ? $('#sessionTime').value : null;
+    const existingSession = state.editingSessionId ? state.sessions.find(session => session.id === state.editingSessionId) : null;
     if (later && !surfTime) throw new Error('Pick a date and time.');
     if (surfTime && new Date(surfTime) <= new Date()) throw new Error('Pick a future date and time.');
+    const savedSurfTime = surfTime
+      ? new Date(surfTime).toISOString()
+      : existingSession?.when_label === 'Now'
+        ? existingSession.surf_time
+        : existingSession ? new Date().toISOString() : null;
     const payload = {
       author: state.profile.id, spot_id: spot.id, region_id: state.currentRegion.id,
-      when_label: later ? 'Scheduled' : 'Now', surf_time: surfTime ? new Date(surfTime).toISOString() : null,
+      when_label: later ? 'Scheduled' : 'Now', surf_time: savedSurfTime,
       author_role: $('[data-session-role].active').dataset.sessionRole,
       featured_surfer_name: null, featured_surfer_user: null, participant_names: state.sessionPeople,
       wants_filmer: $('#wantsFilmer').checked, note: $('#sessionNote').value.trim() || null,
@@ -1314,6 +1322,12 @@ async function setRsvp(sessionId, role) {
     : await db.from('session_rsvps').upsert({ session_id: sessionId, user_id: state.profile.id, role }, { onConflict: 'session_id,user_id' });
   if (result.error) { toast(readableError(result.error)); return; }
   await loadSessions(); await renderProfile();
+}
+
+async function startSession(sessionId) {
+  const result = await db.from('sessions').update({ when_label: 'Now', surf_time: new Date().toISOString() }).eq('id', sessionId).eq('author', state.profile.id).eq('status', 'active');
+  if (result.error) { toast(readableError(result.error)); return; }
+  await loadSessions(); toast('Session started — the crew can see you are out now.');
 }
 
 async function endSession(sessionId) {
@@ -1600,7 +1614,7 @@ function closeGuide() {
 async function quickStartGuideFile() {
   const response = await fetch(quickStartGuideUrl());
   if (!response.ok) throw new Error('The Quick Start Guide could not be loaded.');
-  return new File([await response.blob()], 'SALTY_Quick_Start_Guide_V3_5.pdf', { type:'application/pdf' });
+  return new File([await response.blob()], 'SALTY_Quick_Start_Guide_V4.pdf', { type:'application/pdf' });
 }
 
 async function shareSaltyContent({ title, text, url, file = null, copiedMessage }) {
@@ -1668,6 +1682,7 @@ document.addEventListener('click', async event => {
   const regionNode = event.target.closest('[data-region]');
   const rsvpNode = event.target.closest('[data-rsvp]');
   const endNode = event.target.closest('[data-end-session]');
+  const startNode = event.target.closest('[data-start-session]');
   const editSessionNode = event.target.closest('[data-edit-session]');
   const editPostNode = event.target.closest('[data-edit-post]');
   const removeSessionPersonNode = event.target.closest('[data-remove-session-person]');
@@ -1711,11 +1726,12 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'cancel-session', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || startNode || endNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'cancel-session', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
   if (rsvpNode) await setRsvp(rsvpNode.dataset.rsvp, rsvpNode.dataset.role);
+  if (startNode) await startSession(startNode.dataset.startSession);
   if (editSessionNode) openSessionComposer(editSessionNode.dataset.editSession);
   if (editPostNode) openPostComposer(editPostNode.dataset.editPost);
   if (endNode) await endSession(endNode.dataset.endSession);

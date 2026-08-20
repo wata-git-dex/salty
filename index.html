@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=34">
+  <link rel="stylesheet" href="./styles.css?v=35">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -54,6 +54,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>salty</span>
+    <small class="boot-credit">SaltyView Productions · v35</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -245,14 +246,14 @@
     <div id="sheetScrim" class="sheet-scrim" data-action="close-sheet"></div>
     <section id="sessionSheet" class="sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
-      <h2 id="sessionSheetTitle">Share a surf</h2><p>Post for now or plan ahead in <b id="sessionRegionName">California</b>. It stays live through the scheduled surf.</p>
+      <h2 id="sessionSheetTitle">Share a surf</h2><p>Let the crew know when you're surfing in <b id="sessionRegionName">California</b>. Everyone can join to surf or film.</p>
       <form id="sessionForm">
         <label>Spot name<input id="sessionSpot" maxlength="120" required placeholder="Old Man's" list="spotsList"><datalist id="spotsList"></datalist></label>
         <label>General location<input id="sessionLocation" maxlength="160" required placeholder="San Onofre" list="locationsList"><datalist id="locationsList"></datalist><small>The broader map area—not a secret pin or exact takeoff spot.</small></label>
         <label>When<div class="segmented"><button type="button" class="active" data-when="now">Now</button><button type="button" data-when="later">Pick a time</button></div><span id="sessionDateChoice" class="date-choice hidden"><svg><use href="#i-calendar"/></svg><span><small>Surf date &amp; time</small><strong id="sessionTimeDisplay">Choose date and time</strong></span><input id="sessionTime" type="datetime-local" aria-label="Surf date and time"></span></label>
         <label>You're going to<div class="segmented"><button type="button" class="active" data-session-role="surf">Surf</button><button type="button" data-session-role="film">Film</button></div></label>
         <label>Surfing with <small>optional · add as many people as you want</small><div id="sessionPeopleChips" class="person-chips"></div><div class="add-person-row"><input id="sessionPersonInput" maxlength="100" placeholder="Add a name" list="peopleList"><button type="button" data-action="add-session-person">Add</button></div></label>
-        <label id="wantsFilmerRow" class="toggle-row"><span>Want a filmer?<small>Flags your session so filmers see it</small></span><input id="wantsFilmer" type="checkbox" role="switch"></label>
+        <label id="wantsFilmerRow" class="clip-toggle"><input id="wantsFilmer" type="checkbox" role="switch"><span class="clip-toggle-icon"><svg><use href="#i-camera"/></svg></span><span>Looking for clips<small>Optional · highlights this surf for filmers</small></span><b aria-hidden="true"></b></label>
         <label>Note <small>optional</small><textarea id="sessionNote" maxlength="500" placeholder="Anything? “first one in”, “bringing the longboard”…"></textarea></label>
         <button id="sessionSubmit" class="primary" type="submit">Share session</button>
         <button id="sessionCancel" class="danger-button hidden" type="button" data-action="cancel-session"><svg><use href="#i-close"/></svg>Cancel session</button>
@@ -328,6 +329,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=34" defer></script>
+  <script src="./app.js?v=35" defer></script>
 </body>
 </html>
