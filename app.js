@@ -14,6 +14,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
 });
 const CONSENT_VERSION = '1.0';
+const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V2.pdf';
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
 
@@ -1002,17 +1003,50 @@ function localTimeValue(date) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
+function readableDateValue(value) {
+  if (!value) return 'Choose a date';
+  return new Intl.DateTimeFormat([], { weekday:'short', month:'short', day:'numeric', year:'numeric' }).format(new Date(`${value}T12:00:00`));
+}
+
+function readableTimeValue(value) {
+  if (!value) return 'Choose a time';
+  const [hours, minutes] = value.split(':').map(Number);
+  return new Intl.DateTimeFormat([], { hour:'numeric', minute:'2-digit' }).format(new Date(2000, 0, 1, hours, minutes));
+}
+
+function readableDateTimeValue(value) {
+  if (!value) return 'Choose date and time';
+  return new Intl.DateTimeFormat([], { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }).format(new Date(value));
+}
+
+function updateDateChoiceLabels() {
+  $('#eventDateDisplay').textContent = readableDateValue($('#eventDate').value);
+  $('#eventStartDisplay').textContent = readableTimeValue($('#eventStartClock').value);
+  $('#eventEndDisplay').textContent = readableTimeValue($('#eventEndClock').value);
+  $('#sessionTimeDisplay').textContent = readableDateTimeValue($('#sessionTime').value);
+}
+
+function ensureSessionTimeChoice() {
+  if (!$('#sessionTime').value) {
+    const date = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    date.setHours(7, 0, 0, 0);
+    $('#sessionTime').value = `${localDateValue(date)}T${localTimeValue(date)}`;
+  }
+  updateDateChoiceLabels();
+}
+
 function resetEventComposer() {
   state.editingEventId = null;
   $('#eventForm').reset();
   $('#eventSheetTitle').textContent = 'Add an event';
   $('#eventSubmit').textContent = 'Share event';
   const start = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  start.setMinutes(0, 0, 0);
+  start.setHours(18, 0, 0, 0);
   const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
   $('#eventDate').value = localDateValue(start);
   $('#eventStartClock').value = localTimeValue(start);
   $('#eventEndClock').value = localTimeValue(end);
+  updateDateChoiceLabels();
 }
 
 function openEventComposer(eventId = null) {
@@ -1031,6 +1065,7 @@ function openEventComposer(eventId = null) {
     $('#eventVenue').value = item.venue_name || item.spot?.name || '';
     $('#eventLocation').value = item.location_text || item.spot?.general_location || '';
     $('#eventDescription').value = item.description || '';
+    updateDateChoiceLabels();
   }
   openSheet('eventSheet');
 }
@@ -1206,7 +1241,9 @@ function resetSessionComposer() {
   $('#sessionSubmit').textContent = 'Share session';
   $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === 'now'));
   $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === 'surf'));
-  $('#sessionTime').classList.add('hidden');
+  $('#sessionDateChoice').classList.add('hidden');
+  $('#sessionTime').value = '';
+  updateDateChoiceLabels();
   $('#wantsFilmerRow').classList.remove('hidden');
   renderSessionPeopleChips();
 }
@@ -1223,11 +1260,12 @@ function openSessionComposer(sessionId = null) {
     $('#sessionLocation').value = session.spot?.general_location || '';
     const later = session.when_label !== 'Now';
     $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === (later ? 'later' : 'now')));
-    $('#sessionTime').classList.toggle('hidden', !later);
+    $('#sessionDateChoice').classList.toggle('hidden', !later);
     if (session.surf_time) {
       const localDate = new Date(new Date(session.surf_time).getTime() - new Date(session.surf_time).getTimezoneOffset() * 60000);
       $('#sessionTime').value = localDate.toISOString().slice(0, 16);
     }
+    if (later) ensureSessionTimeChoice();
     $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === session.author_role));
     $('#wantsFilmerRow').classList.toggle('hidden', session.author_role === 'film');
     $('#wantsFilmer').checked = session.wants_filmer;
@@ -1409,7 +1447,7 @@ function profileMarkup(profile, stats = {}) {
   const socialUrl = safeExternalUrl(profile.social_url);
   const social = socialUrl ? `<a class="profile-link" href="${esc(socialUrl)}" target="_blank" rel="noopener">Social profile ↗</a>` : '';
   const controls = stats.own
-    ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Salty</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
+    ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Salty</button><button class="secondary-button guide-invite-button" data-action="share-invite-guide">Invite a friend + guide</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
     : `<div class="profile-actions"><button class="primary" data-dm-member="${profile.id}">Message ${esc(profile.name)}</button></div>`;
   return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Salty Crew</p></div></div>${stats.own ? `<div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.clips || 0}</b><span>clips</span></article></div>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${controls}<footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
 }
@@ -1463,20 +1501,72 @@ function closeDrawer() { $('#drawer').classList.remove('open'); $('#drawerScrim'
 function openSheet(id) { const sheet = $(`#${id}`); sheet.scrollTop = 0; sheet.classList.add('open'); $('#sheetScrim').classList.add('open'); }
 function closeSheet() { $$('.sheet').forEach(sheet => sheet.classList.remove('open')); $('#sheetScrim').classList.remove('open'); }
 
-async function shareInvite() {
+function quickStartGuideUrl() {
+  return new URL(GUIDE_PATH, location.href).href;
+}
+
+async function quickStartGuideFile() {
+  const response = await fetch(quickStartGuideUrl());
+  if (!response.ok) throw new Error('The Quick Start Guide could not be loaded.');
+  return new File([await response.blob()], 'SALTY_Quick_Start_Guide_V2.pdf', { type:'application/pdf' });
+}
+
+async function shareSaltyContent({ title, text, url, file = null, copiedMessage }) {
+  if (navigator.share) {
+    if (file && navigator.canShare?.({ files:[file] })) {
+      await navigator.share({ title, text, url, files:[file] });
+    } else {
+      await navigator.share({ title, text, url });
+    }
+    return;
+  }
+  const copy = `${text}\n${url}`;
+  try {
+    await navigator.clipboard.writeText(copy);
+    toast(copiedMessage);
+  } catch (_error) {
+    prompt('Copy this message:', copy);
+  }
+}
+
+async function shareGuide() {
+  const url = quickStartGuideUrl();
+  const title = 'Salty Quick Start Guide';
+  const text = 'Here is the Salty Quick Start Guide.';
+  let file = null;
+  try { file = await quickStartGuideFile(); }
+  catch (_error) { /* The public guide link remains available as a fallback. */ }
+  try {
+    await shareSaltyContent({ title, text, url, file, copiedMessage:'Quick Start Guide link copied.' });
+  } catch (error) {
+    if (error?.name !== 'AbortError') prompt('Copy the Quick Start Guide link:', url);
+  }
+}
+
+async function shareInvite({ includeGuide = false } = {}) {
   const result = await db.rpc('create_invite', { invite_max_uses: 1 });
   if (result.error) { toast(readableError(result.error)); return; }
   const url = new URL('./', location.href); url.searchParams.set('invite', result.data);
-  const shareData = {
-    title: "You're invited to Salty",
-    text: `I'm inviting you to Salty, a private surf community. Hopefully it helps us surf more together.`,
-    url: url.href,
-  };
+  const guideUrl = quickStartGuideUrl();
+  const title = "You're invited to Salty";
+  const text = includeGuide
+    ? `I'm inviting you to Salty, a private surf community. Hopefully it helps us surf more together.\n\nYour invite: ${url.href}\nQuick Start Guide: ${guideUrl}`
+    : `I'm inviting you to Salty, a private surf community. Hopefully it helps us surf more together.`;
+  let file = null;
+  if (includeGuide) {
+    try { file = await quickStartGuideFile(); }
+    catch (_error) { /* Both links remain in the share message. */ }
+  }
   try {
-    if (navigator.share) await navigator.share(shareData);
-    else { await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`); toast('Invite message and link copied.'); }
+    await shareSaltyContent({
+      title,
+      text,
+      url:url.href,
+      file,
+      copiedMessage:includeGuide ? 'Invite and guide links copied.' : 'Invite message and link copied.',
+    });
   } catch (error) {
-    if (error?.name !== 'AbortError') prompt('Copy this invite:', `${shareData.text}\n${shareData.url}`);
+    if (error?.name !== 'AbortError') prompt('Copy this invite:', `${text}\n${url.href}`);
   }
 }
 
@@ -1528,7 +1618,7 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'edit-profile', 'delete-perk', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -1549,7 +1639,9 @@ document.addEventListener('click', async event => {
   }
   if (whenNode) {
     $$('[data-when]').forEach(button => button.classList.toggle('active', button === whenNode));
-    $('#sessionTime').classList.toggle('hidden', whenNode.dataset.when !== 'later');
+    const later = whenNode.dataset.when === 'later';
+    $('#sessionDateChoice').classList.toggle('hidden', !later);
+    if (later) ensureSessionTimeChoice();
   }
   if (sessionRoleNode) {
     $$('[data-session-role]').forEach(button => button.classList.toggle('active', button === sessionRoleNode));
@@ -1581,8 +1673,10 @@ document.addEventListener('click', async event => {
     'close-sheet': closeSheet,
     'go-surfing': () => setView('surfing'),
     'open-dms': () => setView('dms'),
-    'make-invite': shareInvite,
-    'share-invite': shareInvite,
+    'make-invite': () => shareInvite(),
+    'share-invite': () => shareInvite(),
+    'share-invite-guide': () => shareInvite({ includeGuide:true }),
+    'share-guide': shareGuide,
     'edit-profile': showProfileSetup,
     'cancel-profile': () => showOnly('app'),
     'sign-out': async () => { clearPendingAuth(); await db.auth.signOut(); location.href = './'; },
@@ -1652,6 +1746,10 @@ function fillKnownSpotLocation(spotInput, locationInput) {
 
 $('#sessionSpot').addEventListener('change', () => fillKnownSpotLocation($('#sessionSpot'), $('#sessionLocation')));
 $('#postSpot').addEventListener('change', () => fillKnownSpotLocation($('#postSpot'), $('#postLocation')));
+['sessionTime', 'eventDate', 'eventStartClock', 'eventEndClock'].forEach(id => {
+  $(`#${id}`).addEventListener('input', updateDateChoiceLabels);
+  $(`#${id}`).addEventListener('change', updateDateChoiceLabels);
+});
 $('#sessionPersonInput').addEventListener('keydown', event => {
   if (event.key !== 'Enter' && event.key !== ',') return;
   event.preventDefault();
