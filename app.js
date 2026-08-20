@@ -1505,6 +1505,20 @@ function quickStartGuideUrl() {
   return new URL(GUIDE_PATH, location.href).href;
 }
 
+function openGuide() {
+  const viewer = $('#guideViewer');
+  const frame = $('#guideFrame');
+  if (!frame.getAttribute('src')) frame.src = quickStartGuideUrl();
+  viewer.classList.remove('hidden');
+  document.body.classList.add('guide-open');
+  viewer.querySelector('[data-action="close-guide"]')?.focus();
+}
+
+function closeGuide() {
+  $('#guideViewer').classList.add('hidden');
+  document.body.classList.remove('guide-open');
+}
+
 async function quickStartGuideFile() {
   const response = await fetch(quickStartGuideUrl());
   if (!response.ok) throw new Error('The Quick Start Guide could not be loaded.');
@@ -1671,6 +1685,8 @@ document.addEventListener('click', async event => {
     'dismiss-install': dismissInstallNudge,
     'native-install': runNativeInstall,
     'close-sheet': closeSheet,
+    'open-guide': openGuide,
+    'close-guide': closeGuide,
     'go-surfing': () => setView('surfing'),
     'open-dms': () => setView('dms'),
     'make-invite': () => shareInvite(),
@@ -1682,6 +1698,10 @@ document.addEventListener('click', async event => {
     'sign-out': async () => { clearPendingAuth(); await db.auth.signOut(); location.href = './'; },
   };
   if (actions[actionNode.dataset.action]) await actions[actionNode.dataset.action]();
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !$('#guideViewer').classList.contains('hidden')) closeGuide();
 });
 
 document.addEventListener('submit', async event => {
