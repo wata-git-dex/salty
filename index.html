@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=33">
+  <link rel="stylesheet" href="./styles.css?v=34">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -262,16 +262,18 @@
 
     <section id="postSheet" class="sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
-      <h2>Share a highlight</h2><p>Photo or clip—the whole community sees this, every area.</p>
+      <h2 id="postSheetTitle">Share a highlight</h2><p id="postSheetDescription">Photo or clip—the whole community sees this, every area.</p>
       <form id="postForm">
-        <label class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" required><svg><use href="#i-camera"/></svg><strong id="fileLabel">Add photo or clip</strong><small>clips up to 90s and 50 MB</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
+        <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" required><svg><use href="#i-camera"/></svg><strong id="fileLabel">Add photo or clip</strong><small>clips up to 90s and 50 MB</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
         <label>Filmer <em>required</em><input id="filmerName" maxlength="100" required placeholder="Any name—the filmer doesn't have to be a member" list="peopleList"></label>
         <label>Surfer / shaper <small>optional</small><input id="surferName" maxlength="100" placeholder="Tag who's in it" list="peopleList"><datalist id="peopleList"></datalist></label>
         <label>Board <small>optional</small><input id="boardName" maxlength="100" placeholder="Shortboard, twin fin, log…"></label>
         <label>Spot <small>optional</small><input id="postSpot" maxlength="120" placeholder="Old Man's" list="spotsList"></label>
         <label>General location <small>optional</small><input id="postLocation" maxlength="160" placeholder="San Onofre" list="locationsList"></label>
         <label>Caption<textarea id="postCaption" maxlength="1000" placeholder="Clean left, third wave of the set…"></textarea></label>
-        <button class="primary" type="submit">Share to Stoke</button>
+        <button id="postSubmit" class="primary" type="submit">Share to Stoke</button>
+        <button id="postDelete" class="danger-button hidden" type="button" data-action="delete-post"><svg><use href="#i-close"/></svg>Delete Stoke post</button>
+        <p id="postDeleteNote" class="session-cancel-note hidden">Deletes the post and its photo or clip for everyone. Posting points already earned stay.</p>
         <p class="upgrade-note">Large-upload runway: this uploader is isolated for a future Supabase Pro + resumable TUS upgrade. <!-- TODO(video): switch uploadMedia() to TUS and raise MAX_UPLOAD_BYTES after upgrading Supabase. --></p>
       </form>
     </section>
@@ -326,6 +328,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=33" defer></script>
+  <script src="./app.js?v=34" defer></script>
 </body>
 </html>

@@ -30,7 +30,7 @@ const state = {
   currentRegion: null, eventRegion: null, chatRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
-  consentNext: 'new', sessionPeople: [], editingSessionId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
+  consentNext: 'new', sessionPeople: [], editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1354,7 +1354,8 @@ function renderPosts() {
     const liked = post.post_likes.some(like => like.user_id === state.profile.id);
     const media = post.media_type === 'clip' ? `<video src="${esc(post.media_url)}" controls preload="metadata" playsinline></video>` : `<img src="${esc(post.media_url)}" alt="${esc(post.caption || 'Surf photo')}">`;
     const comments = post.post_comments.slice(-3).map(comment => `<p class="comment"><b>${esc(comment.author_profile?.name || 'Crew')}</b> ${esc(comment.body)}</p>`).join('');
-    return `<article class="post-card"><div class="post-media">${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Salty')}</span><div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>Surfer</b>${esc(post.surfer_name)}</span>` : ''}${post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : ''}<span class="credit filmer"><b>Filmer</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
+    const edit = post.author === state.profile.id ? `<button class="post-edit-icon" type="button" data-edit-post="${post.id}" aria-label="Edit your Stoke post"><svg><use href="#i-edit"/></svg></button>` : '';
+    return `<article class="post-card"><div class="post-media">${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Salty')}</span>${edit}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>Surfer</b>${esc(post.surfer_name)}</span>` : ''}${post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : ''}<span class="credit filmer"><b>Filmer</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
   }).join('');
 }
 
@@ -1390,43 +1391,102 @@ function matchingPerson(name) {
   return state.people.find(person => person.name.toLowerCase() === name.trim().toLowerCase());
 }
 
-async function createPost(event) {
+function resetPostComposer() {
+  state.editingPostId = null;
+  $('#postForm').reset();
+  $('#postSheetTitle').textContent = 'Share a highlight';
+  $('#postSheetDescription').textContent = 'Photo or clip—the whole community sees this, every area.';
+  $('#postMediaPicker').classList.remove('hidden');
+  $('#mediaFile').required = true;
+  $('#fileLabel').textContent = 'Add photo or clip';
+  $('#postSubmit').textContent = 'Share to Stoke';
+  $('#postDelete').classList.add('hidden');
+  $('#postDeleteNote').classList.add('hidden');
+}
+
+function openPostComposer(postId = null) {
+  resetPostComposer();
+  const post = postId ? state.posts.find(item => item.id === postId && item.author === state.profile.id) : null;
+  if (post) {
+    state.editingPostId = post.id;
+    $('#postSheetTitle').textContent = 'Edit Stoke post';
+    $('#postSheetDescription').textContent = 'Update the details below. Your original photo or clip stays in place.';
+    $('#postMediaPicker').classList.add('hidden');
+    $('#mediaFile').required = false;
+    $('#filmerName').value = post.filmer_name || '';
+    $('#surferName').value = post.surfer_name || '';
+    $('#boardName').value = post.board || '';
+    $('#postSpot').value = post.spot?.name || '';
+    $('#postLocation').value = post.spot?.general_location || '';
+    $('#postCaption').value = post.caption || '';
+    $('#postSubmit').textContent = 'Save changes';
+    $('#postDelete').classList.remove('hidden');
+    $('#postDeleteNote').classList.remove('hidden');
+  }
+  openSheet('postSheet');
+}
+
+async function savePost(event) {
   event.preventDefault();
-  const submit = $('#postForm button[type="submit"]'); submit.disabled = true;
+  const submit = $('#postSubmit'); submit.disabled = true;
   const progress = $('#uploadProgress');
   try {
-    const file = $('#mediaFile').files[0];
-    await validateMedia(file);
-    const mediaType = file.type.startsWith('video/') ? 'clip' : 'photo';
-    const extension = file.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '').toLowerCase() || (mediaType === 'clip' ? 'mp4' : 'jpg');
-    const path = `${state.profile.id}/${crypto.randomUUID()}.${extension}`;
-    progress.value = 18; progress.classList.remove('hidden');
-    const mediaUrl = await uploadMedia(file, path);
-    progress.value = 82;
+    const editing = state.editingPostId;
     const spotName = $('#postSpot').value.trim();
     const spot = spotName ? await ensureSpot(spotName, $('#postLocation').value, state.currentRegion.id) : null;
     const filmerName = $('#filmerName').value.trim();
     const surferName = $('#surferName').value.trim();
     const filmer = matchingPerson(filmerName);
     const surfer = surferName ? matchingPerson(surferName) : null;
-    const created = await db.from('posts').insert({
-      author: state.profile.id, media_url: mediaUrl, media_path: path, media_type: mediaType,
+    const details = {
       filmer_name: filmerName, filmer_user: filmer?.id || null, surfer_name: surferName || null,
       board: $('#boardName').value.trim() || null, spot_id: spot?.id || null,
       caption: $('#postCaption').value.trim() || null,
-    }).select('id').single();
-    if (created.error) throw created.error;
+    };
+    let postId = editing;
+    if (editing) {
+      const updated = await db.from('posts').update(details).eq('id', editing).eq('author', state.profile.id).select('id').single();
+      if (updated.error) throw updated.error;
+      const removedTags = await db.from('post_tags').delete().eq('post_id', editing);
+      if (removedTags.error) throw removedTags.error;
+    } else {
+      const file = $('#mediaFile').files[0];
+      await validateMedia(file);
+      const mediaType = file.type.startsWith('video/') ? 'clip' : 'photo';
+      const extension = file.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '').toLowerCase() || (mediaType === 'clip' ? 'mp4' : 'jpg');
+      const path = `${state.profile.id}/${crypto.randomUUID()}.${extension}`;
+      progress.value = 18; progress.classList.remove('hidden');
+      const mediaUrl = await uploadMedia(file, path);
+      progress.value = 82;
+      const created = await db.from('posts').insert({ author: state.profile.id, media_url: mediaUrl, media_path: path, media_type: mediaType, ...details }).select('id').single();
+      if (created.error) throw created.error;
+      postId = created.data.id;
+    }
     const tags = [];
-    if (filmer && filmer.id !== state.profile.id) tags.push({ post_id: created.data.id, user_id: filmer.id, role: 'filmer' });
-    if (surfer && surfer.id !== state.profile.id) tags.push({ post_id: created.data.id, user_id: surfer.id, role: 'surfer' });
+    if (filmer && filmer.id !== state.profile.id) tags.push({ post_id: postId, user_id: filmer.id, role: 'filmer' });
+    if (surfer && surfer.id !== state.profile.id) tags.push({ post_id: postId, user_id: surfer.id, role: 'surfer' });
     if (tags.length) {
       const tagsResult = await db.from('post_tags').insert(tags);
       if (tagsResult.error) throw tagsResult.error;
     }
-    progress.value = 100; $('#postForm').reset(); $('#fileLabel').textContent = 'Add photo or clip'; closeSheet();
-    await loadPosts(); await renderProfile(); toast('Shared with the whole community.');
+    progress.value = 100; resetPostComposer(); closeSheet();
+    await loadPosts(); await renderProfile(); toast(editing ? 'Stoke post updated.' : 'Shared with the whole community.');
   } catch (error) { toast(readableError(error), 5000); }
   finally { submit.disabled = false; progress.classList.add('hidden'); progress.value = 0; }
+}
+
+async function deletePost() {
+  const post = state.posts.find(item => item.id === state.editingPostId && item.author === state.profile.id);
+  if (!post || !confirm('Delete this Stoke post? It will disappear for everyone and cannot be undone.')) return;
+  const button = $('#postDelete'); button.disabled = true;
+  try {
+    const removed = await db.from('posts').delete().eq('id', post.id).eq('author', state.profile.id);
+    if (removed.error) throw removed.error;
+    const media = await db.storage.from(CONFIG.mediaBucket).remove([post.media_path]);
+    if (media.error) console.warn('Stoke media cleanup failed:', media.error.message);
+    resetPostComposer(); closeSheet(); await loadPosts(); await renderProfile(); toast('Stoke post deleted.');
+  } catch (error) { toast(readableError(error), 5000); }
+  finally { button.disabled = false; }
 }
 
 async function toggleLike(postId) {
@@ -1609,6 +1669,7 @@ document.addEventListener('click', async event => {
   const rsvpNode = event.target.closest('[data-rsvp]');
   const endNode = event.target.closest('[data-end-session]');
   const editSessionNode = event.target.closest('[data-edit-session]');
+  const editPostNode = event.target.closest('[data-edit-post]');
   const removeSessionPersonNode = event.target.closest('[data-remove-session-person]');
   const likeNode = event.target.closest('[data-like]');
   const whenNode = event.target.closest('[data-when]');
@@ -1650,12 +1711,13 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'cancel-session', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'cancel-session', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
   if (rsvpNode) await setRsvp(rsvpNode.dataset.rsvp, rsvpNode.dataset.role);
   if (editSessionNode) openSessionComposer(editSessionNode.dataset.editSession);
+  if (editPostNode) openPostComposer(editPostNode.dataset.editPost);
   if (endNode) await endSession(endNode.dataset.endSession);
   if (likeNode) await toggleLike(likeNode.dataset.like);
   if (eventRsvpNode) await toggleEventRsvp(eventRsvpNode.dataset.eventRsvp);
@@ -1696,10 +1758,11 @@ document.addEventListener('click', async event => {
     'open-session': () => openSessionComposer(),
     'add-session-person': addSessionPerson,
     'cancel-session': cancelSession,
-    'open-post': () => openSheet('postSheet'),
+    'open-post': () => openPostComposer(),
     'open-event': () => openEventComposer(),
     'open-perk': () => openPerkComposer(),
     'delete-perk': deletePerk,
+    'delete-post': deletePost,
     'show-install': showInstallInstructions,
     'dismiss-install': dismissInstallNudge,
     'native-install': runNativeInstall,
@@ -1732,7 +1795,7 @@ document.addEventListener('submit', async event => {
   if (event.target.id === 'authForm') await sendMagicLink(event);
   else if (event.target.id === 'profileForm') await completeProfile(event);
   else if (event.target.id === 'sessionForm') await createSession(event);
-  else if (event.target.id === 'postForm') await createPost(event);
+  else if (event.target.id === 'postForm') await savePost(event);
   else if (event.target.id === 'eventForm') await createEvent(event);
   else if (event.target.id === 'perkForm') await savePerk(event);
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
