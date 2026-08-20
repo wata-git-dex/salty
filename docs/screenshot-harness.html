@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Salty documentation screenshot harness</title>
+  <style>
+    html,body,iframe{width:100%;height:100%;margin:0;border:0;background:#07121b}
+    body{overflow:hidden}
+    iframe{display:block}
+  </style>
+</head>
+<body>
+  <iframe id="salty" title="Salty documentation preview" src="../?preview=1&amp;guide=1"></iframe>
+  <script>
+    const frame = document.querySelector('#salty');
+    const mode = new URLSearchParams(location.search).get('state') || 'stoke';
+
+    frame.addEventListener('load', () => setTimeout(() => {
+      const doc = frame.contentDocument;
+      const one = selector => doc.querySelector(selector);
+      const sampleUrl = path => new URL(`./${path}`, location.href).href;
+
+      if (mode === 'profile-setup') {
+        ['#boot','#welcome','#consentScreen','#authScreen','#verifyScreen','#app'].forEach(selector => one(selector)?.classList.add('hidden'));
+        one('#profileSetup')?.classList.remove('hidden');
+        one('#profileSetupBack')?.classList.add('hidden');
+        one('#avatarPreview').innerHTML = `<img src="${sampleUrl('cyrus-profile.png')}" alt="Cyrus profile photo">`;
+        one('#setupName').value = 'Cyrus V.';
+        one('#setupNickname').value = 'Cy';
+        one('#setupPhone').value = '(949) 555-0128';
+        one('#setupRegion').innerHTML = '<option selected>California</option><option>France</option><option>Germany</option>';
+        one('#setupSponsors').value = 'Independent';
+        one('#setupSocial').value = 'instagram.com/saltyviewfinder';
+        doc.documentElement.scrollTop = 0;
+        doc.body.scrollTop = 0;
+        return;
+      }
+
+      if (mode === 'stoke') {
+        one('#mobileNav [data-view="feed"]')?.click();
+        one('#postsFeed').innerHTML = `
+          <article class="post-card">
+            <div class="post-media">
+              <img src="${sampleUrl('anonymous-surf.png')}" alt="Anonymous surfer at San Onofre">
+              <span class="post-author">Old Man's</span>
+              <div class="post-overlay">
+                <div class="credits">
+                  <span class="credit"><b>Surfer</b>Kevin Morgan</span>
+                  <span class="credit"><b>Board</b>Twin fin</span>
+                  <span class="credit filmer"><b>Filmer</b>Maya Chen</span>
+                </div>
+                <p class="post-caption">Last clean set before the wind.</p>
+              </div>
+            </div>
+            <div class="post-foot">
+              <button><svg><use href="#i-heart"/></svg>6</button>
+              <button><svg><use href="#i-chat"/></svg>2</button>
+              <small>◎ Everyone sees this</small>
+            </div>
+            <div class="comments">
+              <p class="comment"><b>Jonah Reyes</b> That inside runner was so clean.</p>
+              <p class="comment"><b>Cyrus V.</b> Great frame, Maya.</p>
+              <form class="comment-form"><input placeholder="Add a comment…"><button>↑</button></form>
+            </div>
+          </article>`;
+        return;
+      }
+
+      if (mode === 'events') {
+        one('#mobileNav [data-view="events"]')?.click();
+        one('#eventsFeed').innerHTML = `
+          <article class="event-card">
+            <div class="event-date-tile"><span>AUG</span><b>28</b></div>
+            <div class="event-main">
+              <div class="event-heading"><div><h2>Friday Night Surf Film</h2><p>Fri, Aug 28 · 6:30 PM – 8:30 PM</p></div></div>
+              <a class="event-place" href="#"><svg><use href="#i-pin"/></svg><span>Hobie Surf Shop · Dana Point</span><b>Map ↗</b></a>
+              <p class="event-description">A community screening, tacos, and a quick raffle. Bring a chair.</p>
+              <div class="event-going"><div class="event-stack"><span class="event-avatar">KM</span><span class="event-avatar">JR</span><span class="event-avatar">MC</span></div><b>3 going</b></div>
+              <div class="card-actions">
+                <button class="small-action surf on"><svg><use href="#i-check"/></svg>Going ✓</button>
+                <button class="small-action"><svg><use href="#i-calendar"/></svg>Add to calendar</button>
+              </div>
+            </div>
+          </article>`;
+      }
+    }, 900));
+  </script>
+</body>
+</html>
