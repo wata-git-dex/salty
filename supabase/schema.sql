@@ -254,7 +254,7 @@ insert into public.rewards (name, points_cost, type, brand_name, offer_text, des
 
 -- One multi-use bootstrap invite. The final SELECT prints it after the transaction.
 insert into public.invites (code, max_uses)
-values ('SALTY-' || upper(encode(gen_random_bytes(5), 'hex')), 25);
+values ('SALTY-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10)), 25);
 
 -- Membership helpers. SECURITY DEFINER avoids recursive RLS checks.
 create or replace function public.is_member(uid uuid default auth.uid())
@@ -337,7 +337,7 @@ declare new_code text;
 begin
   if not public.is_member() then raise exception 'Community membership required'; end if;
   if invite_max_uses < 1 or invite_max_uses > 25 then raise exception 'max uses must be between 1 and 25'; end if;
-  new_code := 'SALTY-' || upper(encode(gen_random_bytes(5), 'hex'));
+  new_code := 'SALTY-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10));
   insert into public.invites (code, created_by, max_uses) values (new_code, auth.uid(), invite_max_uses);
   return new_code;
 end $$;
