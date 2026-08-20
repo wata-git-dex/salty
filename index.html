@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=22">
+  <link rel="stylesheet" href="./styles.css?v=23">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -256,9 +256,9 @@
       <h2>Add an event</h2><p>Comps, movie nights, and meetups for <b id="eventRegionName">your area</b>.</p>
       <form id="eventForm">
         <label>Event name<input id="eventTitle" maxlength="160" required placeholder="Friday night surf movie"></label>
-        <label>Date and time<input id="eventTime" type="datetime-local" required></label>
-        <label>Spot or venue <small>optional</small><input id="eventSpot" maxlength="120" placeholder="Old Man's or Salty HQ" list="spotsList"></label>
-        <label>General location <small>optional</small><input id="eventLocation" maxlength="160" placeholder="San Onofre" list="locationsList"></label>
+        <div class="event-time-fields"><label>Starts<input id="eventStartTime" type="datetime-local" required></label><label>Ends<input id="eventEndTime" type="datetime-local" required></label></div>
+        <label>Venue <small>optional</small><input id="eventVenue" maxlength="160" placeholder="Hobie Surf Shop"></label>
+        <label>Address or map location<input id="eventLocation" maxlength="300" required placeholder="34174 Pacific Coast Hwy, Dana Point, CA"><small>Use a shop name, street address, beach, or general meeting area.</small></label>
         <label>Description<textarea id="eventDescription" maxlength="1200" placeholder="What should the crew know?"></textarea></label>
         <button class="primary" type="submit">Share event</button>
       </form>
@@ -277,6 +277,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=22" defer></script>
+  <script src="./app.js?v=23" defer></script>
 </body>
 </html>

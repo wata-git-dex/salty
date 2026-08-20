@@ -22,6 +22,8 @@ Google sign-in requires a Google OAuth web client with `https://app.saltyviewfin
 
 For an existing database created before release v13, run `supabase/session-places-migration.sql` once. It adds broad spot locations (for example, Old Man's → San Onofre) and multiple starting surfers without removing existing data.
 
+Before release v23, run `supabase/events-v2-migration.sql` once. It safely adds event end times, venue names, searchable map locations, and the broad spot-location field if the earlier migration was missed.
+
 ## Free-tier media limits
 
 - 90 seconds maximum clip duration.

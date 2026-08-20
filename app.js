@@ -217,6 +217,7 @@ function runPreview() {
   state.profile = { id: userId, name: 'Cyrus V.', nickname: 'Cy', phone: '(949) 555-0142', home_region: regionId, sponsors: ['Sodium', 'Salty Viewfinder'], social_url:'https://instagram.com/', avatar_path:null, onboarding_complete:true };
   state.regions = [{ id: regionId, name: 'California' }, { id: 'fr', name: 'France' }, { id: 'de', name: 'Germany' }, { id: 'ut', name: 'Utah' }];
   state.currentRegion = state.regions[0];
+  state.eventRegion = state.currentRegion;
   state.people = [state.profile, { id: 'jonah', name: 'Jonah Reyes', nickname:'Jo', home_region:regionId, sponsors:['Snake Eyes'], onboarding_complete:true }, { id: 'mateo', name: 'Mateo Karras', nickname:null, home_region:regionId, sponsors:[], onboarding_complete:true }];
   state.spots = [{ id: 'malibu', name: 'Malibu', general_location:'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', general_location:'San Clemente', region_id: regionId }];
   state.previewSessions = [
@@ -623,7 +624,7 @@ function activeRegions() {
 }
 
 function renderNav(target) {
-  target.innerHTML = navItems.map(([view, icon, label]) => `<button data-view="${view}" class="${state.view === view ? 'active' : ''}"><svg><use href="#${icon}"/></svg>${label}</button>`).join('');
+  target.innerHTML = navItems.map(([view, icon, label]) => `<button data-view="${view}" class="${state.view === view ? 'active' : ''}"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#${icon}"/></svg>${label}</button>`).join('');
 }
 
 function renderChrome() {
@@ -683,6 +684,11 @@ function eventDate(value) {
   return new Intl.DateTimeFormat([], { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }).format(new Date(value));
 }
 
+function eventMapUrl(item) {
+  const query = [item.venue_name, item.location_text, item.spot?.name, item.spot?.general_location].filter(Boolean).join(', ');
+  return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : '';
+}
+
 function renderEvents() {
   const feed = $('#eventsFeed');
   if (!feed || !state.eventRegion) return;
@@ -694,10 +700,12 @@ function renderEvents() {
     const going = item.event_rsvps || [];
     const mine = going.some(rsvp => rsvp.user_id === state.profile.id);
     const crew = going.slice(0, 4).map(rsvp => avatarMarkup(rsvp.profile, 'event-avatar')).join('');
-    const spot = item.spot?.name || '';
-    const location = item.spot?.general_location || '';
-    const place = [spot, location].filter(Boolean).join(' · ');
-    return `<article class="event-card"><i class="stripe"></i><div class="event-heading"><span class="event-icon"><svg><use href="#i-calendar"/></svg></span><div><h2>${esc(item.title)}</h2><p>${esc(eventDate(item.start_time))}${place ? ` · ${esc(place)}` : ''}</p></div></div>${item.description ? `<p class="event-description">${esc(item.description)}</p>` : ''}<div class="event-going"><div class="event-stack">${crew}</div><b>${going.length} going</b></div><div class="card-actions"><button class="small-action surf ${mine ? 'on' : ''}" data-event-rsvp="${item.id}"><svg><use href="#i-check"/></svg>${mine ? 'Going ✓' : 'RSVP'}</button><button class="small-action" data-event-calendar="${item.id}"><svg><use href="#i-calendar"/></svg>Add to calendar</button></div></article>`;
+    const start = item.start_time ? new Date(item.start_time) : null;
+    const month = start ? new Intl.DateTimeFormat([], { month:'short' }).format(start).toUpperCase() : 'DATE';
+    const day = start ? start.getDate() : '—';
+    const place = [item.venue_name || item.spot?.name, item.location_text || item.spot?.general_location].filter(Boolean).join(' · ');
+    const mapUrl = eventMapUrl(item);
+    return `<article class="event-card"><div class="event-date-tile"><span>${esc(month)}</span><b>${day}</b></div><div class="event-main"><div class="event-heading"><div><h2>${esc(item.title)}</h2><p>${esc(eventDate(item.start_time))}${item.end_time ? ` – ${esc(new Intl.DateTimeFormat([], { hour:'numeric', minute:'2-digit' }).format(new Date(item.end_time)))}` : ''}</p></div></div>${place ? `<a class="event-place" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg><span>${esc(place)}</span><b>Map ↗</b></a>` : ''}${item.description ? `<p class="event-description">${esc(item.description)}</p>` : ''}<div class="event-going"><div class="event-stack">${crew}</div><b>${going.length} going</b></div><div class="card-actions"><button class="small-action surf ${mine ? 'on' : ''}" data-event-rsvp="${item.id}"><svg><use href="#i-check"/></svg>${mine ? 'Going ✓' : 'RSVP'}</button><button class="small-action" data-event-calendar="${item.id}"><svg><use href="#i-calendar"/></svg>Add to calendar</button></div></div></article>`;
   }).join('');
 }
 
@@ -706,17 +714,19 @@ async function createEvent(event) {
   const submit = $('#eventForm button[type="submit"]');
   submit.disabled = true;
   try {
-    const start = new Date($('#eventTime').value);
+    const start = new Date($('#eventStartTime').value);
+    const end = new Date($('#eventEndTime').value);
     if (!Number.isFinite(start.getTime()) || start <= new Date()) throw new Error('Pick a future date and time.');
-    const spotName = $('#eventSpot').value.trim();
-    const location = $('#eventLocation').value.trim();
-    const spot = spotName ? await ensureSpot(spotName, location, state.eventRegion.id) : null;
+    if (!Number.isFinite(end.getTime()) || end <= start) throw new Error('The event end time must be after its start time.');
     const result = await db.from('events').insert({
       author: state.profile.id,
       region_id: state.eventRegion.id,
       title: $('#eventTitle').value.trim(),
-      spot_id: spot?.id || null,
+      spot_id: null,
       start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      venue_name: $('#eventVenue').value.trim() || null,
+      location_text: $('#eventLocation').value.trim(),
       description: $('#eventDescription').value.trim() || null,
     });
     if (result.error) throw result.error;
@@ -741,8 +751,8 @@ function addEventToCalendar(eventId) {
   const clean = value => String(value || '').replace(/([,;\\])/g, '\\$1').replace(/\n/g, '\\n');
   const stamp = date => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const start = new Date(item.start_time);
-  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
-  const place = [item.spot?.name, item.spot?.general_location].filter(Boolean).join(', ');
+  const end = item.end_time ? new Date(item.end_time) : new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  const place = [item.venue_name, item.location_text, item.spot?.name, item.spot?.general_location].filter(Boolean).join(', ');
   const body = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Salty//Events//EN','BEGIN:VEVENT',`UID:${item.id}@saltyviewfinder.com`,`DTSTAMP:${stamp(new Date())}`,`DTSTART:${stamp(start)}`,`DTEND:${stamp(end)}`,`SUMMARY:${clean(item.title)}`,`DESCRIPTION:${clean(item.description)}`,`LOCATION:${clean(place)}`,'END:VEVENT','END:VCALENDAR'].join('\r\n');
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([body], { type:'text/calendar;charset=utf-8' }));
