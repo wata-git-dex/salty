@@ -1183,12 +1183,13 @@ function renderSessions() {
     const filmers = session.session_rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name).filter((name, index, names) => name && names.indexOf(name) === index);
     const crewSummary = [surfers.length ? `<b>${esc(surfers.join(', '))}</b> surfing` : '', filmers.length ? `<b>${esc(filmers.join(', '))}</b> filming` : ''].filter(Boolean).join(' · ');
     const authorRole = session.author_role === 'film' ? 'filming' : 'surfing';
+    const edit = mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="Edit surf"><svg><use href="#i-edit"/></svg></button>` : '';
     const actions = mine
-      ? `<button class="small-action edit" data-edit-session="${session.id}">Edit surf</button><button class="small-action end" data-end-session="${session.id}"><svg><use href="#i-close"/></svg>End session</button>`
+      ? `<button class="small-action finish" data-end-session="${session.id}"><svg><use href="#i-check"/></svg>Surf finished</button>`
       : `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-check"/></svg>${myRsvp?.role === 'surf' ? "You're in" : "I'm down"}</button><button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : "I'll film"}</button>`;
     const mapUrl = spotMapUrl(session.spot);
     const location = session.spot?.general_location ? `<a class="spot-location" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}</a>` : '';
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i><div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you started this session' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag">Wants filmer</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p><div class="card-actions">${actions}</div></article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i>${edit}<div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you started this session' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag">Wants filmer</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p><div class="card-actions">${actions}</div></article>`;
   }).join('');
 }
 
@@ -1239,6 +1240,8 @@ function resetSessionComposer() {
   $('#sessionForm').reset();
   $('#sessionSheetTitle').textContent = 'Share a surf';
   $('#sessionSubmit').textContent = 'Share session';
+  $('#sessionCancel').classList.add('hidden');
+  $('#sessionCancelNote').classList.add('hidden');
   $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === 'now'));
   $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === 'surf'));
   $('#sessionDateChoice').classList.add('hidden');
@@ -1256,6 +1259,8 @@ function openSessionComposer(sessionId = null) {
     state.sessionPeople = [...(session.participant_names || (session.featured_surfer_name ? [session.featured_surfer_name] : []))];
     $('#sessionSheetTitle').textContent = 'Edit surf';
     $('#sessionSubmit').textContent = 'Save changes';
+    $('#sessionCancel').classList.remove('hidden');
+    $('#sessionCancelNote').classList.remove('hidden');
     $('#sessionSpot').value = session.spot?.name || '';
     $('#sessionLocation').value = session.spot?.general_location || '';
     const later = session.when_label !== 'Now';
@@ -1312,9 +1317,22 @@ async function setRsvp(sessionId, role) {
 }
 
 async function endSession(sessionId) {
+  if (!confirm('Mark this surf as finished? If it was cancelled, use the pencil and Cancel session instead.')) return;
   const result = await db.from('sessions').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', sessionId).eq('author', state.profile.id);
   if (result.error) { toast(readableError(result.error)); return; }
-  await loadSessions(); toast('Session ended.');
+  await loadSessions(); toast('Surf marked finished.');
+}
+
+async function cancelSession() {
+  const sessionId = state.editingSessionId;
+  if (!sessionId || !confirm('Cancel this surf? It will disappear for everyone. This cannot be undone.')) return;
+  const button = $('#sessionCancel'); button.disabled = true;
+  try {
+    const result = await db.from('sessions').delete().eq('id', sessionId).eq('author', state.profile.id);
+    if (result.error) throw result.error;
+    resetSessionComposer(); closeSheet(); await loadSessions(); await renderProfile(); toast('Surf cancelled.');
+  } catch (error) { toast(readableError(error)); }
+  finally { button.disabled = false; }
 }
 
 async function loadPosts() {
@@ -1632,7 +1650,7 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'cancel-session', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -1677,6 +1695,7 @@ document.addEventListener('click', async event => {
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
     'open-session': () => openSessionComposer(),
     'add-session-person': addSessionPerson,
+    'cancel-session': cancelSession,
     'open-post': () => openSheet('postSheet'),
     'open-event': () => openEventComposer(),
     'open-perk': () => openPerkComposer(),
