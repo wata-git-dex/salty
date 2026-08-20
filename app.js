@@ -12,11 +12,21 @@ const CONFIG = Object.freeze({
   maxChatPhotoBytes: 10 * 1024 * 1024,
   maxClipSeconds: 90,
   emailOtpDigits: 8,
+  vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V4.pdf';
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
+const NOTIFICATION_DEFAULTS = Object.freeze({
+  master_enabled: true,
+  new_sessions: true,
+  new_stoke: true,
+  direct_messages: true,
+  events: true,
+  session_updates: true,
+  community_chat: false,
+});
 
 // Upgrade runway: after moving Supabase to Pro, raise maxUploadBytes and replace
 // uploadMedia() with a TUS resumable implementation. Callers do not need to change.
@@ -31,6 +41,7 @@ const state = {
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
   consentNext: 'new', sessionPeople: [], editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
+  notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -184,6 +195,7 @@ async function init() {
     } catch (error) { console.warn('Service worker registration deferred:', error); }
   }
   state.pendingInvite = inviteFromUrl() || localStorage.getItem('salty:invite') || '';
+  state.pendingOpen = params.get('open') || '';
   if (state.pendingInvite) localStorage.setItem('salty:invite', state.pendingInvite);
   state.pendingTokenHash = params.get('token_hash') || '';
   state.pendingTokenType = params.get('type') || 'email';
@@ -502,9 +514,13 @@ async function loadApp() {
   state.chatRegion = state.currentRegion;
   await loadAvatarUrls();
   renderChrome();
-  await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadRoomMessages(), loadDmInbox(), renderProfile()]);
+  await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadRoomMessages(), loadDmInbox(), renderProfile(), loadNotificationPreferences()]);
   renderMembers();
   subscribeRealtime();
+  if (['surfing', 'feed', 'chat', 'events', 'dms'].includes(state.pendingOpen)) {
+    setView(state.pendingOpen);
+    state.pendingOpen = '';
+  }
 }
 
 function cleanAuthUrl() {
@@ -516,6 +532,158 @@ function offerInstallAfterAuth() {
   const installed = isStandalone();
   $('#installSettingsRow').classList.toggle('hidden', installed);
   $('#installNudge').classList.toggle('hidden', installed || Boolean(localStorage.getItem(INSTALL_DISMISSED_KEY)));
+}
+
+function isIOSDevice() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function pushIsSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+function urlBase64ToBytes(value) {
+  const padding = '='.repeat((4 - value.length % 4) % 4);
+  const binary = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(binary, character => character.charCodeAt(0));
+}
+
+async function pushRegistration(create = false) {
+  if (!pushIsSupported()) return null;
+  let registration = await navigator.serviceWorker.getRegistration('./');
+  if (!registration && create) registration = await navigator.serviceWorker.register('./sw.js');
+  return registration;
+}
+
+async function loadNotificationPreferences() {
+  if (!state.profile || state.preview) return;
+  const result = await db.from('notification_preferences').select('*').eq('user_id', state.profile.id).maybeSingle();
+  if (result.error) {
+    console.warn('Notification preferences are not ready:', result.error.message);
+    return;
+  }
+  state.notificationPreferences = { ...NOTIFICATION_DEFAULTS, ...(result.data || {}) };
+  await renderNotificationSettings();
+}
+
+async function currentPushSubscription() {
+  const registration = await pushRegistration();
+  state.notificationSubscription = registration ? await registration.pushManager.getSubscription() : null;
+  return state.notificationSubscription;
+}
+
+async function renderNotificationSettings() {
+  const card = $('#notificationSettings');
+  if (!card) return;
+  const preferences = { ...NOTIFICATION_DEFAULTS, ...(state.notificationPreferences || {}) };
+  $$('[data-notification-pref]').forEach(input => { input.checked = Boolean(preferences[input.dataset.notificationPref]); });
+  const supported = pushIsSupported();
+  const subscription = supported ? await currentPushSubscription() : null;
+  const button = $('#notificationDeviceButton');
+  const status = $('#notificationStatus');
+  const permission = supported ? Notification.permission : 'unsupported';
+  if (!supported) {
+    button.disabled = true;
+    button.textContent = 'Not supported on this device';
+    status.textContent = 'This browser cannot receive web push notifications.';
+  } else if (isIOSDevice() && !isStandalone()) {
+    button.disabled = false;
+    button.textContent = 'Add Salty to Home Screen first';
+    status.textContent = 'On iPhone, notifications work from the installed Home Screen app.';
+  } else if (permission === 'denied') {
+    button.disabled = true;
+    button.textContent = 'Notifications are blocked';
+    status.textContent = 'Open iPhone Settings → Notifications → Salty to allow them again.';
+  } else if (subscription) {
+    button.disabled = false;
+    button.textContent = 'Turn off on this device';
+    status.textContent = preferences.master_enabled ? 'Notifications are on for this device.' : 'All Salty notifications are paused.';
+  } else {
+    button.disabled = false;
+    button.textContent = 'Enable notifications on this device';
+    status.textContent = 'Get useful crew updates without needing to keep Salty open.';
+  }
+  $$('#notificationChoices input').forEach(input => { input.disabled = !supported; });
+  $('#notificationMaster').disabled = !subscription;
+  $('#notificationMaster').checked = Boolean(subscription && preferences.master_enabled);
+}
+
+async function saveNotificationPreference(field, enabled) {
+  if (!state.profile || !(field in NOTIFICATION_DEFAULTS)) return;
+  const next = { ...NOTIFICATION_DEFAULTS, ...(state.notificationPreferences || {}), [field]:enabled };
+  const result = await db.from('notification_preferences').upsert({
+    user_id: state.profile.id,
+    master_enabled: next.master_enabled,
+    new_sessions: next.new_sessions,
+    new_stoke: next.new_stoke,
+    direct_messages: next.direct_messages,
+    events: next.events,
+    session_updates: next.session_updates,
+    community_chat: next.community_chat,
+    updated_at: new Date().toISOString(),
+  }, { onConflict:'user_id' }).select().single();
+  if (result.error) throw result.error;
+  state.notificationPreferences = result.data;
+}
+
+async function enablePushNotifications() {
+  if (!pushIsSupported()) throw new Error('This browser does not support notifications.');
+  if (isIOSDevice() && !isStandalone()) {
+    showInstallInstructions();
+    throw new Error('Add Salty to your Home Screen, open it there, then enable notifications.');
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') throw new Error('Notifications were not allowed. You can change this later in device settings.');
+  const registration = await pushRegistration(true);
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToBytes(CONFIG.vapidPublicKey),
+    });
+  }
+  const serialized = subscription.toJSON();
+  const result = await db.from('push_subscriptions').upsert({
+    user_id: state.profile.id,
+    endpoint: subscription.endpoint,
+    p256dh: serialized.keys?.p256dh,
+    auth: serialized.keys?.auth,
+    user_agent: navigator.userAgent.slice(0, 500),
+    updated_at: new Date().toISOString(),
+  }, { onConflict:'endpoint' });
+  if (result.error) {
+    await subscription.unsubscribe();
+    throw result.error;
+  }
+  state.notificationSubscription = subscription;
+  await saveNotificationPreference('master_enabled', true);
+  await renderNotificationSettings();
+  toast('Notifications are on for this device.');
+}
+
+async function disablePushNotifications(announce = true) {
+  const subscription = await currentPushSubscription();
+  if (subscription && state.profile) {
+    const result = await db.from('push_subscriptions').delete().eq('user_id', state.profile.id).eq('endpoint', subscription.endpoint);
+    if (result.error) throw result.error;
+    await subscription.unsubscribe();
+  }
+  state.notificationSubscription = null;
+  await renderNotificationSettings();
+  if (announce) toast('Notifications are off on this device.');
+}
+
+async function togglePushDevice() {
+  const button = $('#notificationDeviceButton');
+  button.disabled = true;
+  try {
+    const subscription = await currentPushSubscription();
+    if (subscription) await disablePushNotifications();
+    else await enablePushNotifications();
+  } catch (error) {
+    toast(readableError(error), 6000);
+    await renderNotificationSettings();
+  }
 }
 
 function showInstallInstructions() {
@@ -671,6 +839,7 @@ function setView(view) {
   scrollTo({ top: 0, behavior: 'smooth' });
   if (!state.preview && view === 'chat') loadRoomMessages();
   if (!state.preview && view === 'dms') loadDmInbox();
+  if (view === 'settings') renderNotificationSettings();
 }
 
 async function loadSessions() {
@@ -1726,7 +1895,7 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || startNode || endNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'cancel-session', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || startNode || endNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'cancel-session', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -1780,6 +1949,7 @@ document.addEventListener('click', async event => {
     'delete-perk': deletePerk,
     'delete-post': deletePost,
     'show-install': showInstallInstructions,
+    'toggle-push-device': togglePushDevice,
     'dismiss-install': dismissInstallNudge,
     'native-install': runNativeInstall,
     'close-sheet': closeSheet,
@@ -1793,7 +1963,11 @@ document.addEventListener('click', async event => {
     'share-guide': shareGuide,
     'edit-profile': showProfileSetup,
     'cancel-profile': () => showOnly('app'),
-    'sign-out': async () => { clearPendingAuth(); await db.auth.signOut(); location.href = './'; },
+    'sign-out': async () => {
+      clearPendingAuth();
+      try { await disablePushNotifications(false); } catch (error) { console.warn('Push cleanup deferred:', error); }
+      await db.auth.signOut(); location.href = './';
+    },
   };
   if (actions[actionNode.dataset.action]) await actions[actionNode.dataset.action]();
 });
@@ -1817,6 +1991,22 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);
+});
+
+document.addEventListener('change', async event => {
+  const input = event.target.closest('[data-notification-pref]');
+  if (!input || state.preview) return;
+  input.disabled = true;
+  try {
+    await saveNotificationPreference(input.dataset.notificationPref, input.checked);
+    await renderNotificationSettings();
+    toast(input.dataset.notificationPref === 'master_enabled'
+      ? (input.checked ? 'Salty notifications resumed.' : 'All Salty notifications paused.')
+      : 'Notification preference saved.');
+  } catch (error) {
+    input.checked = !input.checked;
+    toast(readableError(error), 5000);
+  } finally { input.disabled = false; }
 });
 
 $('#enterButton').addEventListener('click', () => openConsent('new'));

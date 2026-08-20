@@ -30,6 +30,10 @@ Before release v26, run `supabase/chat-v1-migration.sql` once. It adds photo-onl
 
 For databases that show `gen_random_bytes(integer) does not exist` when inviting a friend or a missing `sessions.participant_names` column when sharing a surf, run `supabase/invites-sessions-hotfix.sql` once. It preserves existing data and is safe to run more than once.
 
+Before release v36, run `supabase/push-points-v1-migration.sql` once. It moves surf points from posting/joining to the moment the organizer marks the surf finished, prevents repeat awards per person/session, and adds push subscriptions plus member notification preferences. Deploy the `push` Edge Function and webhook using `supabase/PUSH_SETUP.md`; the VAPID private key and webhook secret must remain Supabase secrets and must never be committed.
+
+On iPhone, Web Push requires iOS 16.4 or later and the installed Home Screen app. Each member opens **Settings → Enable notifications on this device**, accepts Apple's prompt, and can then enable or disable new surfs, Stoke, DMs, events, surf updates, and Community Chat individually. Community Chat is off by default.
+
 ## Free-tier media limits
 
 - 90 seconds maximum clip duration.

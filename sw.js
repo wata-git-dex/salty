@@ -1,5 +1,5 @@
-const CACHE = 'salty-shell-v35';
-const SHELL = ['./', './index.html', './styles.css?v=35', './app.js?v=35', './manifest.webmanifest', './icon.svg', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './docs/SALTY_Quick_Start_Guide_V4.pdf'];
+const CACHE = 'salty-shell-v36';
+const SHELL = ['./', './index.html', './styles.css?v=36', './app.js?v=36', './manifest.webmanifest', './icon.svg', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './docs/SALTY_Quick_Start_Guide_V4.pdf'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -24,4 +24,31 @@ self.addEventListener('fetch', event => {
     caches.open(CACHE).then(cache => cache.put(event.request, copy));
     return response;
   }).catch(() => caches.match('./index.html'))));
+});
+
+self.addEventListener('push', event => {
+  let payload = {};
+  try { payload = event.data?.json() || {}; }
+  catch (_error) { payload = { body:event.data?.text() || 'Open Salty for a crew update.' }; }
+  event.waitUntil(self.registration.showNotification(payload.title || 'Salty', {
+    body: payload.body || 'Open Salty for a crew update.',
+    icon: './icon-ink.svg',
+    badge: './icon-ink.svg',
+    tag: payload.tag || 'salty-update',
+    renotify: Boolean(payload.renotify),
+    data: { url:payload.url || './' },
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || './', self.location.origin).href;
+  event.waitUntil(self.clients.matchAll({ type:'window', includeUncontrolled:true }).then(async clients => {
+    const existing = clients.find(client => new URL(client.url).origin === self.location.origin);
+    if (existing) {
+      await existing.navigate(target);
+      return await existing.focus();
+    }
+    return await self.clients.openWindow(target);
+  }));
 });
