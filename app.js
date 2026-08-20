@@ -715,6 +715,7 @@ function resetPerkComposer() {
   $('#perkActive').checked = true;
   $('#perkSheetTitle').textContent = 'Add a discount';
   $('#perkSubmit').textContent = 'Publish discount';
+  $('#perkDelete').classList.add('hidden');
 }
 
 function openPerkComposer(perkId = null) {
@@ -725,6 +726,7 @@ function openPerkComposer(perkId = null) {
     state.editingPerkId = perk.id;
     $('#perkSheetTitle').textContent = 'Edit discount';
     $('#perkSubmit').textContent = 'Save changes';
+    $('#perkDelete').classList.remove('hidden');
     $('#perkName').value = perk.name || '';
     $('#perkBrand').value = perk.brand_name || '';
     $('#perkOffer').value = perk.offer_text || '';
@@ -734,6 +736,19 @@ function openPerkComposer(perkId = null) {
     $('#perkActive').checked = perk.active !== false;
   }
   openSheet('perkSheet');
+}
+
+async function deletePerk() {
+  if (!state.profile?.is_admin || !state.editingPerkId) return;
+  const perk = state.perks.find(item => item.id === state.editingPerkId);
+  if (!perk || !confirm(`Delete “${perk.name}”? This cannot be undone.`)) return;
+  const button = $('#perkDelete'); button.disabled = true;
+  try {
+    const result = await db.from('rewards').delete().eq('id', perk.id);
+    if (result.error) throw result.error;
+    resetPerkComposer(); closeSheet(); await loadPerks(); toast('Discount deleted.');
+  } catch (error) { toast(readableError(error), 5000); }
+  finally { button.disabled = false; }
 }
 
 async function savePerk(event) {
@@ -1288,7 +1303,7 @@ document.addEventListener('click', async event => {
     renderEventRegions();
     if (!state.preview) await loadEvents();
   }
-  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'edit-profile', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || endNode || likeNode || ['make-invite', 'share-invite', 'edit-profile', 'delete-perk', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -1334,6 +1349,7 @@ document.addEventListener('click', async event => {
     'open-post': () => openSheet('postSheet'),
     'open-event': () => openEventComposer(),
     'open-perk': () => openPerkComposer(),
+    'delete-perk': deletePerk,
     'show-install': showInstallInstructions,
     'dismiss-install': dismissInstallNudge,
     'native-install': runNativeInstall,
