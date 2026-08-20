@@ -26,6 +26,8 @@ Before release v23, run `supabase/events-v2-migration.sql` once. It safely adds 
 
 Before release v24, run `supabase/perks-admin-migration.sql` once. It activates the Saltyviewfinder and WATA discount cards, adds admin-only perk management, and makes `saltyviewfinder@gmail.com` the first Salty admin.
 
+Admins can create, edit, hide, and delete discounts from the Perks screen. Deletion requires an explicit confirmation inside the app.
+
 ## Free-tier media limits
 
 - 90 seconds maximum clip duration.
