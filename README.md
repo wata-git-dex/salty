@@ -26,7 +26,7 @@ Before release v23, run `supabase/events-v2-migration.sql` once. It safely adds 
 
 Before release v24, run `supabase/perks-admin-migration.sql` once. It activates the Saltyviewfinder and WATA discount cards, adds admin-only perk management, and makes `saltyviewfinder@gmail.com` the first Salty admin.
 
-Admins can create, edit, hide, and delete discounts from the Perks screen. Deletion requires an explicit confirmation inside the app.
+Before release v26, run `supabase/chat-v1-migration.sql` once. It adds photo-only attachments to regional community rooms, creates the private `salty-chat` image bucket, and enforces text-only DMs at the database level. Community chat photos are capped at 10 MB; video remains exclusive to Stoke.
 
 ## Free-tier media limits
 
@@ -37,4 +37,6 @@ Admins can create, edit, hide, and delete discounts from the Perks screen. Delet
 
 ## Phases
 
-This checkpoint contains Foundation, Surfing, the global Stoke photo/clip stream, regional Events with RSVP/calendar export, live admin-managed perks, and a visible points/streak guide. Chat/DMs, deeper moderation, and additional offline polish follow. Clubs remain a marked post-launch preview only.
+This checkpoint contains Foundation, Surfing, the global Stoke photo/clip stream, realtime regional Chat with photo sharing, text-only private DMs, regional Events with RSVP/calendar export, live admin-managed perks, and a visible points/streak/rewards guide. Deeper moderation and additional offline polish follow. Clubs remain a marked post-launch preview only.
+
+Admins can create, edit, hide, and delete discounts from the Perks screen. Deletion requires an explicit confirmation inside the app.
