@@ -149,8 +149,12 @@ create table public.events (
   title text not null,
   spot_id uuid references public.spots(id),
   start_time timestamptz,
+  end_time timestamptz,
+  venue_name text,
+  location_text text,
   description text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  check (end_time is null or start_time is null or end_time > start_time)
 );
 
 create table public.event_rsvps (
@@ -182,7 +186,16 @@ create table public.rewards (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   points_cost int not null check (points_cost >= 0),
-  type text not null check (type in ('discount','physical','entry'))
+  type text not null check (type in ('discount','physical','entry')),
+  brand_name text,
+  offer_text text,
+  description text,
+  discount_code text,
+  store_url text,
+  active boolean not null default true,
+  sort_order int not null default 100,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table public.reward_claims (
@@ -224,14 +237,12 @@ create table public.reports (
 insert into public.regions (name) values ('California'),('France'),('Germany'),('Utah')
 on conflict (name) do nothing;
 
-insert into public.brands (name) values ('Sodium'),('Salty Viewfinder'),('Water Merch'),('Snake Eyes')
+insert into public.brands (name) values ('Sodium'),('Salty Viewfinder'),('WATA'),('Snake Eyes')
 on conflict (name) do nothing;
 
-insert into public.rewards (name, points_cost, type) values
-  ('Sodium — 20% off', 0, 'discount'),
-  ('Salty Viewfinder — 15% off', 0, 'discount'),
-  ('Water Merch community hoodie', 1500, 'physical'),
-  ('Snake Eyes — 10% off fins', 0, 'discount');
+insert into public.rewards (name, points_cost, type, brand_name, offer_text, description, store_url, sort_order) values
+  ('Saltyviewfinder Store Discount', 0, 'discount', 'Saltyviewfinder', 'Salty member discount', 'Sodium merch, prints, and more.', 'https://saltyviewfinder.com', 10),
+  ('WATA Store Discount', 0, 'discount', 'WATA', 'Salty member discount', 'Support WATA and save on store gear.', 'https://cleanwata.org', 20);
 
 -- One multi-use bootstrap invite. The final SELECT prints it after the transaction.
 insert into public.invites (code, max_uses)
