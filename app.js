@@ -14,7 +14,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
 });
 const CONSENT_VERSION = '1.0';
-const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V2.pdf';
+const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V3_5.pdf';
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
 
@@ -1522,7 +1522,7 @@ function closeGuide() {
 async function quickStartGuideFile() {
   const response = await fetch(quickStartGuideUrl());
   if (!response.ok) throw new Error('The Quick Start Guide could not be loaded.');
-  return new File([await response.blob()], 'SALTY_Quick_Start_Guide_V2.pdf', { type:'application/pdf' });
+  return new File([await response.blob()], 'SALTY_Quick_Start_Guide_V3_5.pdf', { type:'application/pdf' });
 }
 
 async function shareSaltyContent({ title, text, url, file = null, copiedMessage }) {
