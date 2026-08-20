@@ -16,6 +16,7 @@ const CONFIG = Object.freeze({
 });
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V4_5.pdf';
+const GUIDE_PAGE_COUNT = 24;
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
 const NOTIFICATION_DEFAULTS = Object.freeze({
@@ -1768,9 +1769,15 @@ function quickStartGuideUrl() {
 
 function openGuide() {
   const viewer = $('#guideViewer');
-  const frame = $('#guideFrame');
-  if (!frame.getAttribute('src')) frame.src = quickStartGuideUrl();
+  const pages = $('#guidePages');
+  if (!pages.childElementCount) {
+    pages.innerHTML = Array.from({ length:GUIDE_PAGE_COUNT }, (_, index) => {
+      const page = String(index + 1).padStart(2, '0');
+      return `<img src="./docs/guide-v4_5/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
+    }).join('');
+  }
   viewer.classList.remove('hidden');
+  pages.scrollTop = 0;
   document.body.classList.add('guide-open');
   viewer.querySelector('[data-action="close-guide"]')?.focus();
 }
