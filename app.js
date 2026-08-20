@@ -22,11 +22,11 @@ const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
 });
 
 const state = {
-  session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [],
+  session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [], perks: [],
   currentRegion: null, eventRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
-  consentNext: 'new', sessionPeople: [], editingSessionId: null, installPrompt: null,
+  consentNext: 'new', sessionPeople: [], editingSessionId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -214,7 +214,7 @@ function runPreview() {
   const regionId = '22222222-2222-4222-8222-222222222222';
   state.preview = true;
   state.session = { user: { id: userId } };
-  state.profile = { id: userId, name: 'Cyrus V.', nickname: 'Cy', phone: '(949) 555-0142', home_region: regionId, sponsors: ['Sodium', 'Salty Viewfinder'], social_url:'https://instagram.com/', avatar_path:null, onboarding_complete:true };
+  state.profile = { id: userId, name: 'Cyrus V.', nickname: 'Cy', phone: '(949) 555-0142', home_region: regionId, sponsors: ['Sodium', 'Salty Viewfinder'], social_url:'https://instagram.com/', avatar_path:null, onboarding_complete:true, is_admin:true };
   state.regions = [{ id: regionId, name: 'California' }, { id: 'fr', name: 'France' }, { id: 'de', name: 'Germany' }, { id: 'ut', name: 'Utah' }];
   state.currentRegion = state.regions[0];
   state.eventRegion = state.currentRegion;
@@ -226,7 +226,11 @@ function runPreview() {
   ];
   state.sessions = state.previewSessions;
   state.posts = [];
-  renderChrome(); renderSessions(); renderPosts(); renderPreviewProfile(); renderMembers(); showOnly('app');
+  state.perks = [
+    { id:'sv', name:'Saltyviewfinder Store Discount', brand_name:'Saltyviewfinder', offer_text:'Salty member discount', description:'Sodium merch, prints, and more.', store_url:'https://saltyviewfinder.com', active:true },
+    { id:'wata', name:'WATA Store Discount', brand_name:'WATA', offer_text:'Salty member discount', description:'Support WATA and save on store gear.', store_url:'https://cleanwata.org', active:true },
+  ];
+  renderChrome(); renderSessions(); renderPosts(); renderPerks(); renderPreviewProfile(); renderMembers(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
 
@@ -486,7 +490,7 @@ async function loadApp() {
   state.eventRegion = state.currentRegion;
   await loadAvatarUrls();
   renderChrome();
-  await Promise.all([loadSessions(), loadPosts(), loadEvents(), renderProfile()]);
+  await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), renderProfile()]);
   renderMembers();
   subscribeRealtime();
 }
@@ -679,6 +683,80 @@ async function loadEvents() {
   renderEvents();
 }
 
+async function loadPerks() {
+  const result = await db.from('rewards').select('*').eq('type', 'discount').order('sort_order', { ascending: true }).order('created_at', { ascending: true });
+  if (result.error) { toast(readableError(result.error)); return; }
+  state.perks = result.data || [];
+  renderPerks();
+}
+
+function renderPerks() {
+  const list = $('#perksList');
+  if (!list) return;
+  const admin = Boolean(state.profile?.is_admin);
+  $('#addPerkButton')?.classList.toggle('hidden', !admin);
+  const visible = state.perks.filter(perk => admin || perk.active);
+  if (!visible.length) {
+    list.innerHTML = `<div class="empty"><span>PERKS</span><h2>No live discounts yet</h2><p>New crew perks will show up here.</p></div>`;
+    return;
+  }
+  list.innerHTML = visible.map(perk => {
+    const url = safeExternalUrl(perk.store_url);
+    const code = perk.discount_code ? `<button class="perk-code" data-copy-perk="${perk.id}"><span>CODE</span><b>${esc(perk.discount_code)}</b><small>tap to copy</small></button>` : '';
+    const edit = admin ? `<button class="perk-edit" data-edit-perk="${perk.id}" aria-label="Edit ${esc(perk.name)}"><svg><use href="#i-edit"/></svg></button>` : '';
+    const status = admin && !perk.active ? '<span class="perk-draft">HIDDEN</span>' : '';
+    return `<article class="perk-card"><div class="perk-top"><span class="perk-mark">${esc(initials(perk.brand_name || perk.name))}</span><div><small>${esc(perk.brand_name || 'Salty partner')}</small><h3>${esc(perk.name)}</h3></div>${status}${edit}</div><strong class="perk-offer">${esc(perk.offer_text || 'Member perk')}</strong>${perk.description ? `<p>${esc(perk.description)}</p>` : ''}${code}${url ? `<a class="perk-link" href="${esc(url)}" target="_blank" rel="noopener">Open store <span>↗</span></a>` : ''}</article>`;
+  }).join('');
+}
+
+function resetPerkComposer() {
+  state.editingPerkId = null;
+  $('#perkForm').reset();
+  $('#perkActive').checked = true;
+  $('#perkSheetTitle').textContent = 'Add a discount';
+  $('#perkSubmit').textContent = 'Publish discount';
+}
+
+function openPerkComposer(perkId = null) {
+  if (!state.profile?.is_admin) { toast('Only Salty admins can manage discounts.'); return; }
+  resetPerkComposer();
+  const perk = perkId ? state.perks.find(item => item.id === perkId) : null;
+  if (perk) {
+    state.editingPerkId = perk.id;
+    $('#perkSheetTitle').textContent = 'Edit discount';
+    $('#perkSubmit').textContent = 'Save changes';
+    $('#perkName').value = perk.name || '';
+    $('#perkBrand').value = perk.brand_name || '';
+    $('#perkOffer').value = perk.offer_text || '';
+    $('#perkDescription').value = perk.description || '';
+    $('#perkCode').value = perk.discount_code || '';
+    $('#perkUrl').value = perk.store_url || '';
+    $('#perkActive').checked = perk.active !== false;
+  }
+  openSheet('perkSheet');
+}
+
+async function savePerk(event) {
+  event.preventDefault();
+  if (!state.profile?.is_admin) { toast('Only Salty admins can manage discounts.'); return; }
+  const submit = $('#perkSubmit'); submit.disabled = true;
+  try {
+    const payload = {
+      name: $('#perkName').value.trim(), brand_name: $('#perkBrand').value.trim(),
+      offer_text: $('#perkOffer').value.trim(), description: $('#perkDescription').value.trim() || null,
+      discount_code: $('#perkCode').value.trim() || null, store_url: $('#perkUrl').value.trim() || null,
+      active: $('#perkActive').checked, points_cost: 0, type: 'discount', updated_at: new Date().toISOString(),
+    };
+    const result = state.editingPerkId
+      ? await db.from('rewards').update(payload).eq('id', state.editingPerkId)
+      : await db.from('rewards').insert(payload);
+    if (result.error) throw result.error;
+    const edited = Boolean(state.editingPerkId);
+    resetPerkComposer(); closeSheet(); await loadPerks(); toast(edited ? 'Discount updated.' : 'Discount published.');
+  } catch (error) { toast(readableError(error), 5000); }
+  finally { submit.disabled = false; }
+}
+
 function eventDate(value) {
   if (!value) return 'Time coming soon';
   return new Intl.DateTimeFormat([], { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }).format(new Date(value));
@@ -687,6 +765,48 @@ function eventDate(value) {
 function eventMapUrl(item) {
   const query = [item.venue_name, item.location_text, item.spot?.name, item.spot?.general_location].filter(Boolean).join(', ');
   return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : '';
+}
+
+function localDateValue(date) {
+  const pad = value => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function localTimeValue(date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function resetEventComposer() {
+  state.editingEventId = null;
+  $('#eventForm').reset();
+  $('#eventSheetTitle').textContent = 'Add an event';
+  $('#eventSubmit').textContent = 'Share event';
+  const start = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  start.setMinutes(0, 0, 0);
+  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  $('#eventDate').value = localDateValue(start);
+  $('#eventStartClock').value = localTimeValue(start);
+  $('#eventEndClock').value = localTimeValue(end);
+}
+
+function openEventComposer(eventId = null) {
+  resetEventComposer();
+  const item = eventId ? state.events.find(event => event.id === eventId && event.author === state.profile.id) : null;
+  if (item) {
+    state.editingEventId = item.id;
+    const start = new Date(item.start_time);
+    const end = item.end_time ? new Date(item.end_time) : new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    $('#eventSheetTitle').textContent = 'Edit event';
+    $('#eventSubmit').textContent = 'Save changes';
+    $('#eventTitle').value = item.title || '';
+    $('#eventDate').value = localDateValue(start);
+    $('#eventStartClock').value = localTimeValue(start);
+    $('#eventEndClock').value = localTimeValue(end);
+    $('#eventVenue').value = item.venue_name || item.spot?.name || '';
+    $('#eventLocation').value = item.location_text || item.spot?.general_location || '';
+    $('#eventDescription').value = item.description || '';
+  }
+  openSheet('eventSheet');
 }
 
 function renderEvents() {
@@ -705,7 +825,8 @@ function renderEvents() {
     const day = start ? start.getDate() : '—';
     const place = [item.venue_name || item.spot?.name, item.location_text || item.spot?.general_location].filter(Boolean).join(' · ');
     const mapUrl = eventMapUrl(item);
-    return `<article class="event-card"><div class="event-date-tile"><span>${esc(month)}</span><b>${day}</b></div><div class="event-main"><div class="event-heading"><div><h2>${esc(item.title)}</h2><p>${esc(eventDate(item.start_time))}${item.end_time ? ` – ${esc(new Intl.DateTimeFormat([], { hour:'numeric', minute:'2-digit' }).format(new Date(item.end_time)))}` : ''}</p></div></div>${place ? `<a class="event-place" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg><span>${esc(place)}</span><b>Map ↗</b></a>` : ''}${item.description ? `<p class="event-description">${esc(item.description)}</p>` : ''}<div class="event-going"><div class="event-stack">${crew}</div><b>${going.length} going</b></div><div class="card-actions"><button class="small-action surf ${mine ? 'on' : ''}" data-event-rsvp="${item.id}"><svg><use href="#i-check"/></svg>${mine ? 'Going ✓' : 'RSVP'}</button><button class="small-action" data-event-calendar="${item.id}"><svg><use href="#i-calendar"/></svg>Add to calendar</button></div></div></article>`;
+    const edit = item.author === state.profile.id ? `<button class="event-edit" data-edit-event="${item.id}" aria-label="Edit ${esc(item.title)}"><svg><use href="#i-edit"/></svg></button>` : '';
+    return `<article class="event-card"><div class="event-date-tile"><span>${esc(month)}</span><b>${day}</b></div><div class="event-main"><div class="event-heading"><div><h2>${esc(item.title)}</h2><p>${esc(eventDate(item.start_time))}${item.end_time ? ` – ${esc(new Intl.DateTimeFormat([], { hour:'numeric', minute:'2-digit' }).format(new Date(item.end_time)))}` : ''}</p></div>${edit}</div>${place ? `<a class="event-place" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg><span>${esc(place)}</span><b>Map ↗</b></a>` : ''}${item.description ? `<p class="event-description">${esc(item.description)}</p>` : ''}<div class="event-going"><div class="event-stack">${crew}</div><b>${going.length} going</b></div><div class="card-actions"><button class="small-action surf ${mine ? 'on' : ''}" data-event-rsvp="${item.id}"><svg><use href="#i-check"/></svg>${mine ? 'Going ✓' : 'RSVP'}</button><button class="small-action" data-event-calendar="${item.id}"><svg><use href="#i-calendar"/></svg>Add to calendar</button></div></div></article>`;
   }).join('');
 }
 
@@ -714,11 +835,13 @@ async function createEvent(event) {
   const submit = $('#eventForm button[type="submit"]');
   submit.disabled = true;
   try {
-    const start = new Date($('#eventStartTime').value);
-    const end = new Date($('#eventEndTime').value);
+    const date = $('#eventDate').value;
+    const start = new Date(`${date}T${$('#eventStartClock').value}`);
+    let end = new Date(`${date}T${$('#eventEndClock').value}`);
+    if (end <= start) end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
     if (!Number.isFinite(start.getTime()) || start <= new Date()) throw new Error('Pick a future date and time.');
     if (!Number.isFinite(end.getTime()) || end <= start) throw new Error('The event end time must be after its start time.');
-    const result = await db.from('events').insert({
+    const payload = {
       author: state.profile.id,
       region_id: state.eventRegion.id,
       title: $('#eventTitle').value.trim(),
@@ -728,9 +851,13 @@ async function createEvent(event) {
       venue_name: $('#eventVenue').value.trim() || null,
       location_text: $('#eventLocation').value.trim(),
       description: $('#eventDescription').value.trim() || null,
-    });
+    };
+    const result = state.editingEventId
+      ? await db.from('events').update(payload).eq('id', state.editingEventId).eq('author', state.profile.id)
+      : await db.from('events').insert(payload);
     if (result.error) throw result.error;
-    $('#eventForm').reset(); closeSheet(); await loadEvents(); toast('Event shared with the crew.');
+    const edited = Boolean(state.editingEventId);
+    resetEventComposer(); closeSheet(); await loadEvents(); toast(edited ? 'Event updated.' : 'Event shared with the crew.');
   } catch (error) { toast(readableError(error), 5000); }
   finally { submit.disabled = false; }
 }
@@ -807,11 +934,24 @@ function renderSessions() {
 async function ensureSpot(name, generalLocation, regionId) {
   const cleanName = name.trim();
   const cleanLocation = generalLocation.trim();
-  let spot = state.spots.find(item => item.name.toLowerCase() === cleanName.toLowerCase()
-    && item.region_id === regionId
-    && (!cleanLocation || (item.general_location || '').toLowerCase() === cleanLocation.toLowerCase()));
-  if (spot) return spot;
+  const nameMatch = state.spots.find(item => item.name.toLowerCase() === cleanName.toLowerCase() && item.region_id === regionId);
+  if (nameMatch) {
+    const locationChanged = cleanLocation && (nameMatch.general_location || '').toLowerCase() !== cleanLocation.toLowerCase();
+    if (locationChanged && nameMatch.created_by === state.profile.id) {
+      const updated = await db.from('spots').update({ general_location: cleanLocation }).eq('id', nameMatch.id).select().single();
+      if (updated.error) throw updated.error;
+      Object.assign(nameMatch, updated.data);
+      renderChrome();
+    }
+    return nameMatch;
+  }
   const result = await db.from('spots').insert({ name: cleanName, general_location: cleanLocation || null, region_id: regionId, created_by: state.profile.id }).select().single();
+  if (result.error?.code === '23505') {
+    const existing = await db.from('spots').select('*').eq('region_id', regionId).ilike('name', cleanName).limit(1).maybeSingle();
+    if (!existing.error && existing.data) {
+      state.spots.push(existing.data); renderChrome(); return existing.data;
+    }
+  }
   if (result.error) throw result.error;
   state.spots.push(result.data);
   renderChrome();
@@ -1083,6 +1223,7 @@ function subscribeRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'post_comments' }, async () => await loadPosts())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, async () => await loadEvents())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'event_rsvps' }, async () => await loadEvents())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'rewards' }, async () => await loadPerks())
     .subscribe();
 }
 
@@ -1124,6 +1265,9 @@ document.addEventListener('click', async event => {
   const eventRegionNode = event.target.closest('[data-event-region]');
   const eventRsvpNode = event.target.closest('[data-event-rsvp]');
   const eventCalendarNode = event.target.closest('[data-event-calendar]');
+  const editEventNode = event.target.closest('[data-edit-event]');
+  const editPerkNode = event.target.closest('[data-edit-perk]');
+  const copyPerkNode = event.target.closest('[data-copy-perk]');
   if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
   if (viewNode) setView(viewNode.dataset.view);
   if (memberNode) openMember(memberNode.dataset.member);
@@ -1154,6 +1298,15 @@ document.addEventListener('click', async event => {
   if (likeNode) await toggleLike(likeNode.dataset.like);
   if (eventRsvpNode) await toggleEventRsvp(eventRsvpNode.dataset.eventRsvp);
   if (eventCalendarNode) addEventToCalendar(eventCalendarNode.dataset.eventCalendar);
+  if (editEventNode) openEventComposer(editEventNode.dataset.editEvent);
+  if (editPerkNode) openPerkComposer(editPerkNode.dataset.editPerk);
+  if (copyPerkNode) {
+    const perk = state.perks.find(item => item.id === copyPerkNode.dataset.copyPerk);
+    if (perk?.discount_code) {
+      try { await navigator.clipboard.writeText(perk.discount_code); toast('Discount code copied.'); }
+      catch (_error) { prompt('Copy this discount code:', perk.discount_code); }
+    }
+  }
   if (whenNode) {
     $$('[data-when]').forEach(button => button.classList.toggle('active', button === whenNode));
     $('#sessionTime').classList.toggle('hidden', whenNode.dataset.when !== 'later');
@@ -1179,7 +1332,8 @@ document.addEventListener('click', async event => {
     'open-session': () => openSessionComposer(),
     'add-session-person': addSessionPerson,
     'open-post': () => openSheet('postSheet'),
-    'open-event': () => openSheet('eventSheet'),
+    'open-event': () => openEventComposer(),
+    'open-perk': () => openPerkComposer(),
     'show-install': showInstallInstructions,
     'dismiss-install': dismissInstallNudge,
     'native-install': runNativeInstall,
@@ -1206,6 +1360,7 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'sessionForm') await createSession(event);
   else if (event.target.id === 'postForm') await createPost(event);
   else if (event.target.id === 'eventForm') await createEvent(event);
+  else if (event.target.id === 'perkForm') await savePerk(event);
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);
 });
 

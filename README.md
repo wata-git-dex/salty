@@ -24,6 +24,8 @@ For an existing database created before release v13, run `supabase/session-place
 
 Before release v23, run `supabase/events-v2-migration.sql` once. It safely adds event end times, venue names, searchable map locations, and the broad spot-location field if the earlier migration was missed.
 
+Before release v24, run `supabase/perks-admin-migration.sql` once. It activates the Saltyviewfinder and WATA discount cards, adds admin-only perk management, and makes `saltyviewfinder@gmail.com` the first Salty admin.
+
 ## Free-tier media limits
 
 - 90 seconds maximum clip duration.
@@ -33,4 +35,4 @@ Before release v23, run `supabase/events-v2-migration.sql` once. It safely adds 
 
 ## Phases
 
-This checkpoint contains Foundation, Surfing, the global Stoke photo/clip stream, and regional Events with RSVP and calendar export. Chat/DMs, moderation/perks completion, and additional offline polish follow. Clubs remain a marked post-launch preview only.
+This checkpoint contains Foundation, Surfing, the global Stoke photo/clip stream, regional Events with RSVP/calendar export, live admin-managed perks, and a visible points/streak guide. Chat/DMs, deeper moderation, and additional offline polish follow. Clubs remain a marked post-launch preview only.

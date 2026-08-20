@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=23">
+  <link rel="stylesheet" href="./styles.css?v=24">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -39,6 +39,12 @@
       <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
       <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l11-11a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></symbol>
+      <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/></symbol>
+      <symbol id="i-diamond" viewBox="0 0 24 24"><path d="m12 3 9 9-9 9-9-9 9-9Z"/></symbol>
+      <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
     </defs>
   </svg>
 
@@ -192,12 +198,13 @@
         <article class="club-card"><span class="club-logo coral-bg">S</span><div><h3>Snake Eyes Surf Club</h3><p>Club chat, feed, events and members</p></div><b class="soon">SOON</b></article>
         <article class="club-card"><span class="club-logo amber-bg">SO</span><div><h3>Sodium Team</h3><p>A mini-Salty for the team</p></div><b class="soon">SOON</b></article>
       </div>
-      <div id="view-perks" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Perks &amp; discounts</h2></div><div class="support-list"><article><b>S</b><div><h3>Sodium</h3><p>Community offers are coming in the support phase.</p></div></article><article><b>SV</b><div><h3>Salty Viewfinder</h3><p>Filmer perks and crew discounts.</p></div></article><article><b>WM</b><div><h3>Water Merch</h3><p>Point-unlocked physical rewards.</p></div></article></div></div>
+      <div id="view-perks" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Perks &amp; discounts</h2></div><div class="perks-intro"><span>CREW PERKS</span><h3>Good stuff from friends of Salty</h3><p>Member discounts for surf gear, prints, and projects worth supporting.</p></div><button id="addPerkButton" class="add-content hidden" data-action="open-perk"><svg><use href="#i-plus"/></svg>Add a discount</button><div id="perksList" class="perks-list"></div></div>
       <div id="view-rules" class="app-view sub-view">
         <div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Salty Community Rules</h2></div>
         <div class="copy-card rules-card"><h3>Community basics</h3><ol><li>Credit the filmer, every time.</li><li>Ask before sharing someone else's private details or raw footage.</li><li>No harassment, hate, pile-ons, or unwanted promotion.</li><li>Share sensitive spots thoughtfully and respect the people who surf there.</li><li>Use mute quietly. Report serious safety or community problems to an admin.</li></ol></div>
         <div class="copy-card rules-card"><h3>Lineup rules</h3><ol><li>The surfer closest to the peak has priority. Don't drop in.</li><li>Paddle around the breaking wave, not through another surfer's line.</li><li>Hold onto your board, communicate, and help when somebody is in trouble.</li><li>Take turns. Don't snake, back-paddle, or treat every wave like it belongs to you.</li><li>Know your limits and respect local conditions, access, and the beach.</li></ol><p class="rules-credit">In the spirit of Shaun Tomson's <a href="https://shauntomson.com/" target="_blank" rel="noopener">Surfer's Code</a>: watch out for other surfers, pass along the stoke, and honor surfing.</p></div>
       </div>
+      <div id="view-points" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Points &amp; streaks</h2></div><div class="points-hero"><svg><use href="#i-flame"/></svg><div><span>GET OUT THERE</span><h3>Participation earns points</h3><p>No popularity contest. Points come from surfing, filming, sharing, and showing up for the crew.</p></div></div><div class="points-guide"><h3>How points work</h3><div><b>15</b><span>Share a photo or clip</span></div><div><b>10</b><span>Share a surf</span></div><div><b>10</b><span>RSVP to an event</span></div><div><b>5</b><span>Join or film a surf</span></div><div><b>3</b><span>Leave a useful comment</span></div><div><b>+5</b><span>First qualifying activity of the day</span></div></div><div class="copy-card streak-guide"><h3>How the active streak works</h3><p>Complete any qualifying activity on a new day to add one to your streak. More activity on the same day still earns its normal points, but only counts as one active day.</p><p>If more than seven days pass without a qualifying activity, the next active day starts the streak over at one. The flame in the header shows your current streak.</p><small>Points and streaks reward real participation—not likes, followers, or scrolling. More achievements and point-unlocked perks can be added as the community grows.</small></div></div>
       <div id="view-settings" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Settings</h2></div><div class="copy-card icon-settings"><h3>Salty theme</h3><p>Tap one to preview and apply it across the entire app on this device.</p><div class="icon-options" role="radiogroup" aria-label="Salty color theme"><button data-icon-theme="ink" role="radio" aria-label="Use Ink theme"><img src="./icon-ink.svg" alt=""><span>Ink</span></button><button data-icon-theme="amber" role="radio" aria-label="Use Amber theme"><img src="./icon-amber.svg" alt=""><span>Amber</span></button><button data-icon-theme="foam" role="radio" aria-label="Use Foam theme"><img src="./icon-foam.svg" alt=""><span>Foam</span></button><button data-icon-theme="ocean" role="radio" aria-label="Use Ocean theme"><img src="./icon-ocean.svg" alt=""><span>Ocean</span></button></div><small>Your selected theme changes Salty's colors and logos immediately and stays saved here. The installed Home Screen icon remains the standard Salty icon.</small></div><div class="copy-card"><button id="installSettingsRow" class="settings-row" data-action="show-install">Add Salty to Home Screen <span>›</span></button><button class="settings-row" data-action="make-invite">Invite a friend <span>›</span></button><button class="settings-row" data-action="view-consent">Privacy &amp; consent <span>›</span></button><button class="settings-row danger" data-action="sign-out">Sign out <span>›</span></button></div></div>
       <div id="view-about" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>About Salty</h2></div><div class="copy-card about-card"><img data-app-icon src="./icon-ink.svg" alt="Salty"><h2>salty</h2><p>Surf with your friends, not your feed.</p><small>Private, invite-only, and built for the crew.</small></div><div class="copy-card about-copy"><h3>What Salty is for</h3><p>Surfline tells you whether the waves are good. Salty tells you what your friends are doing—who's surfing, who's filming, where, and when.</p><p>Share a surf for now or plan one ahead. Friends can join, volunteer to film, and keep the plan together without an Instagram doomscroll.</p><h3>How the community works</h3><p>There are no followers and no algorithm. Membership grows through invitations from people who actually surf together. Photos and clips stay properly credited, area conversations stay useful, and members choose what they share.</p><h3>Built to stay simple</h3><p>Salty has no ads and does not sell member information. It is an independent community tool built by Salty Viewfinder, with member data protected through Supabase.</p></div></div>
 
@@ -207,14 +214,16 @@
 
     <div id="drawerScrim" class="drawer-scrim" data-action="close-drawer"></div>
     <aside id="drawer" class="drawer">
+      <button class="drawer-close" data-action="close-drawer" aria-label="Close menu"><svg><use href="#i-close"/></svg></button>
       <div id="drawerProfile" class="drawer-profile"></div>
       <nav>
-        <button data-view="members"><span>◎</span>Members</button>
-        <button data-view="clubs"><span>♧</span>Clubs <b class="soon">SOON</b></button>
-        <button data-view="perks"><span>◇</span>Perks &amp; discounts</button>
-        <button data-view="rules"><span>▤</span>Salty Community Rules</button>
-        <button data-view="settings"><span>⚙</span>Settings</button>
-        <button data-view="about"><span>ⓘ</span>About Salty</button>
+        <button data-view="members"><svg><use href="#i-user"/></svg>Members</button>
+        <button data-view="clubs"><svg><use href="#i-circle"/></svg>Clubs <b class="soon">SOON</b></button>
+        <button data-view="perks"><svg><use href="#i-diamond"/></svg>Perks &amp; discounts</button>
+        <button data-view="points"><svg><use href="#i-flame"/></svg>Points &amp; streaks</button>
+        <button data-view="rules"><svg><use href="#i-list"/></svg>Salty Community Rules</button>
+        <button data-view="settings"><svg><use href="#i-settings"/></svg>Settings</button>
+        <button data-view="about"><svg><use href="#i-info"/></svg>About Salty</button>
       </nav>
       <strong class="drawer-foot">SALTY</strong>
     </aside>
@@ -253,14 +262,29 @@
 
     <section id="eventSheet" class="sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
-      <h2>Add an event</h2><p>Comps, movie nights, and meetups for <b id="eventRegionName">your area</b>.</p>
+      <h2 id="eventSheetTitle">Add an event</h2><p>Comps, movie nights, and meetups for <b id="eventRegionName">your area</b>.</p>
       <form id="eventForm">
         <label>Event name<input id="eventTitle" maxlength="160" required placeholder="Friday night surf movie"></label>
-        <div class="event-time-fields"><label>Starts<input id="eventStartTime" type="datetime-local" required></label><label>Ends<input id="eventEndTime" type="datetime-local" required></label></div>
+        <fieldset class="event-when"><legend>When</legend><label>Date<input id="eventDate" type="date" required></label><div><label>Start time<input id="eventStartClock" type="time" required></label><label>End time<input id="eventEndClock" type="time" required></label></div></fieldset>
         <label>Venue <small>optional</small><input id="eventVenue" maxlength="160" placeholder="Hobie Surf Shop"></label>
         <label>Address or map location<input id="eventLocation" maxlength="300" required placeholder="34174 Pacific Coast Hwy, Dana Point, CA"><small>Use a shop name, street address, beach, or general meeting area.</small></label>
         <label>Description<textarea id="eventDescription" maxlength="1200" placeholder="What should the crew know?"></textarea></label>
-        <button class="primary" type="submit">Share event</button>
+        <button id="eventSubmit" class="primary" type="submit">Share event</button>
+      </form>
+    </section>
+
+    <section id="perkSheet" class="sheet" aria-modal="true" role="dialog">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <h2 id="perkSheetTitle">Add a discount</h2><p>This is only visible to Salty admins.</p>
+      <form id="perkForm">
+        <label>Perk name<input id="perkName" maxlength="120" required placeholder="Saltyviewfinder Store Discount"></label>
+        <label>Brand<input id="perkBrand" maxlength="80" required placeholder="Saltyviewfinder"></label>
+        <label>Offer<input id="perkOffer" maxlength="120" required placeholder="Salty member discount"></label>
+        <label>Description<textarea id="perkDescription" maxlength="600" placeholder="Sodium merch, prints, and more."></textarea></label>
+        <label>Discount code <small>optional</small><input id="perkCode" maxlength="80" placeholder="SALTYCREW"></label>
+        <label>Store link <small>optional</small><input id="perkUrl" type="url" maxlength="500" placeholder="https://saltyviewfinder.com"></label>
+        <label class="toggle-row"><span>Live now<small>Members can see this perk</small></span><input id="perkActive" type="checkbox" role="switch" checked></label>
+        <button id="perkSubmit" class="primary" type="submit">Publish discount</button>
       </form>
     </section>
 
@@ -277,6 +301,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=23" defer></script>
+  <script src="./app.js?v=24" defer></script>
 </body>
 </html>
