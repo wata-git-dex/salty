@@ -121,8 +121,15 @@ create table public.room_messages (
   id uuid primary key default gen_random_uuid(),
   region_id uuid references public.regions(id) on delete cascade not null,
   author uuid references public.profiles(id) on delete cascade not null,
-  body text not null check (char_length(trim(body)) between 1 and 2000),
-  created_at timestamptz not null default now()
+  body text check (body is null or char_length(trim(body)) between 1 and 2000),
+  attachment_path text,
+  attachment_type text check (attachment_type is null or attachment_type in ('image/jpeg','image/png','image/webp','image/gif')),
+  attachment_name text,
+  attachment_size int check (attachment_size is null or attachment_size between 1 and 10485760),
+  created_at timestamptz not null default now(),
+  check (nullif(trim(body), '') is not null or attachment_path is not null),
+  check ((attachment_path is null and attachment_type is null and attachment_name is null and attachment_size is null)
+      or (attachment_path is not null and attachment_type is not null and attachment_size is not null))
 );
 
 create table public.dm_messages (
@@ -137,6 +144,7 @@ create table public.dm_messages (
   created_at timestamptz not null default now(),
   read_at timestamptz,
   check (sender <> recipient),
+  check (attachment_path is null and attachment_type is null and attachment_name is null and attachment_size is null),
   check (nullif(trim(body), '') is not null or attachment_path is not null),
   check ((attachment_path is null and attachment_type is null and attachment_name is null and attachment_size is null)
       or (attachment_path is not null and attachment_type is not null and attachment_size is not null))
@@ -420,6 +428,13 @@ create trigger points_post after insert on public.posts for each row execute fun
 create trigger points_comment after insert on public.post_comments for each row execute function public.points_from_action();
 create trigger points_event_rsvp after insert on public.event_rsvps for each row execute function public.points_from_action();
 
+create or replace function public.mark_dm_read(other_user uuid)
+returns void language sql security definer set search_path = public
+as $$
+  update public.dm_messages set read_at = now()
+  where sender = other_user and recipient = auth.uid() and read_at is null;
+$$;
+
 -- Every table has RLS enabled. Policies use membership, ownership, and relationship checks.
 alter table public.regions enable row level security;
 alter table public.profiles enable row level security;
@@ -480,7 +495,10 @@ create policy likes_insert_own on public.post_likes for insert with check (publi
 create policy likes_delete_own on public.post_likes for delete using (user_id = auth.uid());
 create policy connections_read_parties on public.connections for select using (public.is_member() and auth.uid() in (user_a, user_b));
 create policy room_messages_read on public.room_messages for select using (public.is_member());
-create policy room_messages_insert_own on public.room_messages for insert with check (public.is_member() and author = auth.uid());
+create policy room_messages_insert_own on public.room_messages for insert with check (
+  public.is_member() and author = auth.uid()
+  and (attachment_path is null or split_part(attachment_path, '/', 1) = auth.uid()::text)
+);
 create policy room_messages_update_own on public.room_messages for update using (author = auth.uid()) with check (author = auth.uid());
 create policy room_messages_delete_own on public.room_messages for delete using (author = auth.uid() or public.is_admin());
 create policy dms_read_parties on public.dm_messages for select using (public.is_member() and auth.uid() in (sender, recipient));
@@ -488,7 +506,6 @@ create policy dms_insert_sender on public.dm_messages for insert with check (
   public.is_member() and sender = auth.uid()
   and (attachment_path is null or split_part(attachment_path, '/', 1) = auth.uid()::text)
 );
-create policy dms_update_recipient on public.dm_messages for update using (recipient = auth.uid()) with check (recipient = auth.uid());
 create policy dms_delete_sender on public.dm_messages for delete using (sender = auth.uid());
 create policy events_read on public.events for select using (public.is_member());
 create policy events_insert_own on public.events for insert with check (public.is_member() and author = auth.uid());
@@ -516,16 +533,24 @@ grant execute on function public.invite_is_valid(text) to anon, authenticated;
 grant execute on function public.redeem_invite(text,text,text,text) to authenticated;
 grant execute on function public.create_invite(int) to authenticated;
 grant execute on function public.is_member(uuid), public.is_admin(uuid) to anon, authenticated;
+revoke all on function public.mark_dm_read(uuid) from public, anon;
+grant execute on function public.mark_dm_read(uuid) to authenticated;
 revoke execute on function public.upsert_connection(uuid,uuid,text), public.record_activity(uuid,text,int) from public, anon, authenticated;
+revoke update on public.dm_messages from authenticated;
 
 -- Media bucket and ownership-scoped writes. Public URLs are intentional because the feed is community-global.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('salty-media', 'salty-media', true, 52428800, array['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm'])
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
--- Private DM images: one image per message, 10 MB max. Public area rooms remain text-only.
+-- Legacy private-DM bucket retained for safe schema upgrades. DMs are text-only;
+-- room photos use the private salty-chat bucket below.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('salty-dm', 'salty-dm', false, 10485760, array['image/jpeg','image/png','image/webp','image/gif'])
+on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('salty-chat', 'salty-chat', false, 10485760, array['image/jpeg','image/png','image/webp','image/gif'])
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 -- Member-only profile images, 8 MB max.
@@ -542,8 +567,6 @@ with check (bucket_id = 'salty-media' and owner_id = auth.uid()::text);
 create policy salty_media_delete on storage.objects for delete to authenticated
 using (bucket_id = 'salty-media' and owner_id = auth.uid()::text);
 
-create policy salty_dm_insert on storage.objects for insert to authenticated
-with check (bucket_id = 'salty-dm' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
 create policy salty_dm_read_parties on storage.objects for select to authenticated
 using (
   bucket_id = 'salty-dm' and exists (
@@ -553,6 +576,13 @@ using (
 );
 create policy salty_dm_delete_sender on storage.objects for delete to authenticated
 using (bucket_id = 'salty-dm' and owner_id = auth.uid()::text);
+
+create policy salty_chat_read on storage.objects for select to authenticated
+using (bucket_id = 'salty-chat' and public.is_member());
+create policy salty_chat_insert on storage.objects for insert to authenticated
+with check (bucket_id = 'salty-chat' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
+create policy salty_chat_delete_own on storage.objects for delete to authenticated
+using (bucket_id = 'salty-chat' and owner_id = auth.uid()::text);
 
 create policy salty_avatars_read_members on storage.objects for select to authenticated
 using (bucket_id = 'salty-avatars' and public.is_member());
