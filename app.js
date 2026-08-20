@@ -776,10 +776,12 @@ async function sendRoomMessage(event) {
 function renderDmPeople() {
   const target = $('#dmPeople');
   if (!target) return;
-  target.innerHTML = state.people.filter(person => person.id !== state.profile.id).map(person => {
+  const existingThreads = new Set(state.dmThreads.map(thread => thread.memberId));
+  const available = state.people.filter(person => person.id !== state.profile.id && !existingThreads.has(person.id));
+  target.innerHTML = available.map(person => {
     const region = state.regions.find(item => item.id === person.home_region)?.name || 'Salty Crew';
     return `<button class="member-row" data-dm-member="${person.id}">${avatarMarkup(person)}<span><b>${esc(person.name)}</b><small>${esc(region)}</small></span><i>›</i></button>`;
-  }).join('');
+  }).join('') || '<p class="dm-everyone">Everyone you have messaged is already in your inbox.</p>';
 }
 
 async function loadDmInbox() {
