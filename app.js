@@ -37,8 +37,10 @@ const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
 
 const state = {
   session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [], perks: [],
+  regionMemberships: [],
   roomMessages: [], dmMessages: [], dmThreads: [], chatPhotoUrls: {}, activeDmMember: null,
   currentRegion: null, eventRegion: null, chatRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
+  pendingInviteRegion: '',
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
   consentNext: 'new', sessionPeople: [], editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
@@ -52,6 +54,7 @@ const esc = (value = '') => String(value).replace(/[&<>'"]/g, char => ({'&':'&am
 const initials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 const formatCount = number => new Intl.NumberFormat().format(number || 0);
 const inviteFromUrl = () => new URLSearchParams(location.search).get('invite')?.trim() || '';
+const inviteRegionFromUrl = () => new URLSearchParams(location.search).get('region')?.trim() || '';
 const ICON_THEMES = new Set(['ink', 'amber', 'foam', 'ocean']);
 const THEME_COLORS = Object.freeze({
   ink: '#0A141C',
@@ -197,8 +200,10 @@ async function init() {
     } catch (error) { console.warn('Service worker registration deferred:', error); }
   }
   state.pendingInvite = inviteFromUrl() || localStorage.getItem('salty:invite') || '';
+  state.pendingInviteRegion = inviteRegionFromUrl() || localStorage.getItem('salty:invite-region') || '';
   state.pendingOpen = params.get('open') || '';
   if (state.pendingInvite) localStorage.setItem('salty:invite', state.pendingInvite);
+  if (state.pendingInviteRegion) localStorage.setItem('salty:invite-region', state.pendingInviteRegion);
   state.pendingTokenHash = params.get('token_hash') || '';
   state.pendingTokenType = params.get('type') || 'email';
 
@@ -234,6 +239,7 @@ function runPreview() {
   state.session = { user: { id: userId } };
   state.profile = { id: userId, name: 'Cyrus V.', nickname: 'Cy', phone: '(949) 555-0142', home_region: regionId, sponsors: ['Sodium', 'Salty Viewfinder'], social_url:'https://instagram.com/', avatar_path:null, onboarding_complete:true, is_admin:true };
   state.regions = [{ id: regionId, name: 'California' }, { id: 'fr', name: 'France' }, { id: 'de', name: 'Germany' }, { id: 'ut', name: 'Utah' }];
+  state.regionMemberships = [{ user_id:userId, region_id:regionId, is_home:true, notifications_enabled:true }];
   state.currentRegion = state.regions[0];
   state.eventRegion = state.currentRegion;
   state.chatRegion = state.currentRegion;
@@ -264,7 +270,7 @@ function runPreview() {
 }
 
 function renderPreviewProfile() {
-  $('#profileView').innerHTML = profileMarkup(state.profile, { points:45, streak:3, clips:0, own:true });
+  $('#profileView').innerHTML = profileMarkup(state.profile, { points:45, streak:3, stoke:4, surfed:12, filmed:7, organized:5, locations:2, own:true });
   $('#streakBadge b').textContent = '3';
 }
 
@@ -497,6 +503,14 @@ async function enterCommunity() {
     await showProfileSetup();
     return;
   }
+  if (state.pendingInviteRegion) {
+    const joined = await db.rpc('join_location', { location_id:state.pendingInviteRegion });
+    if (joined.error) console.warn('Invite location join deferred:', joined.error);
+    else {
+      state.pendingInviteRegion = '';
+      localStorage.removeItem('salty:invite-region');
+    }
+  }
   await loadApp();
   showOnly('app');
   clearPendingAuth();
@@ -505,17 +519,25 @@ async function enterCommunity() {
 }
 
 async function loadApp() {
-  const [regionsResult, spotsResult, peopleResult] = await Promise.all([
+  const [regionsResult, spotsResult, peopleResult, membershipsResult] = await Promise.all([
     db.from('regions').select('*').order('name'),
     db.from('spots').select('*').order('name'),
     db.from('profiles').select('id,name,nickname,home_region,sponsors,social_url,avatar_path,onboarding_complete').eq('onboarding_complete', true).order('name'),
+    db.from('region_memberships').select('*').eq('user_id', state.profile.id),
   ]);
-  const firstError = regionsResult.error || spotsResult.error || peopleResult.error;
+  const membershipsUnavailable = membershipsResult.error && /region_memberships/i.test(membershipsResult.error.message || '');
+  const firstError = regionsResult.error || spotsResult.error || peopleResult.error || (membershipsUnavailable ? null : membershipsResult.error);
   if (firstError) throw firstError;
-  state.regions = regionsResult.data;
+  state.regions = (regionsResult.data || []).filter(region => region.is_active !== false);
   state.spots = spotsResult.data;
   state.people = peopleResult.data;
-  state.currentRegion = state.regions.find(region => region.id === state.profile.home_region) || state.regions.find(region => region.name === 'California') || state.regions[0];
+  state.regionMemberships = membershipsUnavailable
+    ? [{ user_id:state.profile.id, region_id:state.profile.home_region, is_home:true, notifications_enabled:true }]
+    : membershipsResult.data || [];
+  const lastRegion = localStorage.getItem('salty:last-location');
+  state.currentRegion = state.regions.find(region => region.id === lastRegion)
+    || state.regions.find(region => region.id === state.profile.home_region)
+    || state.regions.find(region => region.name === 'California') || state.regions[0];
   state.eventRegion = state.currentRegion;
   state.chatRegion = state.currentRegion;
   await loadAvatarUrls();
@@ -729,12 +751,13 @@ async function runNativeInstall() {
 async function showProfileSetup() {
   const regionsResult = await db.from('regions').select('*').order('name');
   if (regionsResult.error) throw regionsResult.error;
-  state.regions = regionsResult.data || [];
+  state.regions = (regionsResult.data || []).filter(region => region.is_active !== false);
   $('#setupRegion').innerHTML = state.regions.map(region => `<option value="${region.id}">${esc(region.name)}</option>`).join('');
   $('#setupName').value = state.profile.name || '';
   $('#setupNickname').value = state.profile.nickname || '';
   $('#setupPhone').value = state.profile.phone || '';
-  $('#setupRegion').value = state.profile.home_region || state.regions[0]?.id || '';
+  const invitedRegion = state.regions.find(region => region.id === state.pendingInviteRegion)?.id;
+  $('#setupRegion').value = invitedRegion || state.profile.home_region || state.regions[0]?.id || '';
   $('#setupSponsors').value = (state.profile.sponsors || []).join(', ');
   $('#setupSocial').value = state.profile.social_url || '';
   $('#profileAvatar').required = !state.profile.avatar_path;
@@ -747,6 +770,63 @@ async function showProfileSetup() {
     if (!signed.error) $('#avatarPreview').innerHTML = `<img src="${esc(signed.data.signedUrl)}" alt="Current profile photo">`;
   }
   showOnly('profileSetup');
+}
+
+async function refreshLocationMemberships() {
+  const result = await db.from('region_memberships').select('*').eq('user_id', state.profile.id);
+  if (result.error) throw result.error;
+  state.regionMemberships = result.data || [];
+}
+
+function joinedLocationIds() {
+  return new Set(state.regionMemberships.map(membership => membership.region_id));
+}
+
+function isLocationJoined(regionId) {
+  return joinedLocationIds().has(regionId) || state.profile?.home_region === regionId;
+}
+
+async function joinLocation(region, announce = true) {
+  if (!region || isLocationJoined(region.id)) return;
+  if (state.preview) {
+    state.regionMemberships.push({ user_id:state.profile.id, region_id:region.id, is_home:false, notifications_enabled:true });
+    return;
+  }
+  const result = await db.rpc('join_location', { location_id:region.id });
+  if (result.error) throw result.error;
+  await refreshLocationMemberships();
+  if (announce) toast(`${region.name} joined. You’ll now see its sessions, chat, events, and notifications.`);
+}
+
+async function saveLocation(event) {
+  event.preventDefault();
+  const submit = $('button[type="submit"]', event.currentTarget);
+  submit.disabled = true;
+  try {
+    const result = await db.rpc('create_or_join_location', {
+      location_name:$('#newLocationName').value.trim(),
+      location_scope:$('#locationScope').value,
+    });
+    if (result.error) throw result.error;
+    const region = result.data;
+    const existingIndex = state.regions.findIndex(item => item.id === region.id);
+    if (existingIndex >= 0) state.regions[existingIndex] = region;
+    else state.regions.push(region);
+    state.regions.sort((a, b) => a.name.localeCompare(b.name));
+    await refreshLocationMemberships();
+    const setupRegion = $('#setupRegion');
+    setupRegion.innerHTML = state.regions.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join('');
+    setupRegion.value = region.id;
+    if (state.profile?.onboarding_complete) {
+      state.currentRegion = region; state.eventRegion = region; state.chatRegion = region;
+      localStorage.setItem('salty:last-location', region.id);
+      renderChrome();
+      await Promise.all([loadSessions(), loadEvents(), loadRoomMessages()]);
+    }
+    event.currentTarget.reset(); closeSheet();
+    toast(`${region.name} is now part of Salty.`);
+  } catch (error) { toast(readableError(error), 6000); }
+  finally { submit.disabled = false; }
 }
 
 async function completeProfile(event) {
@@ -774,6 +854,13 @@ async function completeProfile(event) {
     const result = await db.from('profiles').update(updates).eq('id', state.profile.id).select().single();
     if (result.error) throw result.error;
     state.profile = result.data;
+    if (state.pendingInviteRegion) {
+      const joined = await db.rpc('join_location', { location_id:state.pendingInviteRegion });
+      if (!joined.error) {
+        state.pendingInviteRegion = '';
+        localStorage.removeItem('salty:invite-region');
+      }
+    }
     $('#profileForm').reset();
     await loadApp(); showOnly('app'); cleanAuthUrl(); offerInstallAfterAuth(); toast('Profile saved. Welcome to Salty.');
   } catch (error) { toast(readableError(error), 6000); }
@@ -808,9 +895,7 @@ const navItems = [
 ];
 
 function activeRegions() {
-  const memberRegionIds = new Set(state.people.map(person => person.home_region).filter(Boolean));
-  if (state.profile?.home_region) memberRegionIds.add(state.profile.home_region);
-  return state.regions.filter(region => memberRegionIds.has(region.id));
+  return state.regions.filter(region => region.is_active !== false);
 }
 
 function renderNav(target) {
@@ -821,7 +906,11 @@ function renderChrome() {
   renderNav($('#mobileNav')); renderNav($('#desktopNav'));
   $('#locationName').textContent = state.currentRegion.name;
   const visibleRegions = activeRegions();
-  $('#regionMenu').innerHTML = visibleRegions.map(region => `<button data-region="${region.id}" class="${region.id === state.currentRegion.id ? 'active' : ''}">${esc(region.name)} <small>view sessions</small></button>`).join('');
+  const joined = joinedLocationIds();
+  $('#regionMenu').innerHTML = visibleRegions.map(region => {
+    const status = region.id === state.profile.home_region ? 'HOME' : joined.has(region.id) ? 'JOINED' : 'EXPLORE';
+    return `<button data-region="${region.id}" class="${region.id === state.currentRegion.id ? 'active' : ''}">${esc(region.name)} <small>${status}</small></button>`;
+  }).join('') + '<button class="add-location" data-action="open-location">+ Add a new location</button>';
   const regionSpots = state.spots.filter(spot => spot.region_id === state.currentRegion.id);
   $('#spotsList').innerHTML = regionSpots.map(spot => `<option value="${esc(spot.name)}"></option>`).join('');
   $('#locationsList').innerHTML = [...new Set(regionSpots.map(spot => spot.general_location).filter(Boolean))].sort().map(location => `<option value="${esc(location)}"></option>`).join('');
@@ -929,6 +1018,7 @@ async function sendRoomMessage(event) {
   const submit = $('button[type="submit"]', form); submit.disabled = true;
   let attachmentPath = null;
   try {
+    await joinLocation(state.chatRegion, false);
     if (file) {
       const safeName = file.name.replace(/[^a-z0-9._-]+/gi, '-').slice(-100);
       attachmentPath = `${state.profile.id}/${crypto.randomUUID()}-${safeName}`;
@@ -1274,6 +1364,7 @@ async function createEvent(event) {
   const submit = $('#eventForm button[type="submit"]');
   submit.disabled = true;
   try {
+    await joinLocation(state.eventRegion, false);
     const date = $('#eventDate').value;
     const start = new Date(`${date}T${$('#eventStartClock').value}`);
     let end = new Date(`${date}T${$('#eventEndClock').value}`);
@@ -1582,6 +1673,7 @@ async function createSession(event) {
   event.preventDefault();
   const submit = $('#sessionForm button[type="submit"]'); submit.disabled = true;
   try {
+    await joinLocation(state.currentRegion, false);
     if ($('#sessionPersonInput').value.trim()) addSessionPerson();
     const spot = await ensureSpot($('#sessionSpot').value, $('#sessionLocation').value, state.currentRegion.id);
     const later = $('[data-when="later"]').classList.contains('active');
@@ -1820,13 +1912,19 @@ async function addComment(event, postId) {
 }
 
 async function renderProfile() {
-  const [points, streak, posts] = await Promise.all([
+  const [points, streak, posts, participation] = await Promise.all([
     db.from('points_events').select('points').eq('user_id', state.profile.id),
     db.from('streaks').select('*').eq('user_id', state.profile.id).maybeSingle(),
     db.from('posts').select('id', { count: 'exact', head: true }).eq('author', state.profile.id),
+    db.rpc('get_profile_participation_stats', { target_user:state.profile.id }),
   ]);
   const total = (points.data || []).reduce((sum, event) => sum + event.points, 0);
-  $('#profileView').innerHTML = profileMarkup(state.profile, { points:total, streak:streak.data?.current_streak || 0, clips:posts.count || 0, own:true });
+  const participationStats = participation.error ? {} : participation.data || {};
+  $('#profileView').innerHTML = profileMarkup(state.profile, {
+    points:total, streak:streak.data?.current_streak || 0, stoke:participationStats.stoke ?? posts.count ?? 0,
+    surfed:participationStats.surfed || 0, filmed:participationStats.filmed || 0,
+    organized:participationStats.organized || 0, locations:participationStats.locations || 0, own:true,
+  });
   $('#streakBadge b').textContent = streak.data?.current_streak || 0;
 }
 
@@ -1839,7 +1937,7 @@ function profileMarkup(profile, stats = {}) {
   const controls = stats.own
     ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Salty</button><button class="secondary-button guide-invite-button" data-action="share-invite-guide">Invite a friend + guide</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
     : `<div class="profile-actions"><button class="primary" data-dm-member="${profile.id}">Message ${esc(profile.name)}</button></div>`;
-  return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Salty Crew</p></div></div>${stats.own ? `<div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.clips || 0}</b><span>clips</span></article></div>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${controls}<footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
+  return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Salty Crew</p></div></div>${stats.own ? `<div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke shared</span></article></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>sessions surfed</span></article><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>sessions filmed</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>sessions organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations surfed</span></article></div><p class="stats-note">Only completed sessions count.</p>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${controls}<footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
 }
 
 function safeExternalUrl(value) {
@@ -1954,14 +2052,19 @@ async function shareGuide() {
 }
 
 async function shareInvite({ includeGuide = false } = {}) {
-  const result = await db.rpc('create_invite', { invite_max_uses: 1 });
+  const inviteRegion = state.currentRegion || state.regions.find(region => region.id === state.profile.home_region);
+  let result = await db.rpc('create_invite', { invite_max_uses:1, invite_region:inviteRegion?.id || null });
+  if (result.error && /create_invite/i.test(result.error.message || '')) {
+    result = await db.rpc('create_invite', { invite_max_uses:1 });
+  }
   if (result.error) { toast(readableError(result.error)); return; }
   const url = new URL('./', location.href); url.searchParams.set('invite', result.data);
+  if (inviteRegion?.id) url.searchParams.set('region', inviteRegion.id);
   const guideUrl = quickStartGuideUrl();
   const title = "You're invited to Salty";
   const text = includeGuide
-    ? `I'm inviting you to Salty, a private surf community. Hopefully it helps us surf more together.\n\nYour invite: ${url.href}\nQuick Start Guide: ${guideUrl}`
-    : `I'm inviting you to Salty, a private surf community. Hopefully it helps us surf more together.`;
+    ? `I'm inviting you to Salty${inviteRegion ? ` in ${inviteRegion.name}` : ''}, a private surf community. Hopefully it helps us surf more together.\n\nYour invite: ${url.href}\nQuick Start Guide: ${guideUrl}`
+    : `I'm inviting you to Salty${inviteRegion ? ` in ${inviteRegion.name}` : ''}, a private surf community. Hopefully it helps us surf more together.`;
   let file = null;
   if (includeGuide) {
     try { file = await quickStartGuideFile(); }
@@ -2017,7 +2120,11 @@ document.addEventListener('click', async event => {
     renderSessionPeopleChips();
   }
   if (regionNode) {
-    state.currentRegion = state.regions.find(region => region.id === regionNode.dataset.region);
+    const region = state.regions.find(item => item.id === regionNode.dataset.region);
+    try { await joinLocation(region); }
+    catch (error) { toast(readableError(error), 5000); return; }
+    state.currentRegion = region; state.eventRegion = region; state.chatRegion = region;
+    localStorage.setItem('salty:last-location', region.id);
     $('#regionMenu').classList.remove('open'); renderChrome();
     if (state.preview) {
       state.sessions = state.previewSessions.filter(session => session.region_id === state.currentRegion.id);
@@ -2025,12 +2132,18 @@ document.addEventListener('click', async event => {
     } else await loadSessions();
   }
   if (eventRegionNode) {
-    state.eventRegion = state.regions.find(region => region.id === eventRegionNode.dataset.eventRegion);
+    const region = state.regions.find(item => item.id === eventRegionNode.dataset.eventRegion);
+    try { await joinLocation(region); }
+    catch (error) { toast(readableError(error), 5000); return; }
+    state.eventRegion = region;
     renderEventRegions();
     if (!state.preview) await loadEvents();
   }
   if (chatRegionNode) {
-    state.chatRegion = state.regions.find(region => region.id === chatRegionNode.dataset.chatRegion);
+    const region = state.regions.find(item => item.id === chatRegionNode.dataset.chatRegion);
+    try { await joinLocation(region); }
+    catch (error) { toast(readableError(error), 5000); return; }
+    state.chatRegion = region;
     renderChatRegions();
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
@@ -2087,6 +2200,7 @@ document.addEventListener('click', async event => {
     'open-post': () => openPostComposer(),
     'open-event': () => openEventComposer(),
     'open-perk': () => openPerkComposer(),
+    'open-location': () => { $('#locationForm').reset(); openSheet('locationSheet'); },
     'delete-perk': deletePerk,
     'delete-post': deletePost,
     'show-install': showInstallInstructions,
@@ -2131,6 +2245,7 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'perkForm') await savePerk(event);
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
+  else if (event.target.id === 'locationForm') await saveLocation(event);
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);
 });
 

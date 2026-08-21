@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=43">
+  <link rel="stylesheet" href="./styles.css?v=44">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -54,7 +54,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>salty</span>
-    <small class="boot-credit">SaltyView Productions · v1.43</small>
+    <small class="boot-credit">SaltyView Productions · v1.44</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -147,7 +147,7 @@
         <label>Name<input id="setupName" autocomplete="name" maxlength="80" required placeholder="Your name"></label>
         <label>Nickname <small>optional</small><input id="setupNickname" maxlength="50" placeholder="What else does the crew call you?"></label>
         <label>Phone<input id="setupPhone" autocomplete="tel" inputmode="tel" required placeholder="(949) 555-0142"></label>
-        <label>Home area<select id="setupRegion" required></select></label>
+        <label>Home location<select id="setupRegion" required></select><small>United States members use their state. Everywhere else uses the country.</small></label>
         <label>Sponsors <small>optional · separate with commas</small><input id="setupSponsors" maxlength="300" placeholder="Sodium, Snake Eyes"></label>
         <label>Instagram or social link <small>optional</small><input id="setupSocial" maxlength="300" inputmode="url" placeholder="https://instagram.com/yourname"></label>
         <button id="profileSubmit" class="primary" type="submit">Save profile and enter Salty</button>
@@ -173,7 +173,7 @@
           <button class="install-nudge-button" data-action="show-install">Add app</button>
           <button class="install-nudge-close" data-action="dismiss-install" aria-label="Dismiss">×</button>
         </div>
-        <button id="locationPill" class="location-pill" data-action="toggle-regions"><svg><use href="#i-pin"/></svg><strong id="locationName">California</strong><span>▾</span><small>tap to change area</small></button>
+        <button id="locationPill" class="location-pill" data-action="toggle-regions"><svg><use href="#i-pin"/></svg><strong id="locationName">California</strong><span>▾</span><small>tap to change location</small></button>
         <div id="regionMenu" class="region-menu"></div>
       </header>
 
@@ -324,6 +324,17 @@
       </form>
     </section>
 
+    <section id="locationSheet" class="sheet" aria-modal="true" role="dialog">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <h2>Add a Salty location</h2><p>Create a real geographic community when the crew reaches somewhere new.</p>
+      <form id="locationForm">
+        <label>Location type<select id="locationScope" required><option value="country">Country</option><option value="state">United States state</option></select></label>
+        <label>Location name<input id="newLocationName" maxlength="80" required placeholder="Mexico"><small>Use the US state inside the United States. Everywhere else, use the country.</small></label>
+        <div class="location-examples"><b>Examples</b><span>California · New York · Mexico · France · Germany</span></div>
+        <button class="primary" type="submit">Create and join location</button>
+      </form>
+    </section>
+
     <section id="installSheet" class="sheet install-sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <div class="install-app-mark"><img src="./icon-ink.svg" alt="Salty app icon"></div>
@@ -345,6 +356,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=43" defer></script>
+  <script src="./app.js?v=44" defer></script>
 </body>
 </html>

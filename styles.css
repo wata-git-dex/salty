@@ -29,6 +29,10 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 .about-card img{width:82px;height:82px;border-radius:22px}
 @media(min-width:1200px){.app-shell{grid-template-columns:240px minmax(0,var(--content));gap:36px}.fab,.sheet{left:calc(50% + 138px)}}
 @media(max-width:370px){.location-pill small{display:none}.session-card,.post-card{margin-left:9px;margin-right:9px}.stats{gap:6px}.stat b{font-size:21px}}
+
+/* Travel locations and participation stats */
+.sheet select{display:block;width:100%;margin-top:7px;padding:13px 14px;border:1px solid var(--line);border-radius:13px;outline:0;background:var(--surf);color:var(--foam);font-size:14px;font-weight:600;text-transform:none;letter-spacing:0}.sheet select:focus{border-color:var(--hail)}
+.region-menu{width:260px;max-height:min(60vh,420px);overflow:auto}.region-menu button.add-location{margin-top:5px;border-top:1px solid var(--line);border-radius:8px;color:var(--hail);justify-content:flex-start}.location-examples{display:flex;flex-direction:column;gap:4px;margin:-3px 0 18px;padding:12px 14px;border:1px solid var(--line);border-radius:13px;background:var(--surf)}.location-examples b{color:var(--foam);font-size:11px;letter-spacing:.7px;text-transform:uppercase}.location-examples span{color:var(--mut);font-size:12px;line-height:1.45}.participation-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}.participation-stats .profile-card{margin-bottom:0}.participation-stats .stat b{font-size:22px}.stats-note{margin:9px 0 15px;color:var(--mut2);font-size:10px;text-align:center}
 @media(max-width:430px){.event-time-fields{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 

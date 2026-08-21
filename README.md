@@ -32,6 +32,8 @@ For databases that show `gen_random_bytes(integer) does not exist` when inviting
 
 Before release v36, run `supabase/push-points-v1-migration.sql` once. It moves surf points from posting/joining to the moment the organizer marks the surf finished, prevents repeat awards per person/session, and adds push subscriptions plus member notification preferences. Deploy the `push` Edge Function and webhook using `supabase/PUSH_SETUP.md`; the VAPID private key and webhook secret must remain Supabase secrets and must never be committed.
 
+Before the travel-locations release, run `supabase/location-memberships-v1-migration.sql` once. It keeps one home location per member, lets members join real travel locations, carries the inviter's current location into new invites, scopes regional notifications to joined locations, and adds completed-session participation stats. Locations are U.S. states inside the United States and countries everywhere else; named spots and broader map areas remain attached to individual sessions.
+
 On iPhone, Web Push requires iOS 16.4 or later and the installed Home Screen app. Each member opens **Settings → Enable notifications on this device**, accepts Apple's prompt, and can then enable or disable new surfs, Stoke, DMs, events, surf updates, and Community Chat individually. Community Chat is off by default.
 
 ## Free-tier media limits
