@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=39">
+  <link rel="stylesheet" href="./styles.css?v=40">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -54,7 +54,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>salty</span>
-    <small class="boot-credit">SaltyView Productions · v39</small>
+    <small class="boot-credit">SaltyView Productions · v40</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -196,12 +196,12 @@
 
       <div id="view-feed" class="app-view">
         <div class="section-label"><span>Stoke</span><small>photos &amp; clips · every area</small></div>
-        <button class="add-content" data-action="open-post"><svg><use href="#i-plus"/></svg>Add photo or clip</button>
         <div id="postsFeed"></div>
+        <button class="add-content stoke-add-button" data-action="open-post"><svg><use href="#i-plus"/></svg>Add photo or clip</button>
       </div>
 
       <div id="view-chat" class="app-view chat-view">
-        <div class="chat-heading"><div><span>COMMUNITY CHAT</span><h2 id="chatRoomTitle">California</h2></div><small>Text + photos · no clips</small></div>
+        <div class="chat-heading"><div><span>COMMUNITY CHAT</span><h2 id="chatRoomTitle">California</h2></div></div>
         <div id="chatRegions" class="event-regions chat-regions"></div>
         <div id="roomMessages" class="message-list" aria-live="polite"></div>
         <form id="roomMessageForm" class="message-composer">
@@ -212,7 +212,7 @@
       </div>
       <div id="view-events" class="app-view">
         <div id="eventRegions" class="event-regions"></div>
-        <button class="events-calendar-button" data-action="open-events-calendar"><svg><use href="#i-calendar"/></svg><span><b>Crew calendar</b><small>See surfs and events together</small></span><svg class="events-calendar-arrow"><use href="#i-back"/></svg></button>
+        <div class="section-label surf-section-label events-section-label"><span>Events</span><div class="surf-section-actions"><span id="eventsPlanned" class="live event-live">NO EVENTS PLANNED</span><button class="surf-calendar-button" data-action="open-events-calendar"><svg><use href="#i-calendar"/></svg>Calendar</button></div></div>
         <div id="eventsFeed"></div>
         <button class="add-content events-add-button" data-action="open-event"><svg><use href="#i-plus"/></svg>Add an event</button>
       </div>
@@ -345,6 +345,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=39" defer></script>
+  <script src="./app.js?v=40" defer></script>
 </body>
 </html>

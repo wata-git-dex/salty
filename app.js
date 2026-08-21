@@ -1250,6 +1250,8 @@ function openEventComposer(eventId = null) {
 function renderEvents() {
   const feed = $('#eventsFeed');
   if (!feed || !state.eventRegion) return;
+  const plannedLabel = $('#eventsPlanned');
+  if (plannedLabel) plannedLabel.textContent = state.events.length ? `${state.events.length} PLANNED` : 'NO EVENTS PLANNED';
   if (!state.events.length) {
     feed.innerHTML = `<div class="empty"><span>EVENTS</span><h2>No events in ${esc(state.eventRegion.name)} yet</h2><p>Add a comp, movie night, or meetup and the crew can RSVP.</p></div>`;
     return;
@@ -1463,8 +1465,6 @@ function renderSessions() {
       .filter(Boolean)
       .filter((name, index, names) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
     const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...session.session_rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
-    const crewSummary = [surfers.length ? `<b>${esc(surfers.join(', '))}</b> surfing` : '', filmers.length ? `<b>${esc(filmers.join(', '))}</b> filming` : ''].filter(Boolean).join(' · ');
-    const authorRole = session.author_role === 'film' ? 'filming' : 'surfing';
     const edit = mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="Edit surf"><svg><use href="#i-edit"/></svg></button>` : '';
     const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;
     const filmAction = (session.wants_filmer || myRsvp?.role === 'film')
@@ -1477,10 +1477,12 @@ function renderSessions() {
       : `${surfAction}${filmAction}`;
     const mapUrl = spotMapUrl(session.spot);
     const location = session.spot?.general_location ? `<a class="spot-location" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}</a>` : '';
-    const actionHint = mine
-      ? '<small class="session-owner-note">Friends see a Join surf button here. If you request a filmer, they also see I can film.</small>'
-      : `<small class="session-join-label">${session.wants_filmer ? 'JOIN THE SURF OR HELP FILM' : 'JOIN THIS SURF'}</small>`;
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i>${edit}<div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you shared this surf' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag"><svg><use href="#i-camera"/></svg>Looking for clips</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p>${actionHint}<div class="card-actions">${actions}</div></article>`;
+    const surferNames = surfers.length ? surfers.map(name => `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
+    const filmerNames = filmers.length ? filmers.map(name => `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
+    const filmerRow = (session.wants_filmer || filmers.length)
+      ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
+      : '';
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i>${edit}<div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${esc(session.author_profile?.name || 'Salty member')}</strong><small>Shared this surf</small></div></div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div><div class="card-actions">${actions}</div></article>`;
   }).join('');
 }
 
