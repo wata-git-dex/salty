@@ -803,7 +803,7 @@ function avatarMarkup(profile, className = 'avatar') {
 }
 
 const navItems = [
-  ['surfing', 'i-surf', 'Surfing'], ['feed', 'i-wave', 'Stoke'], ['chat', 'i-chat', 'Chat'],
+  ['surfing', 'i-surf', 'Sessions'], ['feed', 'i-wave', 'Stoke'], ['chat', 'i-chat', 'Chat'],
   ['events', 'i-calendar', 'Events'], ['you', 'i-user', 'Profile'],
 ];
 
@@ -1481,7 +1481,8 @@ function renderSessions() {
     const filmerRow = (session.wants_filmer || filmers.length)
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
       : '';
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''}"><i class="stripe"></i>${edit}<div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${esc(session.author_profile?.name || 'Salty member')}</strong><small>Started this session</small></div></div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div><div class="card-actions">${actions}</div></article>`;
+    const starter = `<div class="session-starter">${avatarMarkup(session.author_profile, 'session-starter-avatar')}<span><b>${esc(session.author_profile?.name || 'Salty member')}</b> started this session</span></div>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''}"><i class="stripe"></i>${edit}<div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div><div class="card-actions">${actions}</div></article>`;
   }).join('');
 }
 
@@ -1535,7 +1536,6 @@ function resetSessionComposer() {
   $('#sessionCancelNote').classList.add('hidden');
   $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === 'now'));
   updateSessionRoleUi('surf');
-  $('#sessionDateChoice').classList.add('hidden');
   $('#sessionTime').value = '';
   updateDateChoiceLabels();
   renderSessionPeopleChips();
@@ -1565,7 +1565,6 @@ function openSessionComposer(sessionId = null) {
     $('#sessionLocation').value = session.spot?.general_location || '';
     const later = session.when_label !== 'Now';
     $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === (later ? 'later' : 'now')));
-    $('#sessionDateChoice').classList.toggle('hidden', !later);
     if (session.surf_time) {
       const localDate = new Date(new Date(session.surf_time).getTime() - new Date(session.surf_time).getTimezoneOffset() * 60000);
       $('#sessionTime').value = localDate.toISOString().slice(0, 16);
@@ -2060,8 +2059,8 @@ document.addEventListener('click', async event => {
   if (whenNode) {
     $$('[data-when]').forEach(button => button.classList.toggle('active', button === whenNode));
     const later = whenNode.dataset.when === 'later';
-    $('#sessionDateChoice').classList.toggle('hidden', !later);
-    if (later) ensureSessionTimeChoice();
+    if (!later) $('#sessionTime').value = '';
+    updateDateChoiceLabels();
   }
   if (sessionRoleNode) {
     updateSessionRoleUi(sessionRoleNode.dataset.sessionRole);
@@ -2197,8 +2196,14 @@ function fillKnownSpotLocation(spotInput, locationInput) {
 $('#sessionSpot').addEventListener('change', () => fillKnownSpotLocation($('#sessionSpot'), $('#sessionLocation')));
 $('#postSpot').addEventListener('change', () => fillKnownSpotLocation($('#postSpot'), $('#postLocation')));
 ['sessionTime', 'eventDate', 'eventStartClock', 'eventEndClock'].forEach(id => {
-  $(`#${id}`).addEventListener('input', updateDateChoiceLabels);
-  $(`#${id}`).addEventListener('change', updateDateChoiceLabels);
+  const refreshChoice = () => {
+    if (id === 'sessionTime' && $('#sessionTime').value) {
+      $$('[data-when]').forEach(choice => choice.classList.toggle('active', choice.dataset.when === 'later'));
+    }
+    updateDateChoiceLabels();
+  };
+  $(`#${id}`).addEventListener('input', refreshChoice);
+  $(`#${id}`).addEventListener('change', refreshChoice);
 });
 $('#sessionPersonInput').addEventListener('keydown', event => {
   if (event.key !== 'Enter' && event.key !== ',') return;
