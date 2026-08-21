@@ -43,6 +43,7 @@ const state = {
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
   consentNext: 'new', sessionPeople: [], editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
   notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '',
+  calendarMonth: null, calendarDate: '',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -240,10 +241,14 @@ function runPreview() {
   state.spots = [{ id: 'malibu', name: 'Malibu', general_location:'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', general_location:'San Clemente', region_id: regionId }];
   state.previewSessions = [
     { id:'mine', author:userId, region_id:regionId, author_role:'surf', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 86400000).toISOString(), wants_filmer:false, note:'morning glass before the wind', spot:{name:"Old Man's",general_location:'San Onofre'}, author_profile:{name:'Cyrus'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah'}}]},
+    { id:'mateo-surf', author:'mateo', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 2 * 86400000).toISOString(), wants_filmer:false, note:'easy afternoon log session', spot:{name:'First Point',general_location:'Malibu'}, author_profile:{name:'Mateo'}, session_rsvps:[] },
     { id:'crew', author:'jonah', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 3 * 86400000).toISOString(), wants_filmer:true, note:'sunrise window', spot:{name:'Lowers',general_location:'San Clemente'}, author_profile:{name:'Jonah'}, session_rsvps:[] },
   ];
   state.sessions = state.previewSessions;
   state.posts = [];
+  const previewEventStart = new Date(Date.now() + 5 * 86400000);
+  previewEventStart.setHours(18, 30, 0, 0);
+  state.events = [{ id:'preview-event', author:userId, region_id:regionId, title:'Friday Night Surf Film', start_time:previewEventStart.toISOString(), end_time:new Date(previewEventStart.getTime() + 2 * 3600000).toISOString(), venue_name:'Hobie Surf Shop', location_text:'Dana Point', description:'A surf film, tacos, and the crew.', event_rsvps:[{ user_id:userId, profile:state.profile }, { user_id:'jonah', profile:state.people[1] }] }];
   state.perks = [
     { id:'sv', name:'Saltyviewfinder Store Discount', brand_name:'Saltyviewfinder', offer_text:'Salty member discount', description:'Sodium merch, prints, and more.', store_url:'https://saltyviewfinder.com', active:true },
     { id:'wata', name:'WATA Store Discount', brand_name:'WATA', offer_text:'Salty member discount', description:'Support WATA and save on store gear.', store_url:'https://cleanwata.org', active:true },
@@ -254,7 +259,7 @@ function runPreview() {
   ];
   state.dmMessages = [{ id:'dm-1', sender:'jonah', recipient:userId, body:'Want to hit Lowers Friday?', created_at:new Date(Date.now() - 35 * 60000).toISOString(), read_at:null }];
   state.dmThreads = [{ memberId:'jonah', message:state.dmMessages[0] }];
-  renderChrome(); renderSessions(); renderPosts(); renderPerks(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); showOnly('app');
+  renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderPerks(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
 
@@ -850,6 +855,7 @@ async function loadSessions() {
   if (result.error) { toast(readableError(result.error)); return; }
   state.sessions = result.data || [];
   renderSessions();
+  if (state.view === 'calendar') renderCalendar();
 }
 
 function renderEventRegions() {
@@ -1063,6 +1069,7 @@ async function loadEvents() {
   if (result.error) { toast(readableError(result.error)); return; }
   state.events = result.data || [];
   renderEvents();
+  if (state.view === 'calendar') renderCalendar();
 }
 
 async function loadPerks() {
@@ -1321,7 +1328,95 @@ function addEventToCalendar(eventId) {
 
 function sessionWhen(session) {
   if (session.when_label === 'Now' || !session.surf_time) return 'out now';
-  return new Intl.DateTimeFormat([], { weekday:'short', hour:'numeric', minute:'2-digit' }).format(new Date(session.surf_time));
+  const date = new Date(session.surf_time);
+  const options = { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' };
+  if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
+  return new Intl.DateTimeFormat([], options).format(date);
+}
+
+function calendarDateKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? localDateValue(date) : '';
+}
+
+function calendarItems() {
+  const now = new Date();
+  const surfs = state.sessions
+    .filter(session => session.region_id === state.currentRegion.id)
+    .map(session => {
+      const date = session.surf_time ? new Date(session.surf_time) : now;
+      return { type:'surf', id:session.id, date, title:session.spot?.name || 'Surf', location:session.spot?.general_location || '', live:session.when_label === 'Now' };
+    });
+  const events = state.events
+    .filter(event => event.region_id === state.currentRegion.id && event.start_time)
+    .map(event => ({ type:'event', id:event.id, date:new Date(event.start_time), title:event.title, location:event.location_text || event.venue_name || event.spot?.general_location || '' }));
+  return [...surfs, ...events].filter(item => Number.isFinite(item.date.getTime())).sort((a, b) => a.date - b.date);
+}
+
+function calendarAgendaTime(item) {
+  if (item.live) return 'Out now';
+  return new Intl.DateTimeFormat([], { hour:'numeric', minute:'2-digit' }).format(item.date);
+}
+
+function renderCalendar() {
+  const grid = $('#calendarGrid');
+  const agenda = $('#calendarAgenda');
+  if (!grid || !agenda || !state.currentRegion) return;
+  const today = new Date();
+  const items = calendarItems();
+  if (!state.calendarMonth) state.calendarMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const month = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth(), 1);
+  state.calendarMonth = month;
+  $('#calendarRegionName').textContent = `${state.currentRegion.name} · surfs and events`;
+  $('#calendarMonthLabel').textContent = new Intl.DateTimeFormat([], { month:'long', year:'numeric' }).format(month);
+
+  const monthItems = items.filter(item => item.date.getFullYear() === month.getFullYear() && item.date.getMonth() === month.getMonth());
+  const todayKey = calendarDateKey(today);
+  if (!state.calendarDate || !state.calendarDate.startsWith(`${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`)) {
+    state.calendarDate = monthItems[0] ? calendarDateKey(monthItems[0].date) : (today.getFullYear() === month.getFullYear() && today.getMonth() === month.getMonth() ? todayKey : calendarDateKey(month));
+  }
+
+  const byDay = new Map();
+  items.forEach(item => {
+    const key = calendarDateKey(item.date);
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(item);
+  });
+  const gridStart = new Date(month.getFullYear(), month.getMonth(), 1 - month.getDay());
+  grid.innerHTML = Array.from({ length:42 }, (_, index) => {
+    const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
+    const key = calendarDateKey(date);
+    const dayItems = byDay.get(key) || [];
+    const surfCount = dayItems.filter(item => item.type === 'surf').length;
+    const eventCount = dayItems.filter(item => item.type === 'event').length;
+    const outside = date.getMonth() !== month.getMonth();
+    const label = new Intl.DateTimeFormat([], { weekday:'long', month:'long', day:'numeric' }).format(date);
+    return `<button class="calendar-day ${outside ? 'outside' : ''} ${key === todayKey ? 'today' : ''} ${key === state.calendarDate ? 'selected' : ''}" data-calendar-date="${key}" role="gridcell" aria-label="${esc(label)}${dayItems.length ? `, ${dayItems.length} planned` : ''}"><b>${date.getDate()}</b><span>${surfCount ? `<i class="surf-dot"></i>` : ''}${eventCount ? `<i class="event-dot"></i>` : ''}</span></button>`;
+  }).join('');
+
+  const selected = new Date(`${state.calendarDate}T12:00:00`);
+  const selectedItems = byDay.get(state.calendarDate) || [];
+  const heading = new Intl.DateTimeFormat([], { weekday:'long', month:'long', day:'numeric' }).format(selected);
+  agenda.innerHTML = `<div class="calendar-agenda-heading"><span>DAY PLAN</span><h3>${esc(heading)}</h3></div>${selectedItems.length ? selectedItems.map(item => `<article class="calendar-agenda-item ${item.type}"><i></i><div><b>${esc(item.title)}</b><span>${esc(calendarAgendaTime(item))}${item.location ? ` · ${esc(item.location)}` : ''}</span></div><button data-view="${item.type === 'surf' ? 'surfing' : 'events'}">View</button></article>`).join('') : `<div class="calendar-empty"><b>Nothing planned yet</b><span>Share a surf or add an event for this day.</span></div>`}`;
+}
+
+async function openCrewCalendar() {
+  state.eventRegion = state.currentRegion;
+  renderEventRegions();
+  if (!state.preview) await loadEvents();
+  const upcoming = calendarItems().find(item => item.date >= new Date(new Date().setHours(0, 0, 0, 0)));
+  const anchor = upcoming?.date || new Date();
+  state.calendarMonth = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  state.calendarDate = upcoming ? calendarDateKey(upcoming.date) : calendarDateKey(new Date());
+  renderCalendar();
+  setView('calendar');
+}
+
+function changeCalendarMonth(offset) {
+  const current = state.calendarMonth || new Date();
+  state.calendarMonth = new Date(current.getFullYear(), current.getMonth() + offset, 1);
+  state.calendarDate = '';
+  renderCalendar();
 }
 
 function spotMapUrl(spot) {
@@ -1332,10 +1427,13 @@ function spotMapUrl(spot) {
 
 function renderSessions() {
   const liveNow = state.sessions.filter(session => session.when_label === 'Now').length;
-  $('#liveCount').innerHTML = liveNow ? `<i></i>${liveNow} OUT NOW` : 'quiet right now';
+  const planned = state.sessions.length - liveNow;
+  $('#liveCount').innerHTML = liveNow
+    ? `<i></i>${liveNow} OUT NOW${planned ? ` · ${planned} PLANNED` : ''}`
+    : (planned ? `${planned} PLANNED` : 'NO SURFS PLANNED');
   const feed = $('#sessionsFeed');
   if (!state.sessions.length) {
-    feed.innerHTML = `<div class="empty"><span>QUIET</span><h2>No one's out in ${esc(state.currentRegion.name)} yet</h2><p>Be the first to post a session. One person starts it and the area comes alive.</p></div>`;
+    feed.innerHTML = `<div class="empty"><span>OPEN</span><h2>No surfs planned in ${esc(state.currentRegion.name)} yet</h2><p>Share when you're heading out and give the crew something to join.</p></div>`;
     return;
   }
   const orderedSessions = [...state.sessions].sort((first, second) => {
@@ -1354,14 +1452,21 @@ function renderSessions() {
     const crewSummary = [surfers.length ? `<b>${esc(surfers.join(', '))}</b> surfing` : '', filmers.length ? `<b>${esc(filmers.join(', '))}</b> filming` : ''].filter(Boolean).join(' · ');
     const authorRole = session.author_role === 'film' ? 'filming' : 'surfing';
     const edit = mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="Edit surf"><svg><use href="#i-edit"/></svg></button>` : '';
+    const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;
+    const filmAction = (session.wants_filmer || myRsvp?.role === 'film')
+      ? `<button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : (filmers.length ? 'Film too' : 'I can film')}</button>`
+      : '';
     const actions = mine
       ? (session.when_label === 'Now'
         ? `<button class="small-action finish" data-end-session="${session.id}"><svg><use href="#i-check"/></svg>Surf finished</button>`
         : `<button class="small-action start" data-start-session="${session.id}"><svg><use href="#i-surf"/></svg>Start session</button>`)
-      : `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : "I'm surfing"}</button><button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : "I'm filming"}</button>`;
+      : `${surfAction}${filmAction}`;
     const mapUrl = spotMapUrl(session.spot);
     const location = session.spot?.general_location ? `<a class="spot-location" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}</a>` : '';
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i>${edit}<div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you shared this surf' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag"><svg><use href="#i-camera"/></svg>Looking for clips</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p><div class="card-actions">${actions}</div></article>`;
+    const actionHint = mine
+      ? '<small class="session-owner-note">Friends see a Join surf button here. If you request a filmer, they also see I can film.</small>'
+      : `<small class="session-join-label">${session.wants_filmer ? 'JOIN THE SURF OR HELP FILM' : 'JOIN THIS SURF'}</small>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i>${edit}<div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${mine ? 'You' : esc(session.author_profile?.name)} ${mine ? '<b class="you-tag">YOU</b>' : ''}</strong><small>${mine ? 'you shared this surf' : esc(state.currentRegion.name)} · ${authorRole}</small></div>${session.wants_filmer ? '<b class="filmer-tag"><svg><use href="#i-camera"/></svg>Looking for clips</b>' : ''}</div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<p class="crew-line">${crewSummary || '<b>Open session</b> · bring the crew'}</p>${actionHint}<div class="card-actions">${actions}</div></article>`;
   }).join('');
 }
 
@@ -1487,11 +1592,13 @@ async function createSession(event) {
 
 async function setRsvp(sessionId, role) {
   const existing = state.sessions.find(session => session.id === sessionId)?.session_rsvps.find(rsvp => rsvp.user_id === state.profile.id);
+  const leaving = existing?.role === role;
   const result = existing?.role === role
     ? await db.from('session_rsvps').delete().eq('id', existing.id)
     : await db.from('session_rsvps').upsert({ session_id: sessionId, user_id: state.profile.id, role }, { onConflict: 'session_id,user_id' });
   if (result.error) { toast(readableError(result.error)); return; }
   await loadSessions(); await renderProfile();
+  toast(leaving ? (role === 'film' ? 'You are no longer filming this surf.' : 'You left this surf.') : (role === 'film' ? 'You are filming this surf.' : 'You joined this surf.'));
 }
 
 async function startSession(sessionId) {
@@ -1875,10 +1982,15 @@ document.addEventListener('click', async event => {
   const copyPerkNode = event.target.closest('[data-copy-perk]');
   const chatRegionNode = event.target.closest('[data-chat-region]');
   const dmMemberNode = event.target.closest('[data-dm-member]');
+  const calendarDateNode = event.target.closest('[data-calendar-date]');
   if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
   if (viewNode) setView(viewNode.dataset.view);
   if (memberNode) openMember(memberNode.dataset.member);
   if (dmMemberNode) await openDm(dmMemberNode.dataset.dmMember);
+  if (calendarDateNode) {
+    state.calendarDate = calendarDateNode.dataset.calendarDate;
+    renderCalendar();
+  }
   if (removeSessionPersonNode) {
     state.sessionPeople.splice(Number(removeSessionPersonNode.dataset.removeSessionPerson), 1);
     renderSessionPeopleChips();
@@ -1948,6 +2060,9 @@ document.addEventListener('click', async event => {
     'close-drawer': closeDrawer,
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
     'open-session': () => openSessionComposer(),
+    'open-calendar': openCrewCalendar,
+    'calendar-prev': () => changeCalendarMonth(-1),
+    'calendar-next': () => changeCalendarMonth(1),
     'add-session-person': addSessionPerson,
     'cancel-session': cancelSession,
     'open-post': () => openPostComposer(),
