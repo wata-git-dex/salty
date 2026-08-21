@@ -1412,6 +1412,20 @@ async function openCrewCalendar() {
   setView('calendar');
 }
 
+async function openEventsCalendar() {
+  if (state.eventRegion && state.eventRegion.id !== state.currentRegion.id) {
+    state.currentRegion = state.eventRegion;
+    renderChrome();
+    if (state.preview) {
+      state.sessions = state.previewSessions.filter(session => session.region_id === state.currentRegion.id);
+      renderSessions();
+    } else {
+      await loadSessions();
+    }
+  }
+  await openCrewCalendar();
+}
+
 function changeCalendarMonth(offset) {
   const current = state.calendarMonth || new Date();
   state.calendarMonth = new Date(current.getFullYear(), current.getMonth() + offset, 1);
@@ -2061,6 +2075,7 @@ document.addEventListener('click', async event => {
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
     'open-session': () => openSessionComposer(),
     'open-calendar': openCrewCalendar,
+    'open-events-calendar': openEventsCalendar,
     'calendar-prev': () => changeCalendarMonth(-1),
     'calendar-next': () => changeCalendarMonth(1),
     'add-session-person': addSessionPerson,

@@ -9,7 +9,7 @@
   <meta property="og:description" content="A private surf community built to help friends surf and film together more often.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://app.saltyviewfinder.com/">
-  <title>Salty — surf crew</title>
+  <title>Salty Community App</title>
   <link id="appManifest" rel="manifest" href="./manifest.webmanifest">
   <link id="appFavicon" rel="icon" href="./icon.svg" type="image/svg+xml">
   <link id="appTouchIcon" rel="apple-touch-icon" href="./icon-ink.svg">
@@ -210,7 +210,12 @@
           <button type="submit" aria-label="Send message"><svg><use href="#i-send"/></svg></button>
         </form>
       </div>
-      <div id="view-events" class="app-view"><div id="eventRegions" class="event-regions"></div><button class="add-content" data-action="open-event"><svg><use href="#i-plus"/></svg>Add an event</button><div id="eventsFeed"></div></div>
+      <div id="view-events" class="app-view">
+        <div id="eventRegions" class="event-regions"></div>
+        <button class="events-calendar-button" data-action="open-events-calendar"><svg><use href="#i-calendar"/></svg><span><b>Crew calendar</b><small>See surfs and events together</small></span><svg class="events-calendar-arrow"><use href="#i-back"/></svg></button>
+        <div id="eventsFeed"></div>
+        <button class="add-content events-add-button" data-action="open-event"><svg><use href="#i-plus"/></svg>Add an event</button>
+      </div>
 
       <div id="view-you" class="app-view"><div id="profileView" class="profile"></div></div>
       <div id="view-members" class="app-view sub-view"><div class="backbar"><button data-view="you"><svg><use href="#i-back"/></svg></button><h2>Members</h2></div><div id="membersList" class="members-list"></div></div>
