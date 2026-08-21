@@ -241,7 +241,7 @@ function runPreview() {
   state.spots = [{ id: 'malibu', name: 'Malibu', general_location:'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', general_location:'San Clemente', region_id: regionId }];
   state.previewSessions = [
     { id:'mine', author:userId, region_id:regionId, author_role:'surf', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 86400000).toISOString(), wants_filmer:false, note:'morning glass before the wind', spot:{name:"Old Man's",general_location:'San Onofre'}, author_profile:{name:'Cyrus'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah'}}]},
-    { id:'mateo-surf', author:'mateo', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 2 * 86400000).toISOString(), wants_filmer:false, note:'easy afternoon log session', spot:{name:'First Point',general_location:'Malibu'}, author_profile:{name:'Mateo'}, session_rsvps:[] },
+    { id:'mateo-surf', author:'mateo', region_id:regionId, author_role:'film', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 2 * 86400000).toISOString(), wants_filmer:false, note:'filming the afternoon window', spot:{name:'First Point',general_location:'Malibu'}, author_profile:{name:'Mateo'}, session_rsvps:[] },
     { id:'crew', author:'jonah', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 3 * 86400000).toISOString(), wants_filmer:true, note:'sunrise window', spot:{name:'Lowers',general_location:'San Clemente'}, author_profile:{name:'Jonah'}, session_rsvps:[] },
   ];
   state.sessions = state.previewSessions;
@@ -820,7 +820,6 @@ function renderNav(target) {
 function renderChrome() {
   renderNav($('#mobileNav')); renderNav($('#desktopNav'));
   $('#locationName').textContent = state.currentRegion.name;
-  $('#sessionRegionName').textContent = state.currentRegion.name;
   const visibleRegions = activeRegions();
   $('#regionMenu').innerHTML = visibleRegions.map(region => `<button data-region="${region.id}" class="${region.id === state.currentRegion.id ? 'active' : ''}">${esc(region.name)} <small>view sessions</small></button>`).join('');
   const regionSpots = state.spots.filter(spot => spot.region_id === state.currentRegion.id);
@@ -1399,7 +1398,7 @@ function renderCalendar() {
   const selected = new Date(`${state.calendarDate}T12:00:00`);
   const selectedItems = byDay.get(state.calendarDate) || [];
   const heading = new Intl.DateTimeFormat([], { weekday:'long', month:'long', day:'numeric' }).format(selected);
-  agenda.innerHTML = `<div class="calendar-agenda-heading"><span>DAY PLAN</span><h3>${esc(heading)}</h3></div>${selectedItems.length ? selectedItems.map(item => `<article class="calendar-agenda-item ${item.type}"><i></i><div><b>${esc(item.title)}</b><span>${esc(calendarAgendaTime(item))}${item.location ? ` · ${esc(item.location)}` : ''}</span></div><button data-view="${item.type === 'surf' ? 'surfing' : 'events'}">View</button></article>`).join('') : `<div class="calendar-empty"><b>Nothing planned yet</b><span>Share a surf or add an event for this day.</span></div>`}`;
+  agenda.innerHTML = `<div class="calendar-agenda-heading"><span>DAY PLAN</span><h3>${esc(heading)}</h3></div>${selectedItems.length ? selectedItems.map(item => `<article class="calendar-agenda-item ${item.type}"><i></i><div><b>${esc(item.title)}</b><span>${esc(calendarAgendaTime(item))}${item.location ? ` · ${esc(item.location)}` : ''}</span></div><button data-view="${item.type === 'surf' ? 'surfing' : 'events'}">View</button></article>`).join('') : `<div class="calendar-empty"><b>Nothing planned yet</b><span>Start a session or add an event for this day.</span></div>`}`;
 }
 
 async function openCrewCalendar() {
@@ -1472,7 +1471,7 @@ function renderSessions() {
       : '';
     const actions = mine
       ? (session.when_label === 'Now'
-        ? `<button class="small-action finish" data-end-session="${session.id}"><svg><use href="#i-check"/></svg>Surf finished</button>`
+        ? `<button class="small-action finish" data-end-session="${session.id}"><svg><use href="#i-check"/></svg>${session.author_role === 'film' ? 'Session finished' : 'Surf finished'}</button>`
         : `<button class="small-action start" data-start-session="${session.id}"><svg><use href="#i-surf"/></svg>Start session</button>`)
       : `${surfAction}${filmAction}`;
     const mapUrl = spotMapUrl(session.spot);
@@ -1482,7 +1481,7 @@ function renderSessions() {
     const filmerRow = (session.wants_filmer || filmers.length)
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
       : '';
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''}"><i class="stripe"></i>${edit}<div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${esc(session.author_profile?.name || 'Salty member')}</strong><small>Shared this surf</small></div></div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div><div class="card-actions">${actions}</div></article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''}"><i class="stripe"></i>${edit}<div class="card-head">${avatarMarkup(session.author_profile)}<div class="card-person"><strong>${esc(session.author_profile?.name || 'Salty member')}</strong><small>Started this session</small></div></div><div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div><div class="card-actions">${actions}</div></article>`;
   }).join('');
 }
 
@@ -1531,17 +1530,25 @@ function resetSessionComposer() {
   state.editingSessionId = null;
   state.sessionPeople = [];
   $('#sessionForm').reset();
-  $('#sessionSheetTitle').textContent = 'Share a surf';
-  $('#sessionSubmit').textContent = 'Share session';
+  $('#sessionSheetTitle').textContent = 'Create a session';
   $('#sessionCancel').classList.add('hidden');
   $('#sessionCancelNote').classList.add('hidden');
   $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === 'now'));
-  $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === 'surf'));
+  updateSessionRoleUi('surf');
   $('#sessionDateChoice').classList.add('hidden');
   $('#sessionTime').value = '';
   updateDateChoiceLabels();
-  $('#wantsFilmerRow').classList.remove('hidden');
   renderSessionPeopleChips();
+}
+
+function updateSessionRoleUi(role) {
+  const isFilming = role === 'film';
+  $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === role));
+  $('#wantsFilmerRow').classList.toggle('hidden', isFilming);
+  $('#sessionPeopleLabel').textContent = isFilming ? 'Surfers coming' : 'Surfing with';
+  $('#sessionPersonInput').placeholder = isFilming ? 'Add a surfer' : 'Add a name';
+  if (isFilming) $('#wantsFilmer').checked = false;
+  if (!state.editingSessionId) $('#sessionSubmit').textContent = isFilming ? 'Share filming session' : 'Share surf';
 }
 
 function openSessionComposer(sessionId = null) {
@@ -1550,7 +1557,7 @@ function openSessionComposer(sessionId = null) {
   if (session) {
     state.editingSessionId = session.id;
     state.sessionPeople = [...(session.participant_names || (session.featured_surfer_name ? [session.featured_surfer_name] : []))];
-    $('#sessionSheetTitle').textContent = 'Edit surf';
+    $('#sessionSheetTitle').textContent = 'Edit session';
     $('#sessionSubmit').textContent = 'Save changes';
     $('#sessionCancel').classList.remove('hidden');
     $('#sessionCancelNote').classList.remove('hidden');
@@ -1564,8 +1571,7 @@ function openSessionComposer(sessionId = null) {
       $('#sessionTime').value = localDate.toISOString().slice(0, 16);
     }
     if (later) ensureSessionTimeChoice();
-    $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === session.author_role));
-    $('#wantsFilmerRow').classList.toggle('hidden', session.author_role === 'film');
+    updateSessionRoleUi(session.author_role);
     $('#wantsFilmer').checked = session.wants_filmer;
     $('#sessionNote').value = session.note || '';
     renderSessionPeopleChips();
@@ -1601,7 +1607,7 @@ async function createSession(event) {
       : await db.from('sessions').insert(payload);
     if (result.error) throw result.error;
     const edited = Boolean(state.editingSessionId);
-    resetSessionComposer(); closeSheet(); await loadSessions(); await renderProfile(); toast(edited ? 'Surf updated.' : 'Your session is live.');
+    resetSessionComposer(); closeSheet(); await loadSessions(); await renderProfile(); toast(edited ? 'Session updated.' : 'Your session is live.');
   } catch (error) { toast(readableError(error)); }
   finally { submit.disabled = false; }
 }
@@ -1632,7 +1638,7 @@ async function endSession(sessionId) {
 
 async function cancelSession() {
   const sessionId = state.editingSessionId;
-  if (!sessionId || !confirm('Cancel this surf? It will disappear for everyone. This cannot be undone.')) return;
+  if (!sessionId || !confirm('Cancel this session? It will disappear for everyone. This cannot be undone.')) return;
   const button = $('#sessionCancel'); button.disabled = true;
   try {
     const result = await db.from('sessions').delete().eq('id', sessionId).eq('author', state.profile.id);
@@ -2058,10 +2064,7 @@ document.addEventListener('click', async event => {
     if (later) ensureSessionTimeChoice();
   }
   if (sessionRoleNode) {
-    $$('[data-session-role]').forEach(button => button.classList.toggle('active', button === sessionRoleNode));
-    const isFilming = sessionRoleNode.dataset.sessionRole === 'film';
-    $('#wantsFilmerRow').classList.toggle('hidden', isFilming);
-    if (isFilming) $('#wantsFilmer').checked = false;
+    updateSessionRoleUi(sessionRoleNode.dataset.sessionRole);
   }
   if (!actionNode) return;
   const actions = {
