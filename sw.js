@@ -1,6 +1,6 @@
-const CACHE = 'salty-shell-v45-guide-v7';
+const CACHE = 'salty-shell-v46-guide-v7';
 const GUIDE_PAGES = Array.from({ length:4 }, (_, index) => `./docs/guide-v7/page-${String(index + 1).padStart(2, '0')}.jpg`);
-const SHELL = ['./', './index.html', './styles.css?v=45', './app.js?v=44-guide7', './manifest.webmanifest', './icon.svg', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './docs/SALTY_Quick_Start_Guide_V7.pdf', ...GUIDE_PAGES];
+const SHELL = ['./', './index.html', './styles.css?v=46', './app.js?v=46-guide7', './manifest.webmanifest', './icon.svg', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './docs/SALTY_Quick_Start_Guide_V7.pdf', ...GUIDE_PAGES];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));

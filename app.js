@@ -44,7 +44,7 @@ const state = {
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
   consentNext: 'new', sessionPeople: [], editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
-  notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '',
+  notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '',
   calendarMonth: null, calendarDate: '',
 };
 
@@ -202,6 +202,8 @@ async function init() {
   state.pendingInvite = inviteFromUrl() || localStorage.getItem('salty:invite') || '';
   state.pendingInviteRegion = inviteRegionFromUrl() || localStorage.getItem('salty:invite-region') || '';
   state.pendingOpen = params.get('open') || '';
+  state.pendingSessionId = params.get('session')?.trim() || '';
+  state.pendingSessionRegion = params.get('region')?.trim() || '';
   if (state.pendingInvite) localStorage.setItem('salty:invite', state.pendingInvite);
   if (state.pendingInviteRegion) localStorage.setItem('salty:invite-region', state.pendingInviteRegion);
   state.pendingTokenHash = params.get('token_hash') || '';
@@ -347,6 +349,9 @@ async function sendMagicLink(event) {
   const redirect = new URL('./', location.href);
   redirect.searchParams.set('auth', 'callback');
   if (isNew) redirect.searchParams.set('invite', state.pendingInvite);
+  if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
+  if (state.pendingSessionRegion) redirect.searchParams.set('region', state.pendingSessionRegion);
+  if (state.pendingOpen) redirect.searchParams.set('open', state.pendingOpen);
   const { error } = await db.auth.signInWithOtp({
     email,
     options: {
@@ -399,6 +404,9 @@ async function signInWithGoogle() {
   redirect.hash = '';
   redirect.searchParams.set('auth', 'google');
   if (isNew) redirect.searchParams.set('invite', state.pendingInvite);
+  if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
+  if (state.pendingSessionRegion) redirect.searchParams.set('region', state.pendingSessionRegion);
+  if (state.pendingOpen) redirect.searchParams.set('open', state.pendingOpen);
   const { error } = await db.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: redirect.href },
@@ -498,6 +506,11 @@ async function enterCommunity() {
     return;
   }
 
+  // Existing members can open invitation-backed session links without leaving
+  // a stale invite on this device after the shared surf has opened.
+  state.pendingInvite = '';
+  localStorage.removeItem('salty:invite');
+
   state.profile = profile;
   if (!profile.onboarding_complete) {
     await showProfileSetup();
@@ -516,6 +529,7 @@ async function enterCommunity() {
   clearPendingAuth();
   cleanAuthUrl();
   offerInstallAfterAuth();
+  revealSharedSession();
 }
 
 async function loadApp() {
@@ -535,7 +549,11 @@ async function loadApp() {
     ? [{ user_id:state.profile.id, region_id:state.profile.home_region, is_home:true, notifications_enabled:true }]
     : membershipsResult.data || [];
   const lastRegion = localStorage.getItem('salty:last-location');
-  state.currentRegion = state.regions.find(region => region.id === lastRegion)
+  const sharedSessionRegion = state.pendingSessionId
+    ? state.regions.find(region => region.id === state.pendingSessionRegion)
+    : null;
+  state.currentRegion = sharedSessionRegion
+    || state.regions.find(region => region.id === lastRegion)
     || state.regions.find(region => region.id === state.profile.home_region)
     || state.regions.find(region => region.name === 'California') || state.regions[0];
   state.eventRegion = state.currentRegion;
@@ -862,7 +880,7 @@ async function completeProfile(event) {
       }
     }
     $('#profileForm').reset();
-    await loadApp(); showOnly('app'); cleanAuthUrl(); offerInstallAfterAuth(); toast('Profile saved. Welcome to Salty.');
+    await loadApp(); showOnly('app'); cleanAuthUrl(); offerInstallAfterAuth(); revealSharedSession(); toast('Profile saved. Welcome to Salty.');
   } catch (error) { toast(readableError(error), 6000); }
   finally { submit.disabled = false; submit.textContent = state.profile.onboarding_complete ? 'Save changes' : 'Save profile and enter Salty'; }
 }
@@ -944,6 +962,25 @@ async function loadSessions() {
   state.sessions = result.data || [];
   renderSessions();
   if (state.view === 'calendar') renderCalendar();
+}
+
+function revealSharedSession() {
+  if (!state.pendingSessionId) return;
+  const sharedId = state.pendingSessionId;
+  state.pendingSessionId = '';
+  state.pendingSessionRegion = '';
+  state.pendingOpen = '';
+  setView('surfing');
+  const session = state.sessions.find(item => item.id === sharedId);
+  const card = [...document.querySelectorAll('[data-session-id]')].find(item => item.dataset.sessionId === sharedId);
+  if (!session || !card) {
+    toast('That shared surf has ended or is no longer available.', 5000);
+    return;
+  }
+  card.classList.add('shared-target');
+  requestAnimationFrame(() => card.scrollIntoView({ behavior:'smooth', block:'center' }));
+  setTimeout(() => card.classList.remove('shared-target'), 3600);
+  toast(`Shared surf opened: ${session.spot?.name || 'session'}.`);
 }
 
 function renderEventRegions() {
@@ -1556,6 +1593,8 @@ function renderSessions() {
       .filter((name, index, names) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
     const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...session.session_rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
     const edit = mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="Edit surf"><svg><use href="#i-edit"/></svg></button>` : '';
+    const share = `<button class="session-share-icon" data-share-session="${session.id}" aria-label="Share this surf"><svg><use href="#i-share"/></svg></button>`;
+    const tools = `<div class="session-card-tools">${share}${edit}</div>`;
     const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;
     const filmAction = (session.wants_filmer || myRsvp?.role === 'film')
       ? `<button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : (filmers.length ? 'Film too' : 'I can film')}</button>`
@@ -1573,7 +1612,7 @@ function renderSessions() {
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
       : '';
     const starter = `<div class="session-starter">${avatarMarkup(session.author_profile, 'session-starter-avatar')}<span><b>${esc(session.author_profile?.name || 'Salty member')}</b> started this session</span></div>`;
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''}"><i class="stripe"></i>${edit}<div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div><div class="card-actions">${actions}</div></article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''}" data-session-id="${session.id}"><i class="stripe"></i>${tools}<div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div><div class="card-actions">${actions}</div></article>`;
   }).join('');
 }
 
@@ -1605,7 +1644,27 @@ async function ensureSpot(name, generalLocation, regionId) {
 }
 
 function renderSessionPeopleChips() {
-  $('#sessionPeopleChips').innerHTML = state.sessionPeople.map((name, index) => `<button type="button" data-remove-session-person="${index}">${esc(name)}<span>×</span></button>`).join('');
+  $('#sessionPeopleChips').innerHTML = state.sessionPeople.map((name, index) => {
+    const member = state.people.find(person => person.name.toLowerCase() === name.toLowerCase());
+    return `<button type="button" class="${member ? 'linked-member' : ''}" data-remove-session-person="${index}" title="${member ? 'Salty member' : 'Added by name'}">${member ? `<svg><use href="#i-user"/></svg>` : ''}${esc(name)}<span>×</span></button>`;
+  }).join('');
+}
+
+function renderSessionMemberSuggestions(rawQuery = $('#sessionPersonInput').value) {
+  const target = $('#sessionMemberSuggestions');
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) { target.innerHTML = ''; target.classList.remove('open'); return; }
+  const selected = new Set(state.sessionPeople.map(name => name.toLowerCase()));
+  const matches = state.people.filter(person => {
+    if (person.id === state.profile.id || selected.has(person.name.toLowerCase())) return false;
+    return person.name.toLowerCase().includes(query) || (person.nickname || '').toLowerCase().includes(query);
+  }).slice(0, 6);
+  target.innerHTML = matches.map(person => {
+    const region = state.regions.find(item => item.id === person.home_region)?.name || 'Salty member';
+    const nickname = person.nickname ? ` · ${esc(person.nickname)}` : '';
+    return `<button type="button" data-session-member="${person.id}">${avatarMarkup(person, 'member-suggestion-avatar')}<span><b>${esc(person.name)}</b><small>${esc(region)}${nickname}</small></span><em>Add</em></button>`;
+  }).join('');
+  target.classList.toggle('open', matches.length > 0);
 }
 
 function addSessionPerson(rawName = $('#sessionPersonInput').value) {
@@ -1616,6 +1675,7 @@ function addSessionPerson(rawName = $('#sessionPersonInput').value) {
   });
   $('#sessionPersonInput').value = '';
   renderSessionPeopleChips();
+  renderSessionMemberSuggestions('');
 }
 
 function resetSessionComposer() {
@@ -1630,6 +1690,7 @@ function resetSessionComposer() {
   $('#sessionTime').value = '';
   updateDateChoiceLabels();
   renderSessionPeopleChips();
+  renderSessionMemberSuggestions('');
 }
 
 function updateSessionRoleUi(role) {
@@ -2051,6 +2112,40 @@ async function shareGuide() {
   }
 }
 
+async function shareSession(sessionId) {
+  const session = state.sessions.find(item => item.id === sessionId);
+  if (!session) { toast('That surf is no longer available.'); return; }
+  const region = state.regions.find(item => item.id === session.region_id) || state.currentRegion;
+  let invite = await db.rpc('create_invite', { invite_max_uses:1, invite_region:region?.id || null });
+  if (invite.error && /create_invite/i.test(invite.error.message || '')) {
+    invite = await db.rpc('create_invite', { invite_max_uses:1 });
+  }
+  if (invite.error) { toast(readableError(invite.error)); return; }
+
+  const url = new URL('./', location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('invite', invite.data);
+  if (region?.id) url.searchParams.set('region', region.id);
+  url.searchParams.set('open', 'surfing');
+  url.searchParams.set('session', session.id);
+
+  const spot = session.spot?.name || 'a surf';
+  const area = session.spot?.general_location ? ` · ${session.spot.general_location}` : '';
+  const roles = session.wants_filmer ? 'Join to surf or volunteer to film.' : 'Open it in Salty to join the surf.';
+  const text = `${state.profile.name} shared a surf with you on Salty.\n\n${spot}${area}\n${sessionWhen(session)}\n${roles}`;
+  try {
+    await shareSaltyContent({
+      title:`${spot} surf on Salty`,
+      text,
+      url:url.href,
+      copiedMessage:'Surf details and link copied.',
+    });
+  } catch (error) {
+    if (error?.name !== 'AbortError') prompt('Copy this surf:', `${text}\n${url.href}`);
+  }
+}
+
 async function shareInvite({ includeGuide = false } = {}) {
   const inviteRegion = state.currentRegion || state.regions.find(region => region.id === state.profile.home_region);
   let result = await db.rpc('create_invite', { invite_max_uses:1, invite_region:inviteRegion?.id || null });
@@ -2091,8 +2186,10 @@ document.addEventListener('click', async event => {
   const endNode = event.target.closest('[data-end-session]');
   const startNode = event.target.closest('[data-start-session]');
   const editSessionNode = event.target.closest('[data-edit-session]');
+  const shareSessionNode = event.target.closest('[data-share-session]');
   const editPostNode = event.target.closest('[data-edit-post]');
   const removeSessionPersonNode = event.target.closest('[data-remove-session-person]');
+  const sessionMemberNode = event.target.closest('[data-session-member]');
   const likeNode = event.target.closest('[data-like]');
   const whenNode = event.target.closest('[data-when]');
   const sessionRoleNode = event.target.closest('[data-session-role]');
@@ -2118,6 +2215,11 @@ document.addEventListener('click', async event => {
   if (removeSessionPersonNode) {
     state.sessionPeople.splice(Number(removeSessionPersonNode.dataset.removeSessionPerson), 1);
     renderSessionPeopleChips();
+  }
+  if (sessionMemberNode) {
+    const person = state.people.find(item => item.id === sessionMemberNode.dataset.sessionMember);
+    if (person) addSessionPerson(person.name);
+    $('#sessionPersonInput').focus();
   }
   if (regionNode) {
     const region = state.regions.find(item => item.id === regionNode.dataset.region);
@@ -2148,13 +2250,14 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || startNode || endNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'cancel-session', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'cancel-session', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
   if (rsvpNode) await setRsvp(rsvpNode.dataset.rsvp, rsvpNode.dataset.role);
   if (startNode) await startSession(startNode.dataset.startSession);
   if (editSessionNode) openSessionComposer(editSessionNode.dataset.editSession);
+  if (shareSessionNode) await shareSession(shareSessionNode.dataset.shareSession);
   if (editPostNode) openPostComposer(editPostNode.dataset.editPost);
   if (endNode) await endSession(endNode.dataset.endSession);
   if (likeNode) await toggleLike(likeNode.dataset.like);
@@ -2310,6 +2413,14 @@ function fillKnownSpotLocation(spotInput, locationInput) {
 
 $('#sessionSpot').addEventListener('change', () => fillKnownSpotLocation($('#sessionSpot'), $('#sessionLocation')));
 $('#postSpot').addEventListener('change', () => fillKnownSpotLocation($('#postSpot'), $('#postLocation')));
+$('#sessionPersonInput').addEventListener('input', event => renderSessionMemberSuggestions(event.target.value));
+$('#sessionPersonInput').addEventListener('keydown', event => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  const firstMatch = $('#sessionMemberSuggestions [data-session-member]');
+  if (firstMatch) firstMatch.click();
+  else addSessionPerson();
+});
 ['sessionTime', 'eventDate', 'eventStartClock', 'eventEndClock'].forEach(id => {
   const refreshChoice = () => {
     if (id === 'sessionTime' && $('#sessionTime').value) {
