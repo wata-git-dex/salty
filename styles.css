@@ -2,6 +2,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{background:var(--ink);color-scheme:dark}
 body{min-height:100vh;background:radial-gradient(1100px 520px at 50% -10%,#1b3346 0,var(--ink) 58%);color:var(--foam);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+html,body,button,a,input,textarea,select,label{touch-action:manipulation}
 button,input,textarea,select{font:inherit}.hidden{display:none!important}.svg-defs{position:absolute;width:0;height:0}.boot{position:fixed;inset:0;display:grid;place-content:center;gap:12px;z-index:500;background:var(--ink);font:900 25px Archivo,sans-serif;text-align:center}.boot-mark{width:70px;margin:auto}.boot-credit{position:absolute;left:0;right:0;bottom:calc(22px + env(safe-area-inset-bottom));color:var(--mut2);font:700 9px Archivo;letter-spacing:1px;text-transform:uppercase}.boot.ready{opacity:0;pointer-events:none;transition:opacity .3s}
 svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .welcome{width:min(100%,440px);margin:auto;min-height:100vh;padding-bottom:124px}.landing-hero{text-align:center;padding:58px 26px 46px;background:radial-gradient(680px 340px at 50% -8%,#1c3a52 0,transparent 60%)}.landing-logo{display:block;width:104px;height:104px;margin:0 auto 22px;filter:drop-shadow(0 14px 34px #54abec4d)}.landing-hero h1{font:900 52px/.95 Archivo,sans-serif;letter-spacing:-2px;margin-bottom:14px}.landing-hero p{color:var(--mut);font-weight:600;line-height:1.5}.landing-hero p b{color:var(--foam)}
@@ -110,6 +111,26 @@ html[data-theme="foam"] .drawer-scrim,html[data-theme="foam"] .sheet-scrim{backg
 .member-suggestions{display:none;margin-top:7px;overflow:hidden;border:1px solid var(--line);border-radius:13px;background:var(--ink2);box-shadow:0 14px 32px #0007}.member-suggestions.open{display:block}.member-suggestions>button{width:100%;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--foam);text-align:left;text-transform:none}.member-suggestions>button:last-child{border-bottom:0}.member-suggestions>button:active{background:var(--surf2)}.member-suggestion-avatar{width:34px;height:34px;display:grid;place-items:center;overflow:hidden;flex:none;border-radius:10px;background:var(--surf2);color:var(--hail);font-size:10px;font-weight:900}.member-suggestion-avatar img{width:100%;height:100%;object-fit:cover}.member-suggestions>button>span{min-width:0;flex:1}.member-suggestions b,.member-suggestions small{display:block}.member-suggestions b{font-size:12px}.member-suggestions small{margin-top:2px;color:var(--mut);font-size:9.5px}.member-suggestions em{color:var(--go);font-size:10px;font-style:normal;font-weight:900}
 .rules-card ol{margin-bottom:16px}
 .rules-credit{padding-top:14px;border-top:1px solid var(--line);color:var(--mut);font-size:12px;line-height:1.55}
+
+/* v1.47: card schedules and sharing stay clear of titles at phone width. */
+.session-card-heading,.event-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.session-card-heading>strong{min-width:0;flex:1;padding-top:4px;font:800 22px Archivo;letter-spacing:-.4px;line-height:1.15;overflow-wrap:anywhere}
+.session-card-tools,.event-card-tools{position:static;display:flex;flex:none;gap:6px}
+.session-card-tools .session-edit-icon,.session-card-tools .session-share-icon,.event-card-tools .event-edit,.event-card-tools .event-share{position:static;width:34px;height:34px;display:grid;place-items:center;flex:none;border:1px solid #54abec66;border-radius:10px;background:#54abec16;color:var(--hail)}
+.session-card-tools .session-share-icon,.event-card-tools .event-share{border-color:#f6a23c66;background:#f6a23c14;color:var(--sodium)}
+.session-card-tools svg,.event-card-tools svg{width:17px;height:17px}
+.schedule-pills{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0 10px}
+.schedule-pills span{display:inline-flex;align-items:center;gap:5px;min-height:25px;padding:5px 8px;border:1px solid var(--line);border-radius:999px;background:var(--surf);font-size:10.5px;font-weight:900;line-height:1}
+.schedule-pills svg{width:13px;height:13px;flex:none}
+.schedule-date{border-color:#54abec55!important;background:#54abec12!important;color:var(--hail)}
+.schedule-time,.schedule-now{border-color:#f6a23c55!important;background:#f6a23c12!important;color:var(--sodium)}
+.session-card .spot-line,.session-card.mine .spot-line{padding-right:0}
+.session-card .spot-location{margin-top:0}
+.event-card{display:block}
+.event-heading h2{min-width:0;flex:1;padding-top:4px;font:900 17px Archivo;line-height:1.2;overflow-wrap:anywhere}
+.event-schedule{margin-top:8px}
+.event-card.shared-target{border-color:var(--hail);box-shadow:0 0 0 2px #54abec55,0 0 30px #54abec33;animation:shared-session-pulse 1.1s ease-in-out 2}
+@media(max-width:370px){.session-card-tools .session-edit-icon,.session-card-tools .session-share-icon,.event-card-tools .event-edit,.event-card-tools .event-share{width:32px;height:32px}.schedule-pills span{font-size:10px}.session-card-heading>strong{font-size:20px}}
 .rules-credit a{color:var(--hail);font-weight:800}
 .about-copy h3{margin:18px 0 7px}
 .about-copy h3:first-child{margin-top:0}

@@ -44,7 +44,7 @@ const state = {
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
   consentNext: 'new', sessionPeople: [], editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
-  notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '',
+  notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '',
   calendarMonth: null, calendarDate: '',
 };
 
@@ -204,6 +204,8 @@ async function init() {
   state.pendingOpen = params.get('open') || '';
   state.pendingSessionId = params.get('session')?.trim() || '';
   state.pendingSessionRegion = params.get('region')?.trim() || '';
+  state.pendingEventId = params.get('event')?.trim() || '';
+  state.pendingEventRegion = params.get('region')?.trim() || '';
   if (state.pendingInvite) localStorage.setItem('salty:invite', state.pendingInvite);
   if (state.pendingInviteRegion) localStorage.setItem('salty:invite-region', state.pendingInviteRegion);
   state.pendingTokenHash = params.get('token_hash') || '';
@@ -351,6 +353,8 @@ async function sendMagicLink(event) {
   if (isNew) redirect.searchParams.set('invite', state.pendingInvite);
   if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
   if (state.pendingSessionRegion) redirect.searchParams.set('region', state.pendingSessionRegion);
+  if (state.pendingEventId) redirect.searchParams.set('event', state.pendingEventId);
+  if (state.pendingEventRegion) redirect.searchParams.set('region', state.pendingEventRegion);
   if (state.pendingOpen) redirect.searchParams.set('open', state.pendingOpen);
   const { error } = await db.auth.signInWithOtp({
     email,
@@ -406,6 +410,8 @@ async function signInWithGoogle() {
   if (isNew) redirect.searchParams.set('invite', state.pendingInvite);
   if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
   if (state.pendingSessionRegion) redirect.searchParams.set('region', state.pendingSessionRegion);
+  if (state.pendingEventId) redirect.searchParams.set('event', state.pendingEventId);
+  if (state.pendingEventRegion) redirect.searchParams.set('region', state.pendingEventRegion);
   if (state.pendingOpen) redirect.searchParams.set('open', state.pendingOpen);
   const { error } = await db.auth.signInWithOAuth({
     provider: 'google',
@@ -529,7 +535,7 @@ async function enterCommunity() {
   clearPendingAuth();
   cleanAuthUrl();
   offerInstallAfterAuth();
-  revealSharedSession();
+  revealSharedTarget();
 }
 
 async function loadApp() {
@@ -549,10 +555,11 @@ async function loadApp() {
     ? [{ user_id:state.profile.id, region_id:state.profile.home_region, is_home:true, notifications_enabled:true }]
     : membershipsResult.data || [];
   const lastRegion = localStorage.getItem('salty:last-location');
-  const sharedSessionRegion = state.pendingSessionId
-    ? state.regions.find(region => region.id === state.pendingSessionRegion)
+  const sharedRegionId = state.pendingSessionId ? state.pendingSessionRegion : state.pendingEventRegion;
+  const sharedRegion = (state.pendingSessionId || state.pendingEventId)
+    ? state.regions.find(region => region.id === sharedRegionId)
     : null;
-  state.currentRegion = sharedSessionRegion
+  state.currentRegion = sharedRegion
     || state.regions.find(region => region.id === lastRegion)
     || state.regions.find(region => region.id === state.profile.home_region)
     || state.regions.find(region => region.name === 'California') || state.regions[0];
@@ -880,7 +887,7 @@ async function completeProfile(event) {
       }
     }
     $('#profileForm').reset();
-    await loadApp(); showOnly('app'); cleanAuthUrl(); offerInstallAfterAuth(); revealSharedSession(); toast('Profile saved. Welcome to Salty.');
+    await loadApp(); showOnly('app'); cleanAuthUrl(); offerInstallAfterAuth(); revealSharedTarget(); toast('Profile saved. Welcome to Salty.');
   } catch (error) { toast(readableError(error), 6000); }
   finally { submit.disabled = false; submit.textContent = state.profile.onboarding_complete ? 'Save changes' : 'Save profile and enter Salty'; }
 }
@@ -981,6 +988,30 @@ function revealSharedSession() {
   requestAnimationFrame(() => card.scrollIntoView({ behavior:'smooth', block:'center' }));
   setTimeout(() => card.classList.remove('shared-target'), 3600);
   toast(`Shared surf opened: ${session.spot?.name || 'session'}.`);
+}
+
+function revealSharedEvent() {
+  if (!state.pendingEventId) return;
+  const sharedId = state.pendingEventId;
+  state.pendingEventId = '';
+  state.pendingEventRegion = '';
+  state.pendingOpen = '';
+  setView('events');
+  const item = state.events.find(event => event.id === sharedId);
+  const card = [...document.querySelectorAll('[data-event-id]')].find(event => event.dataset.eventId === sharedId);
+  if (!item || !card) {
+    toast('That shared event has ended or is no longer available.', 5000);
+    return;
+  }
+  card.classList.add('shared-target');
+  requestAnimationFrame(() => card.scrollIntoView({ behavior:'smooth', block:'center' }));
+  setTimeout(() => card.classList.remove('shared-target'), 3600);
+  toast(`Shared event opened: ${item.title}.`);
+}
+
+function revealSharedTarget() {
+  if (state.pendingEventId) revealSharedEvent();
+  else revealSharedSession();
 }
 
 function renderEventRegions() {
@@ -1287,9 +1318,22 @@ async function savePerk(event) {
   finally { submit.disabled = false; }
 }
 
-function eventDate(value) {
-  if (!value) return 'Time coming soon';
-  return new Intl.DateTimeFormat([], { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }).format(new Date(value));
+function scheduleParts(startValue, endValue = null) {
+  const start = new Date(startValue);
+  if (!Number.isFinite(start.getTime())) return { date:'Date coming soon', time:'Time coming soon' };
+  const dateOptions = { weekday:'short', month:'short', day:'numeric' };
+  if (start.getFullYear() !== new Date().getFullYear()) dateOptions.year = 'numeric';
+  const date = new Intl.DateTimeFormat([], dateOptions).format(start);
+  const startTime = new Intl.DateTimeFormat([], { hour:'numeric', minute:'2-digit' }).format(start);
+  const end = endValue ? new Date(endValue) : null;
+  const endTime = end && Number.isFinite(end.getTime())
+    ? new Intl.DateTimeFormat([], { hour:'numeric', minute:'2-digit' }).format(end)
+    : '';
+  return { date, time:endTime ? `${startTime} – ${endTime}` : startTime };
+}
+
+function schedulePills(parts, className = '') {
+  return `<div class="schedule-pills ${className}"><span class="schedule-date"><svg><use href="#i-calendar"/></svg>${esc(parts.date)}</span><span class="schedule-time"><svg><use href="#i-clock"/></svg>${esc(parts.time)}</span></div>`;
 }
 
 function eventMapUrl(item) {
@@ -1386,13 +1430,13 @@ function renderEvents() {
     const going = item.event_rsvps || [];
     const mine = going.some(rsvp => rsvp.user_id === state.profile.id);
     const crew = going.slice(0, 4).map(rsvp => avatarMarkup(rsvp.profile, 'event-avatar')).join('');
-    const start = item.start_time ? new Date(item.start_time) : null;
-    const month = start ? new Intl.DateTimeFormat([], { month:'short' }).format(start).toUpperCase() : 'DATE';
-    const day = start ? start.getDate() : '—';
+    const timing = scheduleParts(item.start_time, item.end_time);
     const place = [item.venue_name || item.spot?.name, item.location_text || item.spot?.general_location].filter(Boolean).join(' · ');
     const mapUrl = eventMapUrl(item);
     const edit = item.author === state.profile.id ? `<button class="event-edit" data-edit-event="${item.id}" aria-label="Edit ${esc(item.title)}"><svg><use href="#i-edit"/></svg></button>` : '';
-    return `<article class="event-card"><div class="event-date-tile"><span>${esc(month)}</span><b>${day}</b></div><div class="event-main"><div class="event-heading"><div><h2>${esc(item.title)}</h2><p>${esc(eventDate(item.start_time))}${item.end_time ? ` – ${esc(new Intl.DateTimeFormat([], { hour:'numeric', minute:'2-digit' }).format(new Date(item.end_time)))}` : ''}</p></div>${edit}</div>${place ? `<a class="event-place" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg><span>${esc(place)}</span><b>Map ↗</b></a>` : ''}${item.description ? `<p class="event-description">${esc(item.description)}</p>` : ''}<div class="event-going"><div class="event-stack">${crew}</div><b>${going.length} going</b></div><div class="card-actions"><button class="small-action surf ${mine ? 'on' : ''}" data-event-rsvp="${item.id}"><svg><use href="#i-check"/></svg>${mine ? 'Going ✓' : 'RSVP'}</button><button class="small-action" data-event-calendar="${item.id}"><svg><use href="#i-calendar"/></svg>Add to calendar</button></div></div></article>`;
+    const share = `<button class="event-share" data-share-event="${item.id}" aria-label="Share ${esc(item.title)}"><svg><use href="#i-share"/></svg></button>`;
+    const tools = `<div class="event-card-tools">${share}${edit}</div>`;
+    return `<article class="event-card" data-event-id="${item.id}"><div class="event-main"><div class="event-heading"><h2>${esc(item.title)}</h2>${tools}</div>${schedulePills(timing, 'event-schedule')}${place ? `<a class="event-place" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg><span>${esc(place)}</span><b>Map ↗</b></a>` : ''}${item.description ? `<p class="event-description">${esc(item.description)}</p>` : ''}<div class="event-going"><div class="event-stack">${crew}</div><b>${going.length} going</b></div><div class="card-actions"><button class="small-action surf ${mine ? 'on' : ''}" data-event-rsvp="${item.id}"><svg><use href="#i-check"/></svg>${mine ? 'Going ✓' : 'RSVP'}</button><button class="small-action" data-event-calendar="${item.id}"><svg><use href="#i-calendar"/></svg>Add to calendar</button></div></div></article>`;
   }).join('');
 }
 
@@ -1461,6 +1505,13 @@ function sessionWhen(session) {
   const options = { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' };
   if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
   return new Intl.DateTimeFormat([], options).format(date);
+}
+
+function sessionSchedulePills(session) {
+  if (session.when_label === 'Now' || !session.surf_time) {
+    return `<div class="schedule-pills session-schedule"><span class="schedule-now"><svg><use href="#i-clock"/></svg>Out now</span></div>`;
+  }
+  return schedulePills(scheduleParts(session.surf_time), 'session-schedule');
 }
 
 function calendarDateKey(value) {
@@ -1612,7 +1663,7 @@ function renderSessions() {
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
       : '';
     const starter = `<div class="session-starter">${avatarMarkup(session.author_profile, 'session-starter-avatar')}<span><b>${esc(session.author_profile?.name || 'Salty member')}</b> started this session</span></div>`;
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''}" data-session-id="${session.id}"><i class="stripe"></i>${tools}<div class="spot-line"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong><span>${esc(sessionWhen(session))}</span></div>${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div><div class="card-actions">${actions}</div></article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${sessionSchedulePills(session)}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div><div class="card-actions">${actions}</div></article>`;
   }).join('');
 }
 
@@ -2146,6 +2197,39 @@ async function shareSession(sessionId) {
   }
 }
 
+async function shareEvent(eventId) {
+  const item = state.events.find(event => event.id === eventId);
+  if (!item) { toast('That event is no longer available.'); return; }
+  const region = state.regions.find(region => region.id === item.region_id) || state.eventRegion || state.currentRegion;
+  let invite = await db.rpc('create_invite', { invite_max_uses:1, invite_region:region?.id || null });
+  if (invite.error && /create_invite/i.test(invite.error.message || '')) {
+    invite = await db.rpc('create_invite', { invite_max_uses:1 });
+  }
+  if (invite.error) { toast(readableError(invite.error)); return; }
+
+  const url = new URL('./', location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('invite', invite.data);
+  if (region?.id) url.searchParams.set('region', region.id);
+  url.searchParams.set('open', 'events');
+  url.searchParams.set('event', item.id);
+
+  const place = [item.venue_name || item.spot?.name, item.location_text || item.spot?.general_location].filter(Boolean).join(' · ');
+  const timing = scheduleParts(item.start_time, item.end_time);
+  const text = `${state.profile.name} shared an event with you on Salty.\n\n${item.title}\n${timing.date} · ${timing.time}${place ? `\n${place}` : ''}\nOpen it in Salty to RSVP.`;
+  try {
+    await shareSaltyContent({
+      title:`${item.title} on Salty`,
+      text,
+      url:url.href,
+      copiedMessage:'Event details and link copied.',
+    });
+  } catch (error) {
+    if (error?.name !== 'AbortError') prompt('Copy this event:', `${text}\n${url.href}`);
+  }
+}
+
 async function shareInvite({ includeGuide = false } = {}) {
   const inviteRegion = state.currentRegion || state.regions.find(region => region.id === state.profile.home_region);
   let result = await db.rpc('create_invite', { invite_max_uses:1, invite_region:inviteRegion?.id || null });
@@ -2187,6 +2271,7 @@ document.addEventListener('click', async event => {
   const startNode = event.target.closest('[data-start-session]');
   const editSessionNode = event.target.closest('[data-edit-session]');
   const shareSessionNode = event.target.closest('[data-share-session]');
+  const shareEventNode = event.target.closest('[data-share-event]');
   const editPostNode = event.target.closest('[data-edit-post]');
   const removeSessionPersonNode = event.target.closest('[data-remove-session-person]');
   const sessionMemberNode = event.target.closest('[data-session-member]');
@@ -2250,7 +2335,7 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'cancel-session', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'cancel-session', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -2258,6 +2343,7 @@ document.addEventListener('click', async event => {
   if (startNode) await startSession(startNode.dataset.startSession);
   if (editSessionNode) openSessionComposer(editSessionNode.dataset.editSession);
   if (shareSessionNode) await shareSession(shareSessionNode.dataset.shareSession);
+  if (shareEventNode) await shareEvent(shareEventNode.dataset.shareEvent);
   if (editPostNode) openPostComposer(editPostNode.dataset.editPost);
   if (endNode) await endSession(endNode.dataset.endSession);
   if (likeNode) await toggleLike(likeNode.dataset.like);
