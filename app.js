@@ -16,7 +16,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.48';
+const APP_VERSION = '1.49';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V8.pdf';
 const GUIDE_PAGE_COUNT = 4;
@@ -257,12 +257,16 @@ function runPreview() {
     { id:'mine', author:userId, region_id:regionId, author_role:'surf', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 86400000).toISOString(), wants_filmer:false, note:'morning glass before the wind', spot:{name:"Old Man's",general_location:'San Onofre'}, author_profile:{name:'Cyrus'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah'}}]},
     { id:'mateo-surf', author:'mateo', region_id:regionId, author_role:'film', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 2 * 86400000).toISOString(), wants_filmer:false, note:'filming the afternoon window', spot:{name:'First Point',general_location:'Malibu'}, author_profile:{name:'Mateo'}, session_rsvps:[] },
     { id:'crew', author:'jonah', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 3 * 86400000).toISOString(), wants_filmer:true, note:'sunrise window', spot:{name:'Lowers',general_location:'San Clemente'}, author_profile:{name:'Jonah'}, session_rsvps:[] },
+    { id:'past-surf', author:'jonah', region_id:regionId, author_role:'surf', participant_names:['Mateo'], when_label:'Now', surf_time:new Date(Date.now() - 2 * 86400000).toISOString(), wants_filmer:false, note:'clean little afternoon window', status:'ended', ended_at:new Date(Date.now() - 46 * 3600000).toISOString(), spot:{name:'C Street',general_location:'Ventura'}, author_profile:{name:'Jonah'}, session_rsvps:[] },
   ];
   state.sessions = state.previewSessions;
   state.posts = [];
   const previewEventStart = new Date(Date.now() + 5 * 86400000);
   previewEventStart.setHours(18, 30, 0, 0);
-  state.events = [{ id:'preview-event', author:userId, region_id:regionId, title:'Friday Night Surf Film', start_time:previewEventStart.toISOString(), end_time:new Date(previewEventStart.getTime() + 2 * 3600000).toISOString(), venue_name:'Hobie Surf Shop', location_text:'Dana Point', description:'A surf film, tacos, and the crew.', event_rsvps:[{ user_id:userId, profile:state.profile }, { user_id:'jonah', profile:state.people[1] }] }];
+  state.events = [
+    { id:'preview-event', author:userId, region_id:regionId, title:'Friday Night Surf Film', start_time:previewEventStart.toISOString(), end_time:new Date(previewEventStart.getTime() + 2 * 3600000).toISOString(), venue_name:'Hobie Surf Shop', location_text:'Dana Point', description:'A surf film, tacos, and the crew.', event_rsvps:[{ user_id:userId, profile:state.profile }, { user_id:'jonah', profile:state.people[1] }] },
+    { id:'past-event', author:userId, region_id:regionId, title:'Hobie Movie Night', start_time:new Date(Date.now() - 28 * 3600000).toISOString(), end_time:new Date(Date.now() - 26 * 3600000).toISOString(), venue_name:'Hobie Surf Shop', location_text:'Dana Point', description:'Good flick and a full house.', event_rsvps:[{ user_id:userId, profile:state.profile }] },
+  ];
   state.perks = [
     { id:'sv', name:'Saltyviewfinder Store Discount', brand_name:'Saltyviewfinder', offer_text:'Salty member discount', description:'Sodium merch, prints, and more.', store_url:'https://saltyviewfinder.com', active:true },
     { id:'wata', name:'WATA Store Discount', brand_name:'WATA', offer_text:'Salty member discount', description:'Support WATA and save on store gear.', store_url:'https://cleanwata.org', active:true },
@@ -980,7 +984,7 @@ function setView(view) {
 async function loadSessions() {
   const result = await db.from('sessions')
     .select('*,spot:spots(*),author_profile:profiles!sessions_author_fkey(id,name),session_rsvps(id,user_id,role,profile:profiles!session_rsvps_user_id_fkey(id,name))')
-    .eq('region_id', state.currentRegion.id).eq('status', 'active').order('created_at', { ascending: false });
+    .eq('region_id', state.currentRegion.id).in('status', ['active', 'ended', 'archived']).order('created_at', { ascending: false }).limit(100);
   if (result.error) { toast(readableError(result.error)); return; }
   state.sessions = result.data || [];
   renderSessions();
@@ -1000,6 +1004,8 @@ function revealSharedSession() {
     toast('That shared surf has ended or is no longer available.', 5000);
     return;
   }
+  const archive = card.closest('details');
+  if (archive) archive.open = true;
   card.classList.add('shared-target');
   requestAnimationFrame(() => card.scrollIntoView({ behavior:'smooth', block:'center' }));
   setTimeout(() => card.classList.remove('shared-target'), 3600);
@@ -1019,6 +1025,8 @@ function revealSharedEvent() {
     toast('That shared event has ended or is no longer available.', 5000);
     return;
   }
+  const archive = card.closest('details');
+  if (archive) archive.open = true;
   card.classList.add('shared-target');
   requestAnimationFrame(() => card.scrollIntoView({ behavior:'smooth', block:'center' }));
   setTimeout(() => card.classList.remove('shared-target'), 3600);
@@ -1576,27 +1584,42 @@ function openEventComposer(eventId = null) {
   openSheet('eventSheet');
 }
 
+function isPastEvent(item, now = Date.now()) {
+  const ending = new Date(item.end_time || item.start_time || 0).getTime();
+  return Number.isFinite(ending) && ending > 0 && ending < now;
+}
+
+function renderEventCard(item, past = false) {
+  const going = item.event_rsvps || [];
+  const mine = going.some(rsvp => rsvp.user_id === state.profile.id);
+  const crew = going.slice(0, 4).map(rsvp => avatarMarkup(rsvp.profile, 'event-avatar')).join('');
+  const timing = scheduleParts(item.start_time, item.end_time);
+  const place = [item.venue_name || item.spot?.name, item.location_text || item.spot?.general_location].filter(Boolean).join(' · ');
+  const mapUrl = eventMapUrl(item);
+  const edit = !past && item.author === state.profile.id ? `<button class="event-edit" data-edit-event="${item.id}" aria-label="Edit ${esc(item.title)}"><svg><use href="#i-edit"/></svg></button>` : '';
+  const share = !past ? `<button class="event-share" data-share-event="${item.id}" aria-label="Share ${esc(item.title)}"><svg><use href="#i-share"/></svg></button>` : '';
+  const tools = past ? '<span class="past-badge">Ended</span>' : `<div class="event-card-tools">${share}${edit}</div>`;
+  const actions = past ? '' : `<div class="card-actions"><button class="small-action surf ${mine ? 'on' : ''}" data-event-rsvp="${item.id}"><svg><use href="#i-check"/></svg>${mine ? 'Going ✓' : 'RSVP'}</button><button class="small-action" data-event-calendar="${item.id}"><svg><use href="#i-calendar"/></svg>Add to calendar</button></div>`;
+  return `<article class="event-card ${past ? 'past-card' : ''}" data-event-id="${item.id}"><div class="event-main"><div class="event-heading"><h2>${esc(item.title)}</h2>${tools}</div>${schedulePills(timing, 'event-schedule')}${place ? `<a class="event-place" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg><span>${esc(place)}</span><b>Map ↗</b></a>` : ''}${item.description ? `<p class="event-description">${esc(item.description)}</p>` : ''}<div class="event-going"><div class="event-stack">${crew}</div><b>${going.length} ${past ? 'went' : 'going'}</b></div>${actions}</div></article>`;
+}
+
 function renderEvents() {
   const feed = $('#eventsFeed');
   if (!feed || !state.eventRegion) return;
+  const now = Date.now();
+  const upcoming = state.events.filter(item => !isPastEvent(item, now));
+  const past = state.events.filter(item => isPastEvent(item, now)).sort((a, b) => new Date(b.end_time || b.start_time) - new Date(a.end_time || a.start_time));
   const plannedLabel = $('#eventsPlanned');
-  if (plannedLabel) plannedLabel.textContent = state.events.length ? `${state.events.length} PLANNED` : 'NO EVENTS PLANNED';
+  if (plannedLabel) plannedLabel.textContent = upcoming.length ? `${upcoming.length} PLANNED` : 'NO EVENTS PLANNED';
   if (!state.events.length) {
     feed.innerHTML = `<div class="empty"><span>EVENTS</span><h2>No events in ${esc(state.eventRegion.name)} yet</h2><p>Add a comp, movie night, or meetup and the crew can RSVP.</p></div>`;
     return;
   }
-  feed.innerHTML = state.events.map(item => {
-    const going = item.event_rsvps || [];
-    const mine = going.some(rsvp => rsvp.user_id === state.profile.id);
-    const crew = going.slice(0, 4).map(rsvp => avatarMarkup(rsvp.profile, 'event-avatar')).join('');
-    const timing = scheduleParts(item.start_time, item.end_time);
-    const place = [item.venue_name || item.spot?.name, item.location_text || item.spot?.general_location].filter(Boolean).join(' · ');
-    const mapUrl = eventMapUrl(item);
-    const edit = item.author === state.profile.id ? `<button class="event-edit" data-edit-event="${item.id}" aria-label="Edit ${esc(item.title)}"><svg><use href="#i-edit"/></svg></button>` : '';
-    const share = `<button class="event-share" data-share-event="${item.id}" aria-label="Share ${esc(item.title)}"><svg><use href="#i-share"/></svg></button>`;
-    const tools = `<div class="event-card-tools">${share}${edit}</div>`;
-    return `<article class="event-card" data-event-id="${item.id}"><div class="event-main"><div class="event-heading"><h2>${esc(item.title)}</h2>${tools}</div>${schedulePills(timing, 'event-schedule')}${place ? `<a class="event-place" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg><span>${esc(place)}</span><b>Map ↗</b></a>` : ''}${item.description ? `<p class="event-description">${esc(item.description)}</p>` : ''}<div class="event-going"><div class="event-stack">${crew}</div><b>${going.length} going</b></div><div class="card-actions"><button class="small-action surf ${mine ? 'on' : ''}" data-event-rsvp="${item.id}"><svg><use href="#i-check"/></svg>${mine ? 'Going ✓' : 'RSVP'}</button><button class="small-action" data-event-calendar="${item.id}"><svg><use href="#i-calendar"/></svg>Add to calendar</button></div></div></article>`;
-  }).join('');
+  const upcomingMarkup = upcoming.length
+    ? upcoming.map(item => renderEventCard(item)).join('')
+    : '<div class="empty compact-empty"><span>OPEN</span><h2>No upcoming events</h2><p>Past events are saved below.</p></div>';
+  const pastMarkup = past.length ? `<details class="past-items"><summary><span><b>Past events</b><small>${past.length} ended</small></span><svg><use href="#i-chevron"/></svg></summary><div>${past.map(item => renderEventCard(item, true)).join('')}</div></details>` : '';
+  feed.innerHTML = `${upcomingMarkup}${pastMarkup}`;
 }
 
 async function createEvent(event) {
@@ -1673,6 +1696,12 @@ function sessionSchedulePills(session) {
   return schedulePills(scheduleParts(session.surf_time), 'session-schedule');
 }
 
+function isPastSession(session, now = Date.now()) {
+  if (session.status && session.status !== 'active') return true;
+  const anchor = new Date(session.surf_time || session.created_at || 0).getTime();
+  return Number.isFinite(anchor) && anchor > 0 && anchor < now - 18 * 60 * 60 * 1000;
+}
+
 function calendarDateKey(value) {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isFinite(date.getTime()) ? localDateValue(date) : '';
@@ -1681,13 +1710,13 @@ function calendarDateKey(value) {
 function calendarItems() {
   const now = new Date();
   const surfs = state.sessions
-    .filter(session => session.region_id === state.currentRegion.id)
+    .filter(session => session.region_id === state.currentRegion.id && !isPastSession(session))
     .map(session => {
       const date = session.surf_time ? new Date(session.surf_time) : now;
       return { type:'surf', id:session.id, date, title:session.spot?.name || 'Surf', location:session.spot?.general_location || '', live:session.when_label === 'Now' };
     });
   const events = state.events
-    .filter(event => event.region_id === state.currentRegion.id && event.start_time)
+    .filter(event => event.region_id === state.currentRegion.id && event.start_time && !isPastEvent(event))
     .map(event => ({ type:'event', id:event.id, date:new Date(event.start_time), title:event.title, location:event.location_text || event.venue_name || event.spot?.general_location || '' }));
   return [...surfs, ...events].filter(item => Number.isFinite(item.date.getTime())).sort((a, b) => a.date - b.date);
 }
@@ -1779,8 +1808,11 @@ function spotMapUrl(spot) {
 }
 
 function renderSessions() {
-  const liveNow = state.sessions.filter(session => session.when_label === 'Now').length;
-  const planned = state.sessions.length - liveNow;
+  const now = Date.now();
+  const active = state.sessions.filter(session => !isPastSession(session, now));
+  const past = state.sessions.filter(session => isPastSession(session, now)).sort((a, b) => new Date(b.ended_at || b.surf_time || b.created_at || 0) - new Date(a.ended_at || a.surf_time || a.created_at || 0));
+  const liveNow = active.filter(session => session.when_label === 'Now').length;
+  const planned = active.length - liveNow;
   $('#liveCount').innerHTML = liveNow
     ? `<i></i>${liveNow} OUT NOW${planned ? ` · ${planned} PLANNED` : ''}`
     : (planned ? `${planned} PLANNED` : 'NO SURFS PLANNED');
@@ -1789,27 +1821,28 @@ function renderSessions() {
     feed.innerHTML = `<div class="empty"><span>OPEN</span><h2>No surfs planned in ${esc(state.currentRegion.name)} yet</h2><p>Share when you're heading out and give the crew something to join.</p></div>`;
     return;
   }
-  const orderedSessions = [...state.sessions].sort((first, second) => {
+  const orderedSessions = [...active].sort((first, second) => {
     const firstNow = first.when_label === 'Now';
     const secondNow = second.when_label === 'Now';
     if (firstNow !== secondNow) return firstNow ? -1 : 1;
     return new Date(first.surf_time || first.created_at || 0) - new Date(second.surf_time || second.created_at || 0);
   });
-  feed.innerHTML = orderedSessions.map(session => {
+  const renderSessionCard = (session, pastSession = false) => {
     const mine = session.author === state.profile.id;
-    const myRsvp = session.session_rsvps.find(rsvp => rsvp.user_id === state.profile.id);
-    const surfers = [session.author_role === 'surf' ? session.author_profile?.name : null, ...(session.participant_names || []), session.featured_surfer_name, ...session.session_rsvps.filter(rsvp => rsvp.role === 'surf').map(rsvp => rsvp.profile?.name)]
+    const rsvps = session.session_rsvps || [];
+    const myRsvp = rsvps.find(rsvp => rsvp.user_id === state.profile.id);
+    const surfers = [session.author_role === 'surf' ? session.author_profile?.name : null, ...(session.participant_names || []), session.featured_surfer_name, ...rsvps.filter(rsvp => rsvp.role === 'surf').map(rsvp => rsvp.profile?.name)]
       .filter(Boolean)
       .filter((name, index, names) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
-    const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...session.session_rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
-    const edit = mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="Edit surf"><svg><use href="#i-edit"/></svg></button>` : '';
-    const share = `<button class="session-share-icon" data-share-session="${session.id}" aria-label="Share this surf"><svg><use href="#i-share"/></svg></button>`;
-    const tools = `<div class="session-card-tools">${share}${edit}</div>`;
+    const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
+    const edit = !pastSession && mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="Edit surf"><svg><use href="#i-edit"/></svg></button>` : '';
+    const share = !pastSession ? `<button class="session-share-icon" data-share-session="${session.id}" aria-label="Share this surf"><svg><use href="#i-share"/></svg></button>` : '';
+    const tools = pastSession ? '<span class="past-badge">Finished</span>' : `<div class="session-card-tools">${share}${edit}</div>`;
     const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;
     const filmAction = (session.wants_filmer || myRsvp?.role === 'film')
       ? `<button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : (filmers.length ? 'Film too' : 'I can film')}</button>`
       : '';
-    const actions = mine
+    const actions = pastSession ? '' : mine
       ? (session.when_label === 'Now'
         ? `<button class="small-action finish" data-end-session="${session.id}"><svg><use href="#i-check"/></svg>${session.author_role === 'film' ? 'Session finished' : 'Surf finished'}</button>`
         : `<button class="small-action start" data-start-session="${session.id}"><svg><use href="#i-surf"/></svg>Start session</button>`)
@@ -1822,8 +1855,16 @@ function renderSessions() {
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
       : '';
     const starter = `<div class="session-starter">${avatarMarkup(session.author_profile, 'session-starter-avatar')}<span><b>${esc(session.author_profile?.name || 'Salty member')}</b> started this session</span></div>`;
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${sessionSchedulePills(session)}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div><div class="card-actions">${actions}</div></article>`;
-  }).join('');
+    const schedule = pastSession
+      ? schedulePills(scheduleParts(session.surf_time || session.ended_at || session.created_at), 'session-schedule')
+      : sessionSchedulePills(session);
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${pastSession ? 'past-card' : ''}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${actions ? `<div class="card-actions">${actions}</div>` : ''}</article>`;
+  };
+  const activeMarkup = orderedSessions.length
+    ? orderedSessions.map(session => renderSessionCard(session)).join('')
+    : '<div class="empty compact-empty"><span>OPEN</span><h2>No active surfs</h2><p>Finished sessions are saved below.</p></div>';
+  const pastMarkup = past.length ? `<details class="past-items"><summary><span><b>Past sessions</b><small>${past.length} finished</small></span><svg><use href="#i-chevron"/></svg></summary><div>${past.map(session => renderSessionCard(session, true)).join('')}</div></details>` : '';
+  feed.innerHTML = `${activeMarkup}${pastMarkup}`;
 }
 
 async function ensureSpot(name, generalLocation, regionId) {
