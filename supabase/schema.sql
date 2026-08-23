@@ -329,6 +329,14 @@ create or replace function public.is_admin(uid uuid default auth.uid())
 returns boolean language sql stable security definer set search_path = public
 as $$ select exists (select 1 from public.profiles where id = uid and is_admin) $$;
 
+create or replace function public.get_my_profile()
+returns public.profiles
+language sql stable security definer
+set search_path = pg_catalog, public, auth, extensions, pg_temp
+as $$
+  select profile from public.profiles profile where profile.id = auth.uid() limit 1
+$$;
+
 create or replace function public.invite_is_valid(invite_code text)
 returns boolean language sql stable security definer set search_path = public
 as $$
@@ -669,8 +677,8 @@ create policy session_rsvps_insert_own on public.session_rsvps for insert with c
 create policy session_rsvps_update_own on public.session_rsvps for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy session_rsvps_delete_own on public.session_rsvps for delete using (user_id = auth.uid());
 create policy posts_read on public.posts for select using (public.is_member());
-create policy posts_insert_own on public.posts for insert with check (public.is_member() and author = auth.uid());
-create policy posts_update_own on public.posts for update using (author = auth.uid()) with check (author = auth.uid());
+create policy posts_insert_own on public.posts for insert to authenticated with check (public.is_member() and author = auth.uid() and split_part(media_path, '/', 1) = auth.uid()::text);
+create policy posts_update_own on public.posts for update to authenticated using (author = auth.uid()) with check (author = auth.uid() and split_part(media_path, '/', 1) = auth.uid()::text);
 create policy posts_delete_own on public.posts for delete using (author = auth.uid() or public.is_admin());
 create policy post_tags_read on public.post_tags for select using (public.is_member());
 create policy post_tags_insert_by_post_author on public.post_tags for insert with check (exists (select 1 from public.posts p where p.id = post_id and p.author = auth.uid()));
@@ -720,7 +728,7 @@ create policy mutes_delete_own on public.mutes for delete using (muter = auth.ui
 create policy reports_insert_own on public.reports for insert with check (public.is_member() and reporter = auth.uid());
 create policy reports_read_admin on public.reports for select using (public.is_admin());
 create policy reports_update_admin on public.reports for update using (public.is_admin()) with check (public.is_admin());
-create policy beta_issue_reports_insert_own on public.beta_issue_reports for insert to authenticated with check (public.is_member() and reporter = auth.uid());
+create policy beta_issue_reports_insert_own on public.beta_issue_reports for insert to authenticated with check (public.is_member() and reporter = auth.uid() and (screenshot_path is null or split_part(screenshot_path, '/', 1) = auth.uid()::text));
 create policy beta_issue_reports_read_own_or_admin on public.beta_issue_reports for select to authenticated using (reporter = auth.uid() or public.is_admin());
 create policy beta_issue_reports_update_admin on public.beta_issue_reports for update to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy beta_issue_reports_delete_admin on public.beta_issue_reports for delete to authenticated using (public.is_admin());
@@ -731,6 +739,8 @@ grant execute on function public.invite_is_valid(text) to anon, authenticated;
 grant execute on function public.redeem_invite(text,text,text,text) to authenticated;
 grant execute on function public.create_invite(int) to authenticated;
 grant execute on function public.is_member(uuid), public.is_admin(uuid) to anon, authenticated;
+revoke all on function public.get_my_profile() from public, anon;
+grant execute on function public.get_my_profile() to authenticated;
 revoke all on function public.mark_dm_read(uuid) from public, anon;
 grant execute on function public.mark_dm_read(uuid) to authenticated;
 grant select, insert, update, delete on public.notification_preferences to authenticated;
@@ -743,9 +753,46 @@ revoke execute on function public.upsert_connection(uuid,uuid,text), public.reco
   from public, anon, authenticated;
 revoke update on public.dm_messages from authenticated;
 
--- Media bucket and ownership-scoped writes. Public URLs are intentional because the feed is community-global.
+-- Defense in depth: callers cannot create name-shadowing objects in public,
+-- privileged functions resolve trusted schemas first, and table grants expose
+-- only the operations the client actually uses. RLS still controls each row.
+revoke create on schema public from public, anon, authenticated;
+do $hardening$
+declare function_signature regprocedure;
+begin
+  for function_signature in
+    select procedure.oid::regprocedure
+    from pg_proc procedure
+    join pg_namespace namespace on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'public' and procedure.prosecdef
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', function_signature);
+    execute format('alter function %s set search_path = pg_catalog, public, auth, extensions, pg_temp', function_signature);
+  end loop;
+end
+$hardening$;
+
+grant execute on function public.invite_is_valid(text) to anon, authenticated;
+grant execute on function public.is_member(uuid), public.is_admin(uuid) to authenticated;
+grant execute on function public.get_my_profile() to authenticated;
+grant execute on function public.redeem_invite(text,text,text,text) to authenticated;
+grant execute on function public.create_invite(int) to authenticated;
+grant execute on function public.mark_dm_read(uuid) to authenticated;
+
+revoke all privileges on all tables in schema public from anon, authenticated;
+alter default privileges in schema public revoke all on tables from anon, authenticated;
+grant select on public.regions to authenticated;
+grant select (id, name, nickname, home_region, sponsors, social_url, avatar_path, onboarding_complete, created_at) on public.profiles to authenticated;
+grant update (name, nickname, phone, home_region, sponsors, social_url, avatar_path, onboarding_complete) on public.profiles to authenticated;
+grant select, insert, update, delete on public.spots, public.brands, public.sessions, public.session_rsvps, public.posts, public.post_comments, public.room_messages, public.events, public.rewards, public.notification_preferences, public.push_subscriptions, public.beta_issue_reports to authenticated;
+grant select, insert, delete on public.post_tags, public.post_likes, public.dm_messages, public.event_rsvps, public.mutes to authenticated;
+grant select on public.connections, public.points_events, public.streaks, public.notification_queue to authenticated;
+grant select, insert, update on public.reward_claims, public.reports to authenticated;
+
+-- Stoke media is community-global but not internet-public. The app creates
+-- short-lived signed URLs after member RLS succeeds.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('salty-media', 'salty-media', true, 52428800, array['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm'])
+values ('salty-media', 'salty-media', false, 52428800, array['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm'])
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 -- Legacy private-DM bucket retained for safe schema upgrades. DMs are text-only;
@@ -768,7 +815,7 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('salty-feedback', 'salty-feedback', false, 10485760, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
-create policy salty_media_read on storage.objects for select using (bucket_id = 'salty-media');
+create policy salty_media_read on storage.objects for select to authenticated using (bucket_id = 'salty-media' and public.is_member());
 create policy salty_media_insert on storage.objects for insert to authenticated
 with check (bucket_id = 'salty-media' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
 create policy salty_media_update on storage.objects for update to authenticated

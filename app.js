@@ -16,7 +16,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.49';
+const APP_VERSION = '1.50';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V8.pdf';
 const GUIDE_PAGE_COUNT = 4;
@@ -496,8 +496,7 @@ async function finishAuthentication() {
 
 async function enterCommunity() {
   await persistConsent();
-  const userId = state.session.user.id;
-  let { data: profile, error } = await db.from('profiles').select('*').eq('id', userId).maybeSingle();
+  let { data: profile, error } = await db.rpc('get_my_profile');
   if (error) { toast(readableError(error)); showWelcome(); return; }
 
   if (!profile && state.pendingInvite) {
@@ -889,9 +888,11 @@ async function completeProfile(event) {
       sponsors: $('#setupSponsors').value.split(',').map(item => item.trim()).filter(Boolean).slice(0, 12),
       social_url: normalizeSocialUrl($('#setupSocial').value), avatar_path: avatarPath, onboarding_complete: true,
     };
-    const result = await db.from('profiles').update(updates).eq('id', state.profile.id).select().single();
+    const result = await db.from('profiles').update(updates).eq('id', state.profile.id);
     if (result.error) throw result.error;
-    state.profile = result.data;
+    const refreshed = await db.rpc('get_my_profile');
+    if (refreshed.error || !refreshed.data) throw refreshed.error || new Error('Could not reload your profile.');
+    state.profile = refreshed.data;
     if (state.pendingInviteRegion) {
       const joined = await db.rpc('join_location', { location_id:state.pendingInviteRegion });
       if (!joined.error) {
@@ -2056,7 +2057,14 @@ async function loadPosts() {
     .select('*,spot:spots(*),author_profile:profiles!posts_author_fkey(id,name),post_likes(user_id),post_comments(id,body,created_at,author_profile:profiles!post_comments_author_fkey(id,name))')
     .order('created_at', { ascending: false }).limit(50);
   if (result.error) { toast(readableError(result.error)); return; }
-  state.posts = result.data || [];
+  const posts = result.data || [];
+  const signedEntries = await Promise.all(posts.map(async post => {
+    if (!post.media_path) return [post.id, safeExternalUrl(post.media_url)];
+    const signed = await db.storage.from(CONFIG.mediaBucket).createSignedUrl(post.media_path, 3600);
+    return [post.id, signed.error ? null : signed.data.signedUrl];
+  }));
+  const signedUrls = Object.fromEntries(signedEntries);
+  state.posts = posts.map(post => ({ ...post, media_url:signedUrls[post.id] }));
   renderPosts();
 }
 
@@ -2068,7 +2076,9 @@ function renderPosts() {
   }
   feed.innerHTML = state.posts.map(post => {
     const liked = post.post_likes.some(like => like.user_id === state.profile.id);
-    const media = post.media_type === 'clip' ? `<video src="${esc(post.media_url)}" controls preload="metadata" playsinline></video>` : `<img src="${esc(post.media_url)}" alt="${esc(post.caption || 'Surf photo')}">`;
+    const media = post.media_url
+      ? (post.media_type === 'clip' ? `<video src="${esc(post.media_url)}" controls preload="metadata" playsinline></video>` : `<img src="${esc(post.media_url)}" alt="${esc(post.caption || 'Surf photo')}">`)
+      : '<div class="post-media-unavailable">Media unavailable</div>';
     const comments = post.post_comments.slice(-3).map(comment => `<p class="comment"><b>${esc(comment.author_profile?.name || 'Crew')}</b> ${esc(comment.body)}</p>`).join('');
     const edit = post.author === state.profile.id ? `<button class="post-edit-icon" type="button" data-edit-post="${post.id}" aria-label="Edit your Stoke post"><svg><use href="#i-edit"/></svg></button>` : '';
     return `<article class="post-card"><div class="post-media">${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Salty')}</span>${edit}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>Surfer</b>${esc(post.surfer_name)}</span>` : ''}${post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : ''}<span class="credit filmer"><b>Filmer</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
@@ -2100,7 +2110,7 @@ async function uploadMedia(file, path) {
   // against the direct storage hostname when Supabase Pro is enabled.
   const result = await db.storage.from(CONFIG.mediaBucket).upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
   if (result.error) throw result.error;
-  return db.storage.from(CONFIG.mediaBucket).getPublicUrl(path).data.publicUrl;
+  return path;
 }
 
 function matchingPerson(name) {

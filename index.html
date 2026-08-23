@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta id="appThemeColor" name="theme-color" content="#0A141C">
   <meta name="description" content="Salty — surf with your friends, not your feed.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'sha256-3c89LCajFIcYa3gJG+BT+TDhA7lOkJhgrUVZoL4wcqY=' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://maihhnwrstewzapsvrec.supabase.co; media-src 'self' blob: https://maihhnwrstewzapsvrec.supabase.co; connect-src 'self' https://maihhnwrstewzapsvrec.supabase.co wss://maihhnwrstewzapsvrec.supabase.co; worker-src 'self'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
   <meta property="og:title" content="You're invited to Salty">
   <meta property="og:description" content="A private surf community built to help friends surf and film together more often.">
   <meta property="og:type" content="website">
@@ -17,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=49b">
+  <link rel="stylesheet" href="./styles.css?v=50-security1">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -57,7 +59,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>salty</span>
-    <small class="boot-credit">SaltyView Productions · v1.49</small>
+    <small class="boot-credit">SaltyView Productions · v1.50</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -373,7 +375,7 @@
   </section>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
-  <script src="./app.js?v=49-lifecycle2" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
+  <script src="./app.js?v=50-security1" defer></script>
 </body>
 </html>
