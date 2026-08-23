@@ -287,6 +287,25 @@ create table public.reports (
   created_at timestamptz not null default now()
 );
 
+create table public.beta_issue_reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter uuid not null references public.profiles(id) on delete cascade,
+  category text not null check (category in ('broken','confusing','suggestion','other')),
+  description text not null check (char_length(trim(description)) between 1 and 2000),
+  expected_behavior text check (expected_behavior is null or char_length(trim(expected_behavior)) between 1 and 2000),
+  screen text check (screen is null or char_length(screen) <= 120),
+  app_version text check (app_version is null or char_length(app_version) <= 40),
+  user_agent text check (user_agent is null or char_length(user_agent) <= 1000),
+  screenshot_path text check (screenshot_path is null or split_part(screenshot_path, '/', 1) = reporter::text),
+  status text not null default 'new' check (status in ('new','reviewing','fixed','closed')),
+  admin_notes text check (admin_notes is null or char_length(admin_notes) <= 4000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index beta_issue_reports_status_created_idx on public.beta_issue_reports (status, created_at desc);
+create index beta_issue_reports_reporter_created_idx on public.beta_issue_reports (reporter, created_at desc);
+
 insert into public.regions (name) values ('California'),('France'),('Germany'),('Utah')
 on conflict (name) do nothing;
 
@@ -627,6 +646,7 @@ alter table public.reward_claims enable row level security;
 alter table public.invites enable row level security;
 alter table public.mutes enable row level security;
 alter table public.reports enable row level security;
+alter table public.beta_issue_reports enable row level security;
 
 create policy regions_read on public.regions for select using (public.is_member());
 create policy regions_admin_write on public.regions for all using (public.is_admin()) with check (public.is_admin());
@@ -700,6 +720,12 @@ create policy mutes_delete_own on public.mutes for delete using (muter = auth.ui
 create policy reports_insert_own on public.reports for insert with check (public.is_member() and reporter = auth.uid());
 create policy reports_read_admin on public.reports for select using (public.is_admin());
 create policy reports_update_admin on public.reports for update using (public.is_admin()) with check (public.is_admin());
+create policy beta_issue_reports_insert_own on public.beta_issue_reports for insert to authenticated with check (public.is_member() and reporter = auth.uid());
+create policy beta_issue_reports_read_own_or_admin on public.beta_issue_reports for select to authenticated using (reporter = auth.uid() or public.is_admin());
+create policy beta_issue_reports_update_admin on public.beta_issue_reports for update to authenticated using (public.is_admin()) with check (public.is_admin());
+create policy beta_issue_reports_delete_admin on public.beta_issue_reports for delete to authenticated using (public.is_admin());
+
+grant select, insert, update, delete on public.beta_issue_reports to authenticated;
 
 grant execute on function public.invite_is_valid(text) to anon, authenticated;
 grant execute on function public.redeem_invite(text,text,text,text) to authenticated;
@@ -737,6 +763,11 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('salty-avatars', 'salty-avatars', false, 8388608, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
+-- Private beta screenshots, visible only to their reporter and Salty admins.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('salty-feedback', 'salty-feedback', false, 10485760, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
 create policy salty_media_read on storage.objects for select using (bucket_id = 'salty-media');
 create policy salty_media_insert on storage.objects for insert to authenticated
 with check (bucket_id = 'salty-media' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
@@ -772,6 +803,13 @@ using (bucket_id = 'salty-avatars' and owner_id = auth.uid()::text)
 with check (bucket_id = 'salty-avatars' and owner_id = auth.uid()::text);
 create policy salty_avatars_delete_own on storage.objects for delete to authenticated
 using (bucket_id = 'salty-avatars' and owner_id = auth.uid()::text);
+
+create policy salty_feedback_insert_own on storage.objects for insert to authenticated
+with check (bucket_id = 'salty-feedback' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
+create policy salty_feedback_read_own_or_admin on storage.objects for select to authenticated
+using (bucket_id = 'salty-feedback' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
+create policy salty_feedback_delete_own_or_admin on storage.objects for delete to authenticated
+using (bucket_id = 'salty-feedback' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
 
 -- Realtime tables used by the later chat phase and live core/feed refreshes.
 alter publication supabase_realtime add table public.sessions, public.session_rsvps, public.posts, public.post_comments, public.post_likes, public.room_messages, public.dm_messages;

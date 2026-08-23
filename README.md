@@ -26,6 +26,8 @@ Before release v23, run `supabase/events-v2-migration.sql` once. It safely adds 
 
 Before release v24, run `supabase/perks-admin-migration.sql` once. It activates the Saltyviewfinder and WATA discount cards, adds admin-only perk management, and makes `saltyviewfinder@gmail.com` the first Salty admin.
 
+Before release v1.48, run `supabase/beta-feedback-v1-migration.sql` once. It adds member issue reports, a private screenshot bucket, and the RLS used by the admin-only Beta Feedback dashboard.
+
 Before release v26, run `supabase/chat-v1-migration.sql` once. It adds photo-only attachments to regional community rooms, creates the private `salty-chat` image bucket, and enforces text-only DMs at the database level. Community chat photos are capped at 10 MB; video remains exclusive to Stoke.
 
 For databases that show `gen_random_bytes(integer) does not exist` when inviting a friend or a missing `sessions.participant_names` column when sharing a surf, run `supabase/invites-sessions-hotfix.sql` once. It preserves existing data and is safe to run more than once.

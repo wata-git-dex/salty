@@ -7,13 +7,16 @@ const CONFIG = Object.freeze({
   mediaBucket: 'salty-media',
   avatarBucket: 'salty-avatars',
   chatBucket: 'salty-chat',
+  feedbackBucket: 'salty-feedback',
   maxUploadBytes: 50 * 1024 * 1024,
   maxAvatarBytes: 8 * 1024 * 1024,
   maxChatPhotoBytes: 10 * 1024 * 1024,
+  maxFeedbackScreenshotBytes: 10 * 1024 * 1024,
   maxClipSeconds: 90,
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
+const APP_VERSION = '1.48';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V8.pdf';
 const GUIDE_PAGE_COUNT = 4;
@@ -46,6 +49,7 @@ const state = {
   consentNext: 'new', sessionPeople: [], editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
   notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '',
   calendarMonth: null, calendarDate: '',
+  previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -269,7 +273,11 @@ function runPreview() {
   ];
   state.dmMessages = [{ id:'dm-1', sender:'jonah', recipient:userId, body:'Want to hit Lowers Friday?', created_at:new Date(Date.now() - 35 * 60000).toISOString(), read_at:null }];
   state.dmThreads = [{ memberId:'jonah', message:state.dmMessages[0] }];
-  renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderPerks(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); showOnly('app');
+  state.issueReports = [
+    { id:'issue-1', reporter:'jonah', reporter_profile:{ id:'jonah', name:'Jonah' }, category:'broken', description:'The Join surf button looked pressed, but my name did not appear until I reopened Salty.', expected_behavior:'My name should show under Surfers immediately.', screen:'Sessions', app_version:APP_VERSION, user_agent:'iPhone · Mobile Safari', status:'new', admin_notes:'', created_at:new Date(Date.now() - 48 * 60000).toISOString() },
+    { id:'issue-2', reporter:'mateo', reporter_profile:{ id:'mateo', name:'Mateo' }, category:'suggestion', description:'Could the event card make the address easier to tap?', expected_behavior:null, screen:'Events', app_version:APP_VERSION, user_agent:'iPhone · Home Screen app', status:'reviewing', admin_notes:'Check the map target size.', created_at:new Date(Date.now() - 26 * 3600000).toISOString() },
+  ];
+  renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderPerks(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderIssueReports(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
 
@@ -569,6 +577,7 @@ async function loadApp() {
   renderChrome();
   await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadRoomMessages(), loadDmInbox(), renderProfile(), loadNotificationPreferences()]);
   renderMembers();
+  if (state.profile?.is_admin) await loadIssueReports({ silent:true });
   subscribeRealtime();
   if (['surfing', 'feed', 'chat', 'events', 'dms'].includes(state.pendingOpen)) {
     setView(state.pendingOpen);
@@ -941,12 +950,18 @@ function renderChrome() {
   $('#locationsList').innerHTML = [...new Set(regionSpots.map(spot => spot.general_location).filter(Boolean))].sort().map(location => `<option value="${esc(location)}"></option>`).join('');
   $('#peopleList').innerHTML = state.people.map(person => `<option value="${esc(person.name)}"></option>`).join('');
   $('#drawerProfile').innerHTML = `${avatarMarkup(state.profile)}<div><h3>${esc(state.profile.name)}</h3><p>${esc(state.currentRegion.name)} · Salty Crew</p></div>`;
+  $('#betaFeedbackMenu')?.classList.toggle('hidden', !state.profile?.is_admin);
   renderEventRegions();
   renderChatRegions();
   renderDmPeople();
 }
 
 function setView(view) {
+  if (view === 'beta-feedback' && !state.profile?.is_admin) {
+    toast('Only Salty admins can view beta feedback.');
+    return;
+  }
+  if (view !== state.view) state.previousView = state.view;
   state.view = view;
   $$('.app-view').forEach(node => node.classList.toggle('active', node.id === `view-${view}`));
   $$('.primary-nav button,.bottom-nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
@@ -959,6 +974,7 @@ function setView(view) {
   if (!state.preview && view === 'chat') loadRoomMessages();
   if (!state.preview && view === 'dms') loadDmInbox();
   if (view === 'settings') renderNotificationSettings();
+  if (!state.preview && view === 'beta-feedback') loadIssueReports();
 }
 
 async function loadSessions() {
@@ -1316,6 +1332,149 @@ async function savePerk(event) {
     resetPerkComposer(); closeSheet(); await loadPerks(); toast(edited ? 'Discount updated.' : 'Discount published.');
   } catch (error) { toast(readableError(error), 5000); }
   finally { submit.disabled = false; }
+}
+
+function issueCategoryLabel(category) {
+  return ({ broken:'Broken', confusing:'Confusing', suggestion:'Suggestion', other:'Other' })[category] || 'Other';
+}
+
+function issueStatusLabel(status) {
+  return ({ new:'New', reviewing:'Reviewing', fixed:'Fixed', closed:'Closed' })[status] || 'New';
+}
+
+function issueScreenLabel(view) {
+  return ({ surfing:'Sessions', feed:'Stoke', chat:'Community Chat', events:'Events', you:'Profile', dms:'Messages', dm:'Direct Message', calendar:'Crew Calendar', settings:'Settings' })[view] || String(view || 'Unknown').replace(/-/g, ' ');
+}
+
+function openIssueReport() {
+  $('#issueReportForm').reset();
+  $('#issueScreenshotLabel').textContent = 'Choose screenshot';
+  state.issueOriginView = state.view === 'settings' ? state.previousView : state.view;
+  openSheet('issueReportSheet');
+  setTimeout(() => $('#issueDescription').focus({ preventScroll:true }), 120);
+}
+
+function feedbackScreenshotPath(file) {
+  const extension = ({ 'image/jpeg':'jpg', 'image/png':'png', 'image/webp':'webp' })[file.type] || 'jpg';
+  const token = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${state.profile.id}/${token}.${extension}`;
+}
+
+function validateFeedbackScreenshot(file) {
+  if (!file) return;
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Use a JPG, PNG, or WebP screenshot.');
+  if (file.size > CONFIG.maxFeedbackScreenshotBytes) throw new Error('That screenshot is over 10 MB. Crop it or choose a smaller image.');
+}
+
+async function saveIssueReport(event) {
+  event.preventDefault();
+  const submit = $('#issueReportSubmit');
+  const screenshot = $('#issueScreenshot').files[0] || null;
+  submit.disabled = true;
+  submit.textContent = 'Sending…';
+  try {
+    validateFeedbackScreenshot(screenshot);
+    let screenshotPath = screenshot ? feedbackScreenshotPath(screenshot) : null;
+    let screenshotFailed = false;
+    if (screenshot) {
+      const uploaded = await db.storage.from(CONFIG.feedbackBucket).upload(screenshotPath, screenshot, { contentType:screenshot.type, upsert:false });
+      if (uploaded.error) {
+        console.warn('Feedback screenshot upload failed:', uploaded.error);
+        screenshotPath = null;
+        screenshotFailed = true;
+      }
+    }
+    const payload = {
+      reporter: state.profile.id,
+      category: $('#issueCategory').value,
+      description: $('#issueDescription').value.trim(),
+      expected_behavior: $('#issueExpected').value.trim() || null,
+      screen: issueScreenLabel(state.issueOriginView),
+      app_version: APP_VERSION,
+      user_agent: navigator.userAgent.slice(0, 1000),
+      screenshot_path: screenshotPath,
+    };
+    const inserted = await db.from('beta_issue_reports').insert(payload).select('id').single();
+    if (inserted.error) {
+      if (screenshotPath) await db.storage.from(CONFIG.feedbackBucket).remove([screenshotPath]);
+      throw inserted.error;
+    }
+    $('#issueReportForm').reset();
+    $('#issueScreenshotLabel').textContent = 'Choose screenshot';
+    closeSheet();
+    toast(screenshotFailed ? 'Report sent. The screenshot could not upload, but the details are saved.' : 'Report sent. Thank you for helping improve Salty.', 5000);
+    if (state.profile?.is_admin) await loadIssueReports({ silent:true });
+  } catch (error) { toast(readableError(error), 6000); }
+  finally { submit.disabled = false; submit.textContent = 'Send report'; }
+}
+
+async function loadIssueReports({ silent = false } = {}) {
+  if (!state.profile?.is_admin) return;
+  const result = await db.from('beta_issue_reports')
+    .select('*,reporter_profile:profiles!beta_issue_reports_reporter_fkey(id,name)')
+    .order('created_at', { ascending:false });
+  if (result.error) {
+    console.warn('Beta feedback unavailable:', result.error);
+    if (!silent) {
+      $('#feedbackList').innerHTML = '<div class="empty"><span>BETA FEEDBACK</span><h2>Reports could not load</h2><p>Check that the beta-feedback migration has been installed.</p></div>';
+      toast(readableError(result.error), 5000);
+    }
+    return;
+  }
+  state.issueReports = result.data || [];
+  const screenshotEntries = await Promise.all(state.issueReports.filter(report => report.screenshot_path).map(async report => {
+    const signed = await db.storage.from(CONFIG.feedbackBucket).createSignedUrl(report.screenshot_path, 3600);
+    return [report.id, signed.error ? null : signed.data.signedUrl];
+  }));
+  state.issueScreenshotUrls = Object.fromEntries(screenshotEntries);
+  renderIssueReports();
+}
+
+function renderIssueReports() {
+  if (!state.profile?.is_admin) return;
+  const counts = state.issueReports.reduce((result, report) => {
+    result[report.status] = (result[report.status] || 0) + 1;
+    return result;
+  }, { new:0, reviewing:0, fixed:0, closed:0 });
+  const openCount = counts.new + counts.reviewing;
+  $('#feedbackSummary').innerHTML = `<article><b>${openCount}</b><span>open</span></article><article><b>${counts.new}</b><span>new</span></article><article><b>${counts.fixed}</b><span>fixed</span></article>`;
+  $('#betaFeedbackBadge').textContent = counts.new;
+  $('#betaFeedbackBadge').classList.toggle('hidden', counts.new === 0);
+  const filtered = state.issueReports.filter(report => {
+    if (state.issueFilter === 'all') return true;
+    if (state.issueFilter === 'open') return ['new', 'reviewing'].includes(report.status);
+    return report.status === state.issueFilter;
+  });
+  $('#feedbackFilters').querySelectorAll('[data-feedback-filter]').forEach(button => button.classList.toggle('active', button.dataset.feedbackFilter === state.issueFilter));
+  if (!filtered.length) {
+    $('#feedbackList').innerHTML = `<div class="empty"><span>BETA FEEDBACK</span><h2>No ${esc(state.issueFilter)} reports</h2><p>Reports will appear here when members send them.</p></div>`;
+    return;
+  }
+  $('#feedbackList').innerHTML = filtered.map(report => {
+    const reporter = report.reporter_profile?.name || 'Unknown member';
+    const created = new Intl.DateTimeFormat([], { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }).format(new Date(report.created_at));
+    const screenshotUrl = state.issueScreenshotUrls[report.id];
+    const screenshot = screenshotUrl ? `<a class="feedback-screenshot" href="${esc(screenshotUrl)}" target="_blank" rel="noopener"><img src="${esc(screenshotUrl)}" alt="Screenshot attached by ${esc(reporter)}"><span>Open full screenshot ↗</span></a>` : '';
+    const expected = report.expected_behavior ? `<div class="feedback-expected"><b>Expected</b><p>${esc(report.expected_behavior)}</p></div>` : '';
+    return `<article class="feedback-card status-${esc(report.status)}"><header><div><span class="feedback-category category-${esc(report.category)}">${esc(issueCategoryLabel(report.category))}</span><h3>${esc(reporter)}</h3><small>${esc(created)} · ${esc(report.screen || 'Unknown screen')} · v${esc(report.app_version || '?')}</small></div><select data-issue-status="${report.id}" aria-label="Status for report from ${esc(reporter)}">${['new','reviewing','fixed','closed'].map(status => `<option value="${status}" ${status === report.status ? 'selected' : ''}>${issueStatusLabel(status)}</option>`).join('')}</select></header><div class="feedback-description"><b>What happened</b><p>${esc(report.description)}</p></div>${expected}${screenshot}<details class="feedback-device"><summary>Device details</summary><p>${esc(report.user_agent || 'Not available')}</p></details><label class="feedback-notes">Private admin notes<textarea data-issue-notes="${report.id}" maxlength="4000" placeholder="What needs fixing, commit, follow-up…">${esc(report.admin_notes || '')}</textarea></label><button class="secondary-button feedback-save" data-save-feedback="${report.id}">Save status &amp; notes</button></article>`;
+  }).join('');
+}
+
+async function saveIssueAdminUpdate(reportId) {
+  if (!state.profile?.is_admin) return;
+  const status = $(`[data-issue-status="${reportId}"]`)?.value;
+  const notes = $(`[data-issue-notes="${reportId}"]`)?.value.trim() || null;
+  const button = $(`[data-save-feedback="${reportId}"]`);
+  if (!status || !button) return;
+  button.disabled = true;
+  button.textContent = 'Saving…';
+  try {
+    const result = await db.from('beta_issue_reports').update({ status, admin_notes:notes, updated_at:new Date().toISOString() }).eq('id', reportId);
+    if (result.error) throw result.error;
+    await loadIssueReports({ silent:true });
+    toast('Feedback report updated.');
+  } catch (error) { toast(readableError(error), 5000); }
+  finally { button.disabled = false; button.textContent = 'Save status & notes'; }
 }
 
 function scheduleParts(startValue, endValue = null) {
@@ -2289,6 +2448,8 @@ document.addEventListener('click', async event => {
   const chatRegionNode = event.target.closest('[data-chat-region]');
   const dmMemberNode = event.target.closest('[data-dm-member]');
   const calendarDateNode = event.target.closest('[data-calendar-date]');
+  const feedbackFilterNode = event.target.closest('[data-feedback-filter]');
+  const saveFeedbackNode = event.target.closest('[data-save-feedback]');
   if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
   if (viewNode) setView(viewNode.dataset.view);
   if (memberNode) openMember(memberNode.dataset.member);
@@ -2297,6 +2458,11 @@ document.addEventListener('click', async event => {
     state.calendarDate = calendarDateNode.dataset.calendarDate;
     renderCalendar();
   }
+  if (feedbackFilterNode) {
+    state.issueFilter = feedbackFilterNode.dataset.feedbackFilter;
+    renderIssueReports();
+  }
+  if (saveFeedbackNode) await saveIssueAdminUpdate(saveFeedbackNode.dataset.saveFeedback);
   if (removeSessionPersonNode) {
     state.sessionPeople.splice(Number(removeSessionPersonNode.dataset.removeSessionPerson), 1);
     renderSessionPeopleChips();
@@ -2390,6 +2556,7 @@ document.addEventListener('click', async event => {
     'open-event': () => openEventComposer(),
     'open-perk': () => openPerkComposer(),
     'open-location': () => { $('#locationForm').reset(); openSheet('locationSheet'); },
+    'open-issue-report': openIssueReport,
     'delete-perk': deletePerk,
     'delete-post': deletePost,
     'show-install': showInstallInstructions,
@@ -2435,6 +2602,7 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
   else if (event.target.id === 'locationForm') await saveLocation(event);
+  else if (event.target.id === 'issueReportForm') await saveIssueReport(event);
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);
 });
 
@@ -2473,6 +2641,18 @@ $('#mediaFile').addEventListener('change', async event => {
   $('#fileLabel').textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB`;
   try { await validateMedia(file); }
   catch (error) { toast(readableError(error), 5000); event.target.value = ''; $('#fileLabel').textContent = 'Add photo or clip'; }
+});
+$('#issueScreenshot').addEventListener('change', event => {
+  const file = event.target.files[0];
+  if (!file) { $('#issueScreenshotLabel').textContent = 'Choose screenshot'; return; }
+  try {
+    validateFeedbackScreenshot(file);
+    $('#issueScreenshotLabel').textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB`;
+  } catch (error) {
+    toast(readableError(error), 5000);
+    event.target.value = '';
+    $('#issueScreenshotLabel').textContent = 'Choose screenshot';
+  }
 });
 
 $('#roomPhoto').addEventListener('change', event => {
