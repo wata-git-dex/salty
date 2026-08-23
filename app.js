@@ -16,7 +16,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.50';
+const APP_VERSION = '1.51';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V8.pdf';
 const GUIDE_PAGE_COUNT = 4;
@@ -978,6 +978,9 @@ function setView(view) {
   scrollTo({ top: 0, behavior: 'smooth' });
   if (!state.preview && view === 'chat') loadRoomMessages();
   if (!state.preview && view === 'dms') loadDmInbox();
+  // Stoke stays a normal feed. Re-sign private media whenever it is opened so
+  // a long-running home-screen session never depends on an expired raw URL.
+  if (!state.preview && view === 'feed') loadPosts();
   if (view === 'settings') renderNotificationSettings();
   if (!state.preview && view === 'beta-feedback') loadIssueReports();
 }
