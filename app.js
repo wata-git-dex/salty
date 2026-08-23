@@ -18,7 +18,7 @@ const CONFIG = Object.freeze({
 });
 const APP_VERSION = '1.51';
 const CONSENT_VERSION = '1.0';
-const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V8.pdf';
+const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V9.pdf';
 const GUIDE_PAGE_COUNT = 4;
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
@@ -2324,7 +2324,7 @@ function openGuide() {
   if (!pages.childElementCount) {
     pages.innerHTML = Array.from({ length:GUIDE_PAGE_COUNT }, (_, index) => {
       const page = String(index + 1).padStart(2, '0');
-      return `<img src="./docs/guide-v8/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
+      return `<img src="./docs/guide-v9/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
     }).join('');
   }
   viewer.classList.remove('hidden');
@@ -2341,7 +2341,7 @@ function closeGuide() {
 async function quickStartGuideFile() {
   const response = await fetch(quickStartGuideUrl());
   if (!response.ok) throw new Error('The Quick Start Guide could not be loaded.');
-  return new File([await response.blob()], 'SALTY_Quick_Start_Guide_V8.pdf', { type:'application/pdf' });
+  return new File([await response.blob()], 'SALTY_Quick_Start_Guide_V9.pdf', { type:'application/pdf' });
 }
 
 async function shareSaltyContent({ title, text, url, file = null, copiedMessage }) {
