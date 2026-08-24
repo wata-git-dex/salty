@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.54';
+const APP_VERSION = '1.55';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V11.pdf';
 const GUIDE_PAGE_COUNT = 4;
