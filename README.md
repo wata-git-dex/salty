@@ -57,6 +57,6 @@ Admins can create, edit, hide, and delete discounts from the Perks screen. Delet
 
 ## Current member guide
 
-The app opens and shares `docs/SODIUM_Quick_Start_Guide_V11.pdf`. Its four in-app pages live in `docs/guide-v11/`. The guide covers Marketplace and the v1.53 navigation/PWA behavior. The current visual overview is `docs/SODIUM_App_Overview_One_Pager_V6.pdf` with a matching PNG export.
+The app opens and shares `docs/SODIUM_Quick_Start_Guide_V12.pdf`. Its four in-app pages live in `docs/guide-v12/`. The guide covers Marketplace, the v1.57 navigation/PWA behavior, and the orange future-session versus green in-the-water states. The current visual overview is `docs/SODIUM_App_Overview_One_Pager_V7.pdf` with a matching PNG export. Profile sharing offers the invite alone, the invite with the one-page overview, or the invite with the detailed guide.
 
 Before deploying Marketplace to a fresh Supabase project, run `supabase/marketplace-v1-migration.sql` after the base schema. It is additive, preserves existing data, enables RLS, and creates the private `sodium-marketplace` image bucket.

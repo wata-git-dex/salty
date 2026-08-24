@@ -22,9 +22,10 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.56';
+const APP_VERSION = '1.57';
 const CONSENT_VERSION = '1.0';
-const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V11.pdf';
+const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V12.pdf';
+const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V7.png';
 const GUIDE_PAGE_COUNT = 4;
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
@@ -261,6 +262,7 @@ function runPreview() {
   state.people = [state.profile, { id: 'jonah', name: 'Jonah Reyes', nickname:'Jo', home_region:regionId, sponsors:['Snake Eyes'], onboarding_complete:true }, { id: 'mateo', name: 'Mateo Karras', nickname:null, home_region:regionId, sponsors:[], onboarding_complete:true }];
   state.spots = [{ id: 'malibu', name: 'Malibu', general_location:'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', general_location:'San Clemente', region_id: regionId }];
   state.previewSessions = [
+    { id:'live-mine', author:userId, region_id:regionId, author_role:'film', participant_names:['Steve'], when_label:'Now', surf_time:new Date().toISOString(), wants_filmer:false, note:'clean little window right now', spot:{name:'C Street',general_location:'Ventura'}, author_profile:{name:'Cyrus'}, session_rsvps:[] },
     { id:'mine', author:userId, region_id:regionId, author_role:'surf', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 86400000).toISOString(), wants_filmer:false, note:'morning glass before the wind', spot:{name:"Old Man's",general_location:'San Onofre'}, author_profile:{name:'Cyrus'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah'}}]},
     { id:'mateo-surf', author:'mateo', region_id:regionId, author_role:'film', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 2 * 86400000).toISOString(), wants_filmer:false, note:'filming the afternoon window', spot:{name:'First Point',general_location:'Malibu'}, author_profile:{name:'Mateo'}, session_rsvps:[] },
     { id:'crew', author:'jonah', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 3 * 86400000).toISOString(), wants_filmer:true, note:'sunrise window', spot:{name:'Lowers',general_location:'San Clemente'}, author_profile:{name:'Jonah'}, session_rsvps:[] },
@@ -2032,7 +2034,8 @@ function renderSessions() {
     const schedule = pastSession
       ? schedulePills(scheduleParts(session.surf_time || session.ended_at || session.created_at), 'session-schedule')
       : sessionSchedulePills(session);
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${pastSession ? 'past-card' : ''}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${actions ? `<div class="card-actions">${actions}</div>` : ''}</article>`;
+    const timingClass = pastSession ? 'past-card' : (session.when_label === 'Now' ? 'live-session' : 'future-session');
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${actions ? `<div class="card-actions">${actions}</div>` : ''}</article>`;
   };
   const activeMarkup = orderedSessions.length
     ? orderedSessions.map(session => renderSessionCard(session)).join('')
@@ -2432,7 +2435,7 @@ function profileMarkup(profile, stats = {}) {
   const listings = state.listings.filter(item => item.owner_id === profile.id && (item.status === 'approved' || canEditListing(item))).slice(0, 3);
   const listingSection = listings.length ? `<article class="profile-card profile-listings"><div class="profile-listings-header"><h3>Makes / does</h3><button data-view="marketplace">Marketplace →</button></div>${listings.map(item => `<button class="profile-listing" data-listing="${item.id}"><span><b>${esc(item.title)}</b><small>${esc(item.category)}${item.status !== 'approved' ? ` · ${esc(item.status)}` : ''}</small></span><i>›</i></button>`).join('')}</article>` : '';
   const controls = stats.own
-    ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Sodium</button><button class="secondary-button guide-invite-button" data-action="share-invite-guide">Invite a friend + guide</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
+    ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Sodium</button><button class="secondary-button overview-invite-button" data-action="share-invite-overview">Invite + one-page overview</button><button class="secondary-button guide-invite-button" data-action="share-invite-guide">Invite + detailed guide</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
     : `<div class="profile-actions"><button class="primary" data-dm-member="${profile.id}">Message ${esc(profile.name)}</button></div>`;
   return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Sodium Crew</p></div></div>${stats.own ? `<section class="profile-stat-group"><div class="profile-stat-heading"><span>Community activity</span><small>Points, streak, and posts</small></div><div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke shared</span></article></div></section><section class="profile-stat-group surf-stat-group"><div class="profile-stat-heading"><span>Surf stats</span><small>Completed sessions only</small></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>surfed</span></article><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>filmed</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations</span></article></div></section>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${listingSection}${controls}<footer class="profile-footer"><b>SODIUM</b>surf with your friends, not your feed</footer>`;
 }
@@ -2497,7 +2500,7 @@ function openGuide() {
   if (!pages.childElementCount) {
     pages.innerHTML = Array.from({ length:GUIDE_PAGE_COUNT }, (_, index) => {
       const page = String(index + 1).padStart(2, '0');
-      return `<img src="./docs/guide-v11/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
+      return `<img src="./docs/guide-v12/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
     }).join('');
   }
   viewer.classList.remove('hidden');
@@ -2514,7 +2517,17 @@ function closeGuide() {
 async function quickStartGuideFile() {
   const response = await fetch(quickStartGuideUrl());
   if (!response.ok) throw new Error('The Quick Start Guide could not be loaded.');
-  return new File([await response.blob()], 'SODIUM_Quick_Start_Guide_V11.pdf', { type:'application/pdf' });
+  return new File([await response.blob()], 'SODIUM_Quick_Start_Guide_V12.pdf', { type:'application/pdf' });
+}
+
+function overviewUrl() {
+  return new URL(OVERVIEW_PATH, location.href).href;
+}
+
+async function overviewFile() {
+  const response = await fetch(overviewUrl());
+  if (!response.ok) throw new Error('The Sodium overview could not be loaded.');
+  return new File([await response.blob()], 'SODIUM_App_Overview_One_Pager_V7.png', { type:'image/png' });
 }
 
 async function shareSodiumContent({ title, text, url, file = null, copiedMessage }) {
@@ -2616,7 +2629,7 @@ async function shareEvent(eventId) {
   }
 }
 
-async function shareInvite({ includeGuide = false } = {}) {
+async function shareInvite({ includeGuide = false, includeOverview = false } = {}) {
   const inviteRegion = state.currentRegion || state.regions.find(region => region.id === state.profile.home_region);
   let result = await db.rpc('create_invite', { invite_max_uses:1, invite_region:inviteRegion?.id || null });
   if (result.error && /create_invite/i.test(result.error.message || '')) {
@@ -2626,13 +2639,19 @@ async function shareInvite({ includeGuide = false } = {}) {
   const url = new URL('./', location.href); url.searchParams.set('invite', result.data);
   if (inviteRegion?.id) url.searchParams.set('region', inviteRegion.id);
   const guideUrl = quickStartGuideUrl();
+  const onePageUrl = overviewUrl();
   const title = "You're invited to Sodium";
   const text = includeGuide
     ? `I'm inviting you to Sodium${inviteRegion ? ` in ${inviteRegion.name}` : ''}, a private surf community. Hopefully it helps us surf more together.\n\nYour invite: ${url.href}\nQuick Start Guide: ${guideUrl}`
+    : includeOverview
+      ? `I'm inviting you to Sodium${inviteRegion ? ` in ${inviteRegion.name}` : ''}, a private surf community. Hopefully it helps us surf more together.\n\nYour invite: ${url.href}\nOne-page overview: ${onePageUrl}`
     : `I'm inviting you to Sodium${inviteRegion ? ` in ${inviteRegion.name}` : ''}, a private surf community. Hopefully it helps us surf more together.`;
   let file = null;
   if (includeGuide) {
     try { file = await quickStartGuideFile(); }
+    catch (_error) { /* Both links remain in the share message. */ }
+  } else if (includeOverview) {
+    try { file = await overviewFile(); }
     catch (_error) { /* Both links remain in the share message. */ }
   }
   try {
@@ -2641,7 +2660,7 @@ async function shareInvite({ includeGuide = false } = {}) {
       text,
       url:url.href,
       file,
-      copiedMessage:includeGuide ? 'Invite and guide links copied.' : 'Invite message and link copied.',
+      copiedMessage:includeGuide ? 'Invite and guide links copied.' : (includeOverview ? 'Invite and overview links copied.' : 'Invite message and link copied.'),
     });
   } catch (error) {
     if (error?.name !== 'AbortError') prompt('Copy this invite:', `${text}\n${url.href}`);
@@ -2734,7 +2753,7 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || ['make-invite', 'share-invite', 'share-invite-overview', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -2806,6 +2825,7 @@ document.addEventListener('click', async event => {
     'make-invite': () => shareInvite(),
     'share-invite': () => shareInvite(),
     'share-invite-guide': () => shareInvite({ includeGuide:true }),
+    'share-invite-overview': () => shareInvite({ includeOverview:true }),
     'share-guide': shareGuide,
     'edit-profile': showProfileSetup,
     'cancel-profile': () => showOnly('app'),
