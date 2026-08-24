@@ -25,7 +25,7 @@ const CONFIG = Object.freeze({
 const APP_VERSION = '1.57';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V12.pdf';
-const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V7.png';
+const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V8.png';
 const GUIDE_PAGE_COUNT = 4;
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
@@ -2527,7 +2527,7 @@ function overviewUrl() {
 async function overviewFile() {
   const response = await fetch(overviewUrl());
   if (!response.ok) throw new Error('The Sodium overview could not be loaded.');
-  return new File([await response.blob()], 'SODIUM_App_Overview_One_Pager_V7.png', { type:'image/png' });
+  return new File([await response.blob()], 'SODIUM_App_Overview_One_Pager_V8.png', { type:'image/png' });
 }
 
 async function shareSodiumContent({ title, text, url, file = null, copiedMessage }) {
