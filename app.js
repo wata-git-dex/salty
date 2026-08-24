@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.55';
+const APP_VERSION = '1.56';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V11.pdf';
 const GUIDE_PAGE_COUNT = 4;
@@ -1855,7 +1855,7 @@ function addEventToCalendar(eventId) {
 }
 
 function sessionWhen(session) {
-  if (session.when_label === 'Now' || !session.surf_time) return 'out now';
+  if (session.when_label === 'Now' || !session.surf_time) return 'out in the water';
   const date = new Date(session.surf_time);
   const options = { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' };
   if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
@@ -1864,7 +1864,7 @@ function sessionWhen(session) {
 
 function sessionSchedulePills(session) {
   if (session.when_label === 'Now' || !session.surf_time) {
-    return `<div class="schedule-pills session-schedule"><span class="schedule-now"><svg><use href="#i-clock"/></svg>Out now</span></div>`;
+    return `<div class="schedule-pills session-schedule"><span class="schedule-now session-live-pill"><i></i>Out in the water</span></div>`;
   }
   return schedulePills(scheduleParts(session.surf_time), 'session-schedule');
 }
@@ -1987,7 +1987,7 @@ function renderSessions() {
   const liveNow = active.filter(session => session.when_label === 'Now').length;
   const planned = active.length - liveNow;
   $('#liveCount').innerHTML = liveNow
-    ? `<i></i>${liveNow} OUT NOW${planned ? ` · ${planned} PLANNED` : ''}`
+    ? `<i></i>${liveNow} IN THE WATER${planned ? ` · ${planned} PLANNED` : ''}`
     : (planned ? `${planned} PLANNED` : 'NO SURFS PLANNED');
   const feed = $('#sessionsFeed');
   if (!state.sessions.length) {
@@ -2010,16 +2010,17 @@ function renderSessions() {
     const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
     const edit = !pastSession && mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="Edit surf"><svg><use href="#i-edit"/></svg></button>` : '';
     const share = !pastSession ? `<button class="session-share-icon" data-share-session="${session.id}" aria-label="Share this surf"><svg><use href="#i-share"/></svg></button>` : '';
-    const tools = pastSession ? '<span class="past-badge">Finished</span>' : `<div class="session-card-tools">${share}${edit}</div>`;
+    const sessionState = !pastSession && mine
+      ? (session.when_label === 'Now'
+        ? `<button class="session-state-icon stop" data-end-session="${session.id}" aria-label="Stop surf" title="Stop surf"><svg><use href="#i-stop"/></svg></button>`
+        : `<button class="session-state-icon start" data-start-session="${session.id}" aria-label="Start surf" title="Start surf"><svg><use href="#i-play"/></svg></button>`)
+      : '';
+    const tools = pastSession ? '<span class="past-badge">Finished</span>' : `<div class="session-card-tools">${sessionState}${share}${edit}</div>`;
     const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;
     const filmAction = (session.wants_filmer || myRsvp?.role === 'film')
       ? `<button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : (filmers.length ? 'Film too' : 'I can film')}</button>`
       : '';
-    const actions = pastSession ? '' : mine
-      ? (session.when_label === 'Now'
-        ? `<button class="small-action finish" data-end-session="${session.id}"><svg><use href="#i-check"/></svg>${session.author_role === 'film' ? 'Session finished' : 'Surf finished'}</button>`
-        : `<button class="small-action start" data-start-session="${session.id}"><svg><use href="#i-surf"/></svg>Start session</button>`)
-      : `${surfAction}${filmAction}`;
+    const actions = pastSession || mine ? '' : `${surfAction}${filmAction}`;
     const mapUrl = spotMapUrl(session.spot);
     const location = session.spot?.general_location ? `<a class="spot-location" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}</a>` : '';
     const surferNames = surfers.length ? surfers.map(name => `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
@@ -2206,10 +2207,10 @@ async function startSession(sessionId) {
 }
 
 async function endSession(sessionId) {
-  if (!confirm('Mark this surf as finished? If it was cancelled, use the pencil and Cancel session instead.')) return;
+  if (!confirm('Stop this surf and move it to Past sessions? If it was cancelled, use the pencil and Cancel session instead.')) return;
   const result = await db.from('sessions').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', sessionId).eq('author', state.profile.id);
   if (result.error) { toast(readableError(result.error)); return; }
-  await loadSessions(); toast('Surf marked finished.');
+  await loadSessions(); toast('Surf stopped and moved to Past sessions.');
 }
 
 async function cancelSession() {
