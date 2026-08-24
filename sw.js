@@ -1,6 +1,6 @@
-const CACHE = 'sodium-shell-v57-overview-v8-guide-v12';
+const CACHE = 'sodium-shell-v57-doc-kit-setup-v1';
 const GUIDE_PAGES = Array.from({ length:4 }, (_, index) => `./docs/guide-v12/page-${String(index + 1).padStart(2, '0')}.jpg`);
-const SHELL = ['./', './index.html', './styles.css?v=57-sessioncolors', './app.js?v=57-sessioncolors-guide12-overview8', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './docs/SODIUM_Quick_Start_Guide_V12.pdf', './docs/SODIUM_App_Overview_One_Pager_V8.png', ...GUIDE_PAGES];
+const SHELL = ['./', './index.html', './styles.css?v=57-sessioncolors', './app.js?v=57-doc-kit-setup1', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './docs/SODIUM_Quick_Start_Guide_V12.pdf', './docs/SODIUM_App_Overview_One_Pager_V8.png', './docs/SODIUM_Setup_One_Pager_V1.png', ...GUIDE_PAGES];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
