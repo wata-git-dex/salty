@@ -1,6 +1,6 @@
-const CACHE = 'sodium-shell-v52-brand1-guide-v10';
-const GUIDE_PAGES = Array.from({ length:4 }, (_, index) => `./docs/guide-v10/page-${String(index + 1).padStart(2, '0')}.jpg`);
-const SHELL = ['./', './index.html', './styles.css?v=52-sodium1', './app.js?v=52-sodium1-guide10', './manifest.webmanifest', './icon.svg', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './docs/SODIUM_Quick_Start_Guide_V10.pdf', ...GUIDE_PAGES];
+const CACHE = 'sodium-shell-v53-marketplace1-guide-v11';
+const GUIDE_PAGES = Array.from({ length:4 }, (_, index) => `./docs/guide-v11/page-${String(index + 1).padStart(2, '0')}.jpg`);
+const SHELL = ['./', './index.html', './styles.css?v=53-marketplace1', './app.js?v=53-marketplace1-guide11', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './docs/SODIUM_Quick_Start_Guide_V11.pdf', ...GUIDE_PAGES];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -33,8 +33,8 @@ self.addEventListener('push', event => {
   catch (_error) { payload = { body:event.data?.text() || 'Open Sodium for a crew update.' }; }
   event.waitUntil(self.registration.showNotification(payload.title || 'Sodium', {
     body: payload.body || 'Open Sodium for a crew update.',
-    icon: './icon-ink.svg',
-    badge: './icon-ink.svg',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
     tag: payload.tag || 'sodium-update',
     renotify: Boolean(payload.renotify),
     data: { url:payload.url || './' },

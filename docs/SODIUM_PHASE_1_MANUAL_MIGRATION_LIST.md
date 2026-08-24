@@ -6,13 +6,13 @@ This list separates active Sodium materials from intentionally preserved legacy 
 
 | Asset or surface | Location | Current reference | Required change | Phase 2 URL impact |
 | --- | --- | --- | --- | --- |
-| Existing iPhone/iPad Home Screen installs | Members' devices | The installed label may remain `Salty` | If the label does not refresh, remove and re-add the PWA after v1.52 is live | Re-add again only if Phase 2 changes the install origin |
-| Supabase dashboard project display name | Supabase project `maihhnwrstewzapsvrec` | `salty app` | Optional admin-only cosmetic rename to `Sodium` | No |
+| Existing iPhone/iPad Home Screen installs | Members' devices | The installed label may remain `Salty` | Remove and re-add the PWA after v1.53 is live on the new community hostname | Yes; a new origin cannot inherit the old installed PWA or stored session |
+| Supabase dashboard project display name | Supabase project `maihhnwrstewzapsvrec` | `Sodium` | Completed with the v1.53 launch | No |
 | Cloudflare Pages project name | Cloudflare Pages | `salty-community-app` | Keep as a legacy internal deployment identifier | No; custom-domain work is Phase 2 |
-| Current public hostname | Cloudflare custom domain | `app.saltyviewfinder.com` | Keep during Phase 1 | Yes; migrate to `community.saltyviewfinder.com` in Phase 2 |
-| Supabase auth URLs and Google OAuth callbacks | Supabase/Google Cloud consoles | `app.saltyviewfinder.com` and Supabase callback URL | Keep during Phase 1 | Yes; audit and change only in Phase 2 |
+| Current public hostname | Cloudflare custom domain | `community.saltyviewfinder.com` | Active; the former `app.saltyviewfinder.com` hostname is retained and redirected by the app | Completed |
+| Supabase auth URLs and Google OAuth callbacks | Supabase/Google Cloud consoles | Site URL is `community.saltyviewfinder.com`; both old and new redirects are allowed | Keep the old allow-list entry during transition | Completed |
 | Existing shared invite links and QR codes | Messages, PDFs, printed/digital assets outside this repository | `app.saltyviewfinder.com` and/or `SALTY-...` codes | Keep working; replace outward-facing assets when Phase 2 redirects are proven | Yes |
-| Existing email template body/display name | Supabase Auth provider / SMTP provider | May still contain `Salty` | Review manually in the provider dashboard; do not change auth delivery in Phase 1 | Yes; coordinate with Phase 2 auth work |
+| Existing email template body/display name | Supabase Auth provider / SMTP provider | Subject, body, and sender name now say Sodium | OTP behavior and SMTP provider were preserved | Completed |
 | iCloud document archive | `iCloud Drive/SODIUM/APPS/Salty Community App/` | Older SALTY-named guide and overview files | Retain as the old release archive; active Sodium files now also live in `Sodium Community App/` | Only embedded links/QRs would change in Phase 2 |
 
 ## Historical repository archives
@@ -21,8 +21,8 @@ The `docs/SALTY_*` PDFs/PNGs and `docs/guide-v4_5` through `docs/guide-v9` are h
 
 The current active materials are:
 
-- `docs/SODIUM_Quick_Start_Guide_V10.pdf`
-- `docs/guide-v10/page-01.jpg` through `page-04.jpg`
+- `docs/SODIUM_Quick_Start_Guide_V11.pdf`
+- `docs/guide-v11/page-01.jpg` through `page-04.jpg`
 - `docs/SODIUM_App_Overview_One_Pager_V6.pdf`
 - `docs/SODIUM_App_Overview_One_Pager_V6.png`
 

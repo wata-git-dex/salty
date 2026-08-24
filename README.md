@@ -1,13 +1,13 @@
 # Sodium
 
-Private, invite-only surf community PWA. Static HTML/CSS/vanilla JavaScript hosted at `https://app.saltyviewfinder.com/` through Cloudflare Pages, with Supabase Auth, Postgres, Realtime, and Storage.
+Private, invite-only surf community PWA. Static HTML/CSS/vanilla JavaScript hosted at `https://community.saltyviewfinder.com/` through Cloudflare Pages, with Supabase Auth, Postgres, Realtime, and Storage. The former `app.saltyviewfinder.com` address redirects to the community URL.
 
 ## First-time setup
 
 1. Open the Supabase SQL Editor and run all of `supabase/schema.sql` once.
 2. Copy the `bootstrap_invite_code` returned by the final query.
-3. In Supabase Authentication → URL Configuration, set the Site URL to `https://app.saltyviewfinder.com/` and add `https://app.saltyviewfinder.com/**` as a redirect URL.
-4. Open `https://app.saltyviewfinder.com/?invite=YOUR_CODE` on your phone.
+3. In Supabase Authentication → URL Configuration, set the Site URL to `https://community.saltyviewfinder.com/` and add `https://community.saltyviewfinder.com/**` as a redirect URL. Keep the former app URL temporarily for old links.
+4. Open `https://community.saltyviewfinder.com/?invite=YOUR_CODE` on your phone.
 
 ## Phone sign-in and installation
 
@@ -18,7 +18,7 @@ Private, invite-only surf community PWA. Static HTML/CSS/vanilla JavaScript host
 
 If a Home Screen copy has no stored session, it opens the compact member sign-in screen instead of the public marketing page. A pending code screen also survives switching to an email app and returning.
 
-Google sign-in requires a Google OAuth web client with `https://app.saltyviewfinder.com` as an authorized JavaScript origin and `https://maihhnwrstewzapsvrec.supabase.co/auth/v1/callback` as an authorized redirect URI. Enable that client under Supabase Authentication → Sign In / Providers → Google before publishing this release.
+Google sign-in requires a Google OAuth web client with `https://community.saltyviewfinder.com` as an authorized JavaScript origin and `https://maihhnwrstewzapsvrec.supabase.co/auth/v1/callback` as an authorized redirect URI. Keep the former app origin during the transition. Enable that client under Supabase Authentication → Sign In / Providers → Google before publishing this release.
 
 For an existing database created before release v13, run `supabase/session-places-migration.sql` once. It adds broad spot locations (for example, Old Man's → San Onofre) and multiple starting surfers without removing existing data.
 
@@ -57,4 +57,6 @@ Admins can create, edit, hide, and delete discounts from the Perks screen. Delet
 
 ## Current member guide
 
-The app opens and shares `docs/SODIUM_Quick_Start_Guide_V10.pdf`. Its four in-app pages live in `docs/guide-v10/`. The current visual overview is `docs/SODIUM_App_Overview_One_Pager_V6.pdf` with a matching PNG export.
+The app opens and shares `docs/SODIUM_Quick_Start_Guide_V11.pdf`. Its four in-app pages live in `docs/guide-v11/`. The guide covers Marketplace and the v1.53 navigation/PWA behavior. The current visual overview is `docs/SODIUM_App_Overview_One_Pager_V6.pdf` with a matching PNG export.
+
+Before deploying Marketplace to a fresh Supabase project, run `supabase/marketplace-v1-migration.sql` after the base schema. It is additive, preserves existing data, enables RLS, and creates the private `sodium-marketplace` image bucket.

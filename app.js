@@ -1,6 +1,10 @@
 /* global supabase */
 'use strict';
 
+if (location.hostname === 'app.saltyviewfinder.com') {
+  location.replace(`https://community.saltyviewfinder.com${location.pathname}${location.search}${location.hash}`);
+}
+
 const CONFIG = Object.freeze({
   supabaseUrl: 'https://maihhnwrstewzapsvrec.supabase.co',
   supabaseKey: 'sb_publishable_YtVKcZqgPalUaYOHpoSV1w_86he5PDV',
@@ -8,17 +12,19 @@ const CONFIG = Object.freeze({
   avatarBucket: 'salty-avatars',
   chatBucket: 'salty-chat',
   feedbackBucket: 'salty-feedback',
+  marketplaceBucket: 'sodium-marketplace',
   maxUploadBytes: 50 * 1024 * 1024,
   maxAvatarBytes: 8 * 1024 * 1024,
   maxChatPhotoBytes: 10 * 1024 * 1024,
   maxFeedbackScreenshotBytes: 10 * 1024 * 1024,
+  maxMarketplaceImageBytes: 8 * 1024 * 1024,
   maxClipSeconds: 90,
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.52';
+const APP_VERSION = '1.53';
 const CONSENT_VERSION = '1.0';
-const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V10.pdf';
+const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V11.pdf';
 const GUIDE_PAGE_COUNT = 4;
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
@@ -39,7 +45,7 @@ const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
 });
 
 const state = {
-  session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [], perks: [],
+  session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [], perks: [], listings: [],
   regionMemberships: [],
   roomMessages: [], dmMessages: [], dmThreads: [], chatPhotoUrls: {}, activeDmMember: null,
   currentRegion: null, eventRegion: null, chatRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
@@ -50,6 +56,7 @@ const state = {
   notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '',
   calendarMonth: null, calendarDate: '',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
+  marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -98,7 +105,7 @@ function applyIconTheme(theme = 'ink', announce = false) {
   document.documentElement.dataset.theme = chosen;
   $('#appThemeColor').content = THEME_COLORS[chosen];
   $('#appFavicon').href = iconPath;
-  $('#appTouchIcon').href = './icon-ink.svg';
+  $('#appTouchIcon').href = './icon-180.png';
   $('#appManifest').href = './manifest.webmanifest';
   $$('[data-app-icon]').forEach(icon => { icon.src = iconPath; });
   $$('[data-icon-theme]').forEach(button => {
@@ -271,6 +278,10 @@ function runPreview() {
     { id:'sv', name:'Saltyviewfinder Store Discount', brand_name:'Saltyviewfinder', offer_text:'Sodium member discount', description:'Sodium merch, prints, and more.', store_url:'https://saltyviewfinder.com', active:true },
     { id:'wata', name:'WATA Store Discount', brand_name:'WATA', offer_text:'Sodium member discount', description:'Support WATA and save on store gear.', store_url:'https://cleanwata.org', active:true },
   ];
+  state.listings = [
+    { id:'market-saltyviewfinder', owner_id:userId, title:'Saltyviewfinder Store', brand_name:'Saltyviewfinder', description:'Photography, prints, and projects from the crew.', category:'Photography & Film', image_path:null, external_url:'https://saltyviewfinder.com', social_url:null, location:'California', has_member_perk:true, perk_description:'Sodium member discount.', discount_code:null, status:'approved', featured:true, owner_profile:state.profile },
+    { id:'market-wata', owner_id:userId, title:'Water Access To All Store', brand_name:'WATA', description:'Support Water Access To All and its clean-water work.', category:'Clothing & Gear', image_path:null, external_url:'https://cleanwata.org', social_url:null, location:null, has_member_perk:true, perk_description:'Sodium member discount.', discount_code:null, status:'approved', featured:false, owner_profile:state.profile },
+  ];
   state.roomMessages = [
     { id:'chat-1', region_id:regionId, author:'jonah', body:'Waist high at first point. Crowd is pretty mellow.', created_at:new Date(Date.now() - 22 * 60000).toISOString() },
     { id:'chat-2', region_id:regionId, author:userId, body:'I can film for an hour around 7.', created_at:new Date(Date.now() - 8 * 60000).toISOString() },
@@ -281,7 +292,7 @@ function runPreview() {
     { id:'issue-1', reporter:'jonah', reporter_profile:{ id:'jonah', name:'Jonah' }, category:'broken', description:'The Join surf button looked pressed, but my name did not appear until I reopened Sodium.', expected_behavior:'My name should show under Surfers immediately.', screen:'Sessions', app_version:APP_VERSION, user_agent:'iPhone · Mobile Safari', status:'new', admin_notes:'', created_at:new Date(Date.now() - 48 * 60000).toISOString() },
     { id:'issue-2', reporter:'mateo', reporter_profile:{ id:'mateo', name:'Mateo' }, category:'suggestion', description:'Could the event card make the address easier to tap?', expected_behavior:null, screen:'Events', app_version:APP_VERSION, user_agent:'iPhone · Home Screen app', status:'reviewing', admin_notes:'Check the map target size.', created_at:new Date(Date.now() - 26 * 3600000).toISOString() },
   ];
-  renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderPerks(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderIssueReports(); showOnly('app');
+  renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderPerks(); renderMarketplace(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderIssueReports(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
 
@@ -578,7 +589,8 @@ async function loadApp() {
   state.chatRegion = state.currentRegion;
   await loadAvatarUrls();
   renderChrome();
-  await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadRoomMessages(), loadDmInbox(), renderProfile(), loadNotificationPreferences()]);
+  await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadListings(), loadRoomMessages(), loadDmInbox(), loadNotificationPreferences()]);
+  await renderProfile();
   renderMembers();
   if (state.profile?.is_admin) await loadIssueReports({ silent:true });
   subscribeRealtime();
@@ -981,6 +993,7 @@ function setView(view) {
   // Stoke stays a normal feed. Re-sign private media whenever it is opened so
   // a long-running home-screen session never depends on an expired raw URL.
   if (!state.preview && view === 'feed') loadPosts();
+  if (!state.preview && view === 'marketplace') loadListings();
   if (view === 'settings') renderNotificationSettings();
   if (!state.preview && view === 'beta-feedback') loadIssueReports();
 }
@@ -1255,6 +1268,162 @@ async function loadEvents() {
   state.events = result.data || [];
   renderEvents();
   if (state.view === 'calendar') renderCalendar();
+}
+
+async function loadListings() {
+  const result = await db.from('marketplace_listings')
+    .select('*,owner_profile:profiles!marketplace_listings_owner_id_fkey(id,name,nickname,avatar_path,home_region)')
+    .order('featured', { ascending:false }).order('created_at', { ascending:false });
+  if (result.error) { console.warn('Marketplace load deferred:', result.error.message); return; }
+  state.listings = result.data || [];
+  state.marketplaceImageUrls = {};
+  await Promise.all(state.listings.filter(item => item.image_path).map(async item => {
+    const signed = await db.storage.from(CONFIG.marketplaceBucket).createSignedUrl(item.image_path, 3600);
+    if (!signed.error && signed.data?.signedUrl) state.marketplaceImageUrls[item.id] = signed.data.signedUrl;
+  }));
+  renderMarketplace();
+}
+
+function listingImageMarkup(listing, className = 'listing-card-image') {
+  const url = state.marketplaceImageUrls[listing.id];
+  return `<div class="${className}">${url ? `<img src="${esc(url)}" alt="">` : '<svg><use href="#i-store"/></svg>'}</div>`;
+}
+
+function listingOwner(listing) {
+  return listing.owner_profile || state.people.find(person => person.id === listing.owner_id) || (listing.owner_id === state.profile?.id ? state.profile : { name:'Sodium member' });
+}
+
+function canEditListing(listing) {
+  return Boolean(state.profile?.is_admin || listing.owner_id === state.profile?.id);
+}
+
+function renderMarketplace() {
+  const list = $('#marketplaceList');
+  if (!list) return;
+  const visible = state.listings.filter(item => item.status === 'approved' || canEditListing(item));
+  if (!visible.length) {
+    list.innerHTML = '<div class="empty"><span>◌</span><h2>Nothing listed yet</h2><p>Be the first member to show the crew what you make or do.</p></div>';
+    return;
+  }
+  list.innerHTML = visible.map(listing => {
+    const owner = listingOwner(listing);
+    const pending = listing.status !== 'approved' ? `<span class="listing-status">${esc(listing.status)}</span>` : '';
+    const perk = listing.has_member_perk ? '<span class="listing-perk-badge">SODIUM PERK</span>' : '';
+    const edit = canEditListing(listing) ? `<button class="listing-card-edit" data-edit-listing="${listing.id}" aria-label="Edit ${esc(listing.title)}"><svg><use href="#i-edit"/></svg></button>` : '';
+    return `<article class="listing-card ${listing.featured ? 'featured' : ''}" data-listing="${listing.id}">${listingImageMarkup(listing)}<div class="listing-card-copy"><div class="listing-card-top"><div><h3>${esc(listing.title)}</h3><small>${esc(listing.brand_name || owner.name)}</small></div>${edit}</div><p>${esc(listing.description)}</p><div class="listing-card-foot"><span class="listing-category">${esc(listing.category)}</span>${perk}${pending}</div></div></article>`;
+  }).join('');
+}
+
+function renderMarketplaceDetail(listing) {
+  const node = $('#marketplaceDetail');
+  if (!node || !listing) return;
+  const owner = listingOwner(listing);
+  const url = safeExternalUrl(listing.external_url);
+  const social = safeExternalUrl(listing.social_url);
+  const location = listing.location ? `<span class="listing-category">${esc(listing.location)}</span>` : '';
+  const perk = listing.has_member_perk && listing.perk_description ? `<div class="listing-perk"><b>SODIUM MEMBER PERK</b><span>${esc(listing.perk_description)}</span>${listing.discount_code ? `<code>${esc(listing.discount_code)}</code>` : ''}</div>` : '';
+  node.innerHTML = `<article class="listing-detail-hero">${listingImageMarkup(listing, 'listing-detail-image')}<div class="listing-detail-copy"><span>${esc(listing.category)}</span><h2>${esc(listing.title)}</h2><div class="listing-detail-owner">By ${esc(listing.brand_name || owner.name)}</div><p>${esc(listing.description)}</p><div class="listing-detail-meta">${location}${listing.status !== 'approved' ? `<span class="listing-status">${esc(listing.status)}</span>` : ''}</div>${perk}<div class="listing-detail-actions">${url ? `<a class="primary" href="${esc(url)}" target="_blank" rel="noopener">View →</a>` : ''}${social ? `<a class="secondary-button" href="${esc(social)}" target="_blank" rel="noopener">Social profile ↗</a>` : ''}${canEditListing(listing) ? `<button class="secondary-button" data-edit-listing="${listing.id}"><svg><use href="#i-edit"/></svg>Edit listing</button>` : ''}</div></div></article>`;
+}
+
+function openListingDetail(id) {
+  const listing = state.listings.find(item => item.id === id);
+  if (!listing) return;
+  state.selectedListingId = id;
+  renderMarketplaceDetail(listing);
+  setView('marketplace-detail');
+}
+
+function resetListingComposer() {
+  state.editingListingId = null;
+  $('#listingForm').reset();
+  $('#listingSheetTitle').textContent = 'Add a listing';
+  $('#listingSubmit').textContent = state.profile?.is_admin ? 'Publish listing' : 'Submit listing';
+  $('#listingDelete').classList.add('hidden');
+  $('#listingPerkFields').classList.add('hidden');
+  $('#listingAdminFields').classList.toggle('hidden', !state.profile?.is_admin);
+  $('#listingImagePreview').innerHTML = '<svg><use href="#i-photo"/></svg><b>Add an image or logo</b><small>Optional · JPG, PNG or WebP · 8 MB max</small>';
+}
+
+function openListingComposer(id = '') {
+  resetListingComposer();
+  const listing = state.listings.find(item => item.id === id);
+  if (listing && canEditListing(listing)) {
+    state.editingListingId = listing.id;
+    $('#listingSheetTitle').textContent = 'Edit listing';
+    $('#listingTitle').value = listing.title || '';
+    $('#listingBrand').value = listing.brand_name || '';
+    $('#listingCategory').value = listing.category || 'Other';
+    $('#listingDescription').value = listing.description || '';
+    $('#listingUrl').value = listing.external_url || '';
+    $('#listingSocial').value = listing.social_url || '';
+    $('#listingLocation').value = listing.location || '';
+    $('#listingHasPerk').checked = Boolean(listing.has_member_perk);
+    $('#listingPerkDescription').value = listing.perk_description || '';
+    $('#listingDiscountCode').value = listing.discount_code || '';
+    $('#listingPerkFields').classList.toggle('hidden', !listing.has_member_perk);
+    $('#listingStatus').value = listing.status || 'pending';
+    $('#listingFeatured').checked = Boolean(listing.featured);
+    $('#listingSubmit').textContent = 'Save changes';
+    $('#listingDelete').classList.remove('hidden');
+    const imageUrl = state.marketplaceImageUrls[listing.id];
+    if (imageUrl) $('#listingImagePreview').innerHTML = `<img src="${esc(imageUrl)}" alt="Current listing image">`;
+  }
+  openSheet('listingSheet');
+}
+
+function validateListingImage(file) {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Use a JPG, PNG, or WebP image.');
+  if (file.size > CONFIG.maxMarketplaceImageBytes) throw new Error('Listing images must be 8 MB or smaller.');
+}
+
+async function saveListing(event) {
+  event.preventDefault();
+  const submit = $('#listingSubmit'); submit.disabled = true;
+  try {
+    const existing = state.listings.find(item => item.id === state.editingListingId);
+    const file = $('#listingImage').files[0];
+    if (file) validateListingImage(file);
+    const payload = {
+      owner_id: existing?.owner_id || state.profile.id,
+      title: $('#listingTitle').value.trim(), brand_name: $('#listingBrand').value.trim() || null,
+      category: $('#listingCategory').value, description: $('#listingDescription').value.trim(),
+      external_url: $('#listingUrl').value.trim(), social_url: $('#listingSocial').value.trim() || null,
+      location: $('#listingLocation').value.trim() || null, has_member_perk: $('#listingHasPerk').checked,
+      perk_description: $('#listingHasPerk').checked ? $('#listingPerkDescription').value.trim() || null : null,
+      discount_code: $('#listingHasPerk').checked ? $('#listingDiscountCode').value.trim() || null : null,
+      status: state.profile.is_admin ? $('#listingStatus').value : (existing?.status === 'approved' ? 'approved' : 'pending'),
+      featured: state.profile.is_admin ? $('#listingFeatured').checked : false,
+    };
+    let result = existing
+      ? await db.from('marketplace_listings').update(payload).eq('id', existing.id).select().single()
+      : await db.from('marketplace_listings').insert(payload).select().single();
+    if (result.error) throw result.error;
+    if (file) {
+      const ext = ({'image/jpeg':'jpg','image/png':'png','image/webp':'webp'})[file.type];
+      const path = `${state.profile.id}/${result.data.id}-${Date.now()}.${ext}`;
+      const upload = await db.storage.from(CONFIG.marketplaceBucket).upload(path, file, { contentType:file.type, upsert:false });
+      if (upload.error) throw upload.error;
+      const saved = await db.from('marketplace_listings').update({ image_path:path }).eq('id', result.data.id);
+      if (saved.error) throw saved.error;
+      if (existing?.image_path) await db.storage.from(CONFIG.marketplaceBucket).remove([existing.image_path]);
+    }
+    resetListingComposer(); closeSheet(); await loadListings(); await renderProfile();
+    toast(payload.status === 'approved' ? 'Listing published.' : 'Listing submitted for review.');
+  } catch (error) { toast(readableError(error), 6000); }
+  finally { submit.disabled = false; }
+}
+
+async function deleteListing() {
+  const listing = state.listings.find(item => item.id === state.editingListingId);
+  if (!listing || !canEditListing(listing) || !confirm(`Delete “${listing.title}”? This cannot be undone.`)) return;
+  const button = $('#listingDelete'); button.disabled = true;
+  try {
+    const result = await db.from('marketplace_listings').delete().eq('id', listing.id);
+    if (result.error) throw result.error;
+    if (listing.image_path) await db.storage.from(CONFIG.marketplaceBucket).remove([listing.image_path]);
+    resetListingComposer(); closeSheet(); setView('marketplace'); await loadListings(); await renderProfile(); toast('Listing deleted.');
+  } catch (error) { toast(readableError(error), 5000); }
+  finally { button.disabled = false; }
 }
 
 async function loadPerks() {
@@ -2259,10 +2428,12 @@ function profileMarkup(profile, stats = {}) {
   const nickname = profile.nickname ? `<p class="nickname">“${esc(profile.nickname)}”</p>` : '';
   const socialUrl = safeExternalUrl(profile.social_url);
   const social = socialUrl ? `<a class="profile-link" href="${esc(socialUrl)}" target="_blank" rel="noopener">Social profile ↗</a>` : '';
+  const listings = state.listings.filter(item => item.owner_id === profile.id && (item.status === 'approved' || canEditListing(item))).slice(0, 3);
+  const listingSection = listings.length ? `<article class="profile-card profile-listings"><div class="profile-listings-header"><h3>Makes / does</h3><button data-view="marketplace">Marketplace →</button></div>${listings.map(item => `<button class="profile-listing" data-listing="${item.id}"><span><b>${esc(item.title)}</b><small>${esc(item.category)}${item.status !== 'approved' ? ` · ${esc(item.status)}` : ''}</small></span><i>›</i></button>`).join('')}</article>` : '';
   const controls = stats.own
     ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Sodium</button><button class="secondary-button guide-invite-button" data-action="share-invite-guide">Invite a friend + guide</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
     : `<div class="profile-actions"><button class="primary" data-dm-member="${profile.id}">Message ${esc(profile.name)}</button></div>`;
-  return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Sodium Crew</p></div></div>${stats.own ? `<div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke shared</span></article></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>sessions surfed</span></article><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>sessions filmed</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>sessions organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations surfed</span></article></div><p class="stats-note">Only completed sessions count.</p>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${controls}<footer class="profile-footer"><b>SODIUM</b>surf with your friends, not your feed</footer>`;
+  return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Sodium Crew</p></div></div>${stats.own ? `<div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke shared</span></article></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>sessions surfed</span></article><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>sessions filmed</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>sessions organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations surfed</span></article></div><p class="stats-note">Only completed sessions count.</p>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${listingSection}${controls}<footer class="profile-footer"><b>SODIUM</b>surf with your friends, not your feed</footer>`;
 }
 
 function safeExternalUrl(value) {
@@ -2301,6 +2472,7 @@ function subscribeRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, async () => await loadEvents())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'event_rsvps' }, async () => await loadEvents())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'rewards' }, async () => await loadPerks())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_listings' }, async () => { await loadListings(); await renderProfile(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'room_messages' }, async () => await loadRoomMessages())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_messages' }, async () => {
       if (state.activeDmMember && state.view === 'dm') await loadDmConversation();
@@ -2324,7 +2496,7 @@ function openGuide() {
   if (!pages.childElementCount) {
     pages.innerHTML = Array.from({ length:GUIDE_PAGE_COUNT }, (_, index) => {
       const page = String(index + 1).padStart(2, '0');
-      return `<img src="./docs/guide-v10/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
+      return `<img src="./docs/guide-v11/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
     }).join('');
   }
   viewer.classList.remove('hidden');
@@ -2341,7 +2513,7 @@ function closeGuide() {
 async function quickStartGuideFile() {
   const response = await fetch(quickStartGuideUrl());
   if (!response.ok) throw new Error('The Quick Start Guide could not be loaded.');
-  return new File([await response.blob()], 'SODIUM_Quick_Start_Guide_V10.pdf', { type:'application/pdf' });
+  return new File([await response.blob()], 'SODIUM_Quick_Start_Guide_V11.pdf', { type:'application/pdf' });
 }
 
 async function shareSodiumContent({ title, text, url, file = null, copiedMessage }) {
@@ -2504,6 +2676,8 @@ document.addEventListener('click', async event => {
   const calendarDateNode = event.target.closest('[data-calendar-date]');
   const feedbackFilterNode = event.target.closest('[data-feedback-filter]');
   const saveFeedbackNode = event.target.closest('[data-save-feedback]');
+  const listingNode = event.target.closest('[data-listing]');
+  const editListingNode = event.target.closest('[data-edit-listing]');
   if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
   if (viewNode) setView(viewNode.dataset.view);
   if (memberNode) openMember(memberNode.dataset.member);
@@ -2517,6 +2691,10 @@ document.addEventListener('click', async event => {
     renderIssueReports();
   }
   if (saveFeedbackNode) await saveIssueAdminUpdate(saveFeedbackNode.dataset.saveFeedback);
+  if (editListingNode) {
+    event.stopPropagation();
+    openListingComposer(editListingNode.dataset.editListing);
+  } else if (listingNode) openListingDetail(listingNode.dataset.listing);
   if (removeSessionPersonNode) {
     state.sessionPeople.splice(Number(removeSessionPersonNode.dataset.removeSessionPerson), 1);
     renderSessionPeopleChips();
@@ -2555,7 +2733,7 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'cancel-session', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || ['make-invite', 'share-invite', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -2609,9 +2787,11 @@ document.addEventListener('click', async event => {
     'open-post': () => openPostComposer(),
     'open-event': () => openEventComposer(),
     'open-perk': () => openPerkComposer(),
+    'open-listing': () => openListingComposer(),
     'open-location': () => { $('#locationForm').reset(); openSheet('locationSheet'); },
     'open-issue-report': openIssueReport,
     'delete-perk': deletePerk,
+    'delete-listing': deleteListing,
     'delete-post': deletePost,
     'show-install': showInstallInstructions,
     'toggle-push-device': togglePushDevice,
@@ -2653,6 +2833,7 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'postForm') await savePost(event);
   else if (event.target.id === 'eventForm') await createEvent(event);
   else if (event.target.id === 'perkForm') await savePerk(event);
+  else if (event.target.id === 'listingForm') await saveListing(event);
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
   else if (event.target.id === 'locationForm') await saveLocation(event);
@@ -2661,6 +2842,21 @@ document.addEventListener('submit', async event => {
 });
 
 document.addEventListener('change', async event => {
+  if (event.target.id === 'listingHasPerk') {
+    $('#listingPerkFields').classList.toggle('hidden', !event.target.checked);
+    return;
+  }
+  if (event.target.id === 'listingImage') {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      validateListingImage(file);
+      $('#listingImagePreview').innerHTML = `<img src="${esc(URL.createObjectURL(file))}" alt="Selected listing image">`;
+    } catch (error) {
+      toast(readableError(error), 5000); event.target.value = '';
+    }
+    return;
+  }
   const input = event.target.closest('[data-notification-pref]');
   if (!input || state.preview) return;
   input.disabled = true;

@@ -14,16 +14,16 @@
   <meta property="og:description" content="A private surf community built to help friends surf and film together more often.">
   <meta property="og:site_name" content="Sodium">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://app.saltyviewfinder.com/">
+  <meta property="og:url" content="https://community.saltyviewfinder.com/">
   <title>Sodium Community App</title>
   <link id="appManifest" rel="manifest" href="./manifest.webmanifest">
   <link id="appFavicon" rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link id="appTouchIcon" rel="apple-touch-icon" href="./icon-ink.svg">
+  <link id="appTouchIcon" rel="apple-touch-icon" sizes="180x180" href="./icon-180.png">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('salty:theme')||localStorage.getItem('salty:icon-theme')||'ink'}catch(_error){}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=52-sodium1">
+  <link rel="stylesheet" href="./styles.css?v=53-marketplace1">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -57,13 +57,14 @@
       <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></symbol>
       <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
       <symbol id="i-bug" viewBox="0 0 24 24"><path d="M8 7h8a2 2 0 0 1 2 2v5a6 6 0 0 1-12 0V9a2 2 0 0 1 2-2Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2M3 10h3M18 10h3M3 16h4M17 16h4M12 10v8"/></symbol>
+      <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9v11h16V9M3 9l2-6h14l2 6"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M9 20v-6h6v6"/></symbol>
     </defs>
   </svg>
 
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.52</small>
+    <small class="boot-credit">Saltyview Productions · v1.53</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -173,8 +174,8 @@
     <section class="phone-shell">
       <header class="topbar">
         <div class="toprow">
-          <div class="brand-row"><button class="icon-button" data-action="open-drawer" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button><div class="brand"><img data-app-icon src="./icon-ink.svg" alt=""><h1>sodium</h1></div></div>
-          <div class="top-actions"><span id="streakBadge" class="streak" aria-label="Active streak"><svg><use href="#i-flame"/></svg><b>0</b></span><button class="icon-button inbox-button" data-action="open-dms" aria-label="Direct messages"><svg><use href="#i-chat"/></svg><b id="dmUnreadBadge" class="unread-badge hidden">0</b></button></div>
+          <div class="brand-row"><div class="brand"><img data-app-icon src="./icon-ink.svg" alt=""><h1>sodium</h1></div></div>
+          <div class="top-actions"><span id="streakBadge" class="streak" aria-label="Active streak"><svg><use href="#i-flame"/></svg><b>0</b></span><button class="icon-button inbox-button" data-action="open-dms" aria-label="Direct messages"><svg><use href="#i-chat"/></svg><b id="dmUnreadBadge" class="unread-badge hidden">0</b></button><button class="icon-button menu-button" data-action="open-drawer" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button></div>
         </div>
         <div id="appPreviewBanner" class="app-preview-banner hidden">App preview · sample data · nothing saves</div>
         <div id="installNudge" class="install-nudge hidden">
@@ -238,6 +239,13 @@
         <article class="club-card"><span class="club-logo coral-bg">S</span><div><h3>Snake Eyes Surf Club</h3><p>Club chat, feed, events and members</p></div><b class="soon">SOON</b></article>
         <article class="club-card"><span class="club-logo amber-bg">SO</span><div><h3>Sodium Team</h3><p>A mini-Sodium for the team</p></div><b class="soon">SOON</b></article>
       </div>
+      <div id="view-marketplace" class="app-view sub-view">
+        <div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Marketplace</h2></div>
+        <div class="marketplace-intro"><span>MADE BY THE CREW</span><h3>Support the homies</h3><p>Boards, repairs, art, photos, clothing, and services from Sodium members. Transactions happen directly with the member—Sodium takes no cut.</p></div>
+        <button class="add-content marketplace-add-button" data-action="open-listing"><svg><use href="#i-plus"/></svg>Add what you make or do</button>
+        <div id="marketplaceList" class="marketplace-list"></div>
+      </div>
+      <div id="view-marketplace-detail" class="app-view sub-view"><div class="backbar"><button data-view="marketplace"><svg><use href="#i-back"/></svg></button><h2>Marketplace</h2></div><div id="marketplaceDetail" class="marketplace-detail"></div></div>
       <div id="view-perks" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Perks &amp; discounts</h2></div><div class="perks-intro"><span>CREW PERKS</span><h3>Good stuff from friends of Sodium</h3><p>Member discounts for surf gear, prints, and projects worth supporting.</p></div><button id="addPerkButton" class="add-content hidden" data-action="open-perk"><svg><use href="#i-plus"/></svg>Add a discount</button><div id="perksList" class="perks-list"></div></div>
       <div id="view-rules" class="app-view sub-view">
         <div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>Sodium Community Rules</h2></div>
@@ -260,6 +268,7 @@
       <nav>
         <button data-view="members"><svg><use href="#i-user"/></svg>Members</button>
         <button data-view="clubs"><svg><use href="#i-circle"/></svg>Clubs <b class="soon">SOON</b></button>
+        <button data-view="marketplace"><svg><use href="#i-store"/></svg>Marketplace</button>
         <button data-view="perks"><svg><use href="#i-diamond"/></svg>Perks &amp; discounts</button>
         <button data-view="points"><svg><use href="#i-flame"/></svg>Points &amp; streaks</button>
         <button data-view="rules"><svg><use href="#i-list"/></svg>Sodium Community Rules</button>
@@ -295,7 +304,7 @@
         <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" required><svg><use href="#i-camera"/></svg><strong id="fileLabel">Add photo or clip</strong><small>clips up to 90s and 50 MB</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
         <label>Filmer <em>required</em><input id="filmerName" maxlength="100" required placeholder="Any name—the filmer doesn't have to be a member" list="peopleList"></label>
         <label>Surfer / shaper <small>optional</small><input id="surferName" maxlength="100" placeholder="Tag who's in it" list="peopleList"><datalist id="peopleList"></datalist></label>
-        <label>Board <small>optional</small><input id="boardName" maxlength="100" placeholder="Shortboard, twin fin, log…"></label>
+        <label>Board <small>optional · brand + dimensions</small><input id="boardName" maxlength="100" placeholder="9'7 Takayama Annihilator"></label>
         <label>Spot <small>optional</small><input id="postSpot" maxlength="120" placeholder="Old Man's" list="spotsList"></label>
         <label>General location <small>optional</small><input id="postLocation" maxlength="160" placeholder="San Onofre" list="locationsList"></label>
         <label>Caption<textarea id="postCaption" maxlength="1000" placeholder="Clean left, third wave of the set…"></textarea></label>
@@ -332,6 +341,27 @@
         <label class="toggle-row"><span>Live now<small>Members can see this perk</small></span><input id="perkActive" type="checkbox" role="switch" checked></label>
         <button id="perkSubmit" class="primary" type="submit">Publish discount</button>
         <button id="perkDelete" class="danger-button hidden" type="button" data-action="delete-perk"><svg><use href="#i-close"/></svg>Delete discount</button>
+      </form>
+    </section>
+
+    <section id="listingSheet" class="sheet listing-sheet" aria-modal="true" role="dialog">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <h2 id="listingSheetTitle">Add a listing</h2><p>Show the crew what you make or do. Sodium does not process purchases or payments.</p>
+      <form id="listingForm">
+        <label class="listing-image-upload"><input id="listingImage" type="file" accept="image/jpeg,image/png,image/webp"><span id="listingImagePreview"><svg><use href="#i-photo"/></svg><b>Add an image or logo</b><small>Optional · JPG, PNG or WebP · 8 MB max</small></span></label>
+        <label>Listing title<input id="listingTitle" maxlength="120" required placeholder="Ding Repair"></label>
+        <label>Brand or business <small>optional</small><input id="listingBrand" maxlength="120" placeholder="Your shop or project name"></label>
+        <label>Category<select id="listingCategory" required><option value="Boards & Shaping">Boards &amp; Shaping</option><option value="Repair & Glass">Repair &amp; Glass</option><option value="Photography & Film">Photography &amp; Film</option><option value="Art & Prints">Art &amp; Prints</option><option value="Clothing & Gear">Clothing &amp; Gear</option><option value="Services">Services</option><option value="Coaching">Coaching</option><option value="Other">Other</option></select></label>
+        <label>Description<textarea id="listingDescription" maxlength="1200" required placeholder="What do you make or do?"></textarea></label>
+        <label>External link<input id="listingUrl" type="url" maxlength="500" required placeholder="https://your-site.com"></label>
+        <label>Instagram or social link <small>optional</small><input id="listingSocial" maxlength="500" placeholder="https://instagram.com/yourname"></label>
+        <label>Location <small>optional</small><input id="listingLocation" maxlength="160" placeholder="Costa Mesa, CA"></label>
+        <label class="toggle-row"><span>Sodium member perk<small>Optional benefit attached to this listing</small></span><input id="listingHasPerk" type="checkbox" role="switch"></label>
+        <div id="listingPerkFields" class="listing-perk-fields hidden"><label>Perk description<input id="listingPerkDescription" maxlength="300" placeholder="Free assessment for Sodium members"></label><label>Discount code <small>optional</small><input id="listingDiscountCode" maxlength="80" placeholder="SODIUMCREW"></label></div>
+        <div id="listingAdminFields" class="listing-admin-fields hidden"><label>Status<select id="listingStatus"><option value="pending">Pending review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="inactive">Inactive</option></select></label><label class="toggle-row"><span>Featured<small>Show near the top of Marketplace</small></span><input id="listingFeatured" type="checkbox" role="switch"></label></div>
+        <button id="listingSubmit" class="primary" type="submit">Submit listing</button>
+        <button id="listingDelete" class="danger-button hidden" type="button" data-action="delete-listing"><svg><use href="#i-close"/></svg>Delete listing</button>
+        <p class="listing-review-note">Member listings are reviewed before everyone sees them. You can still view and edit your own while they are pending.</p>
       </form>
     </section>
 
@@ -380,6 +410,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=52-sodium1-guide10" defer></script>
+  <script src="./app.js?v=53-marketplace1-guide11" defer></script>
 </body>
 </html>
