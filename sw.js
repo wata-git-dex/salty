@@ -1,6 +1,6 @@
-const CACHE = 'salty-shell-v51-edge1-guide-v9';
-const GUIDE_PAGES = Array.from({ length:4 }, (_, index) => `./docs/guide-v9/page-${String(index + 1).padStart(2, '0')}.jpg`);
-const SHELL = ['./', './index.html', './styles.css?v=51-edge1', './app.js?v=51-guide9', './manifest.webmanifest', './icon.svg', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './docs/SALTY_Quick_Start_Guide_V9.pdf', ...GUIDE_PAGES];
+const CACHE = 'sodium-shell-v52-brand1-guide-v10';
+const GUIDE_PAGES = Array.from({ length:4 }, (_, index) => `./docs/guide-v10/page-${String(index + 1).padStart(2, '0')}.jpg`);
+const SHELL = ['./', './index.html', './styles.css?v=52-sodium1', './app.js?v=52-sodium1-guide10', './manifest.webmanifest', './icon.svg', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './docs/SODIUM_Quick_Start_Guide_V10.pdf', ...GUIDE_PAGES];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -30,12 +30,12 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', event => {
   let payload = {};
   try { payload = event.data?.json() || {}; }
-  catch (_error) { payload = { body:event.data?.text() || 'Open Salty for a crew update.' }; }
-  event.waitUntil(self.registration.showNotification(payload.title || 'Salty', {
-    body: payload.body || 'Open Salty for a crew update.',
+  catch (_error) { payload = { body:event.data?.text() || 'Open Sodium for a crew update.' }; }
+  event.waitUntil(self.registration.showNotification(payload.title || 'Sodium', {
+    body: payload.body || 'Open Sodium for a crew update.',
     icon: './icon-ink.svg',
     badge: './icon-ink.svg',
-    tag: payload.tag || 'salty-update',
+    tag: payload.tag || 'sodium-update',
     renotify: Boolean(payload.renotify),
     data: { url:payload.url || './' },
   }));

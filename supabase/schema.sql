@@ -1,4 +1,4 @@
--- Salty — complete initial database schema
+-- Sodium — complete initial database schema
 -- Run this entire file once in the Supabase SQL Editor before testing the app.
 
 begin;
@@ -313,12 +313,12 @@ insert into public.brands (name) values ('Sodium'),('Salty Viewfinder'),('WATA')
 on conflict (name) do nothing;
 
 insert into public.rewards (name, points_cost, type, brand_name, offer_text, description, store_url, sort_order) values
-  ('Saltyviewfinder Store Discount', 0, 'discount', 'Saltyviewfinder', 'Salty member discount', 'Sodium merch, prints, and more.', 'https://saltyviewfinder.com', 10),
-  ('WATA Store Discount', 0, 'discount', 'WATA', 'Salty member discount', 'Support WATA and save on store gear.', 'https://cleanwata.org', 20);
+  ('Saltyviewfinder Store Discount', 0, 'discount', 'Saltyviewfinder', 'Sodium member discount', 'Sodium merch, prints, and more.', 'https://saltyviewfinder.com', 10),
+  ('WATA Store Discount', 0, 'discount', 'WATA', 'Sodium member discount', 'Support WATA and save on store gear.', 'https://cleanwata.org', 20);
 
 -- One multi-use bootstrap invite. The final SELECT prints it after the transaction.
 insert into public.invites (code, max_uses)
-values ('SALTY-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10)), 25);
+values ('SODIUM-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10)), 25);
 
 -- Membership helpers. SECURITY DEFINER avoids recursive RLS checks.
 create or replace function public.is_member(uid uuid default auth.uid())
@@ -409,7 +409,7 @@ declare new_code text;
 begin
   if not public.is_member() then raise exception 'Community membership required'; end if;
   if invite_max_uses < 1 or invite_max_uses > 25 then raise exception 'max uses must be between 1 and 25'; end if;
-  new_code := 'SALTY-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10));
+  new_code := 'SODIUM-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 10));
   insert into public.invites (code, created_by, max_uses) values (new_code, auth.uid(), invite_max_uses);
   return new_code;
 end $$;
@@ -810,7 +810,7 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('salty-avatars', 'salty-avatars', false, 8388608, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
--- Private beta screenshots, visible only to their reporter and Salty admins.
+-- Private beta screenshots, visible only to their reporter and Sodium admins.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('salty-feedback', 'salty-feedback', false, 10485760, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
@@ -861,7 +861,7 @@ using (bucket_id = 'salty-feedback' and ((storage.foldername(name))[1] = auth.ui
 -- Realtime tables used by the later chat phase and live core/feed refreshes.
 alter publication supabase_realtime add table public.sessions, public.session_rsvps, public.posts, public.post_comments, public.post_likes, public.room_messages, public.dm_messages;
 
--- Nightly stale-session safety net. Unschedule an old Salty job if this script is adapted/re-run.
+-- Nightly stale-session safety net. Unschedule the legacy job if this script is adapted/re-run.
 select cron.schedule(
   'salty-nightly-session-archive',
   '15 3 * * *',

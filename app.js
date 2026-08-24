@@ -16,9 +16,9 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.51';
+const APP_VERSION = '1.52';
 const CONSENT_VERSION = '1.0';
-const GUIDE_PATH = './docs/SALTY_Quick_Start_Guide_V9.pdf';
+const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V10.pdf';
 const GUIDE_PAGE_COUNT = 4;
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
@@ -113,7 +113,7 @@ function applyIconTheme(theme = 'ink', announce = false) {
     document.documentElement.classList.add('theme-previewing');
     clearTimeout(applyIconTheme.previewTimer);
     applyIconTheme.previewTimer = setTimeout(() => document.documentElement.classList.remove('theme-previewing'), 700);
-    toast(`${label} theme applied across Salty.`, 3200);
+    toast(`${label} theme applied across Sodium.`, 3200);
   }
 }
 
@@ -126,7 +126,7 @@ function consentStorageKey() { return `salty:consent:${CONSENT_VERSION}`; }
 function openConsent(next = 'new') {
   state.consentNext = next;
   const reviewing = next === 'settings';
-  $('#consentAcceptButton').textContent = reviewing ? 'Back to Settings' : 'I understand — enter Salty';
+  $('#consentAcceptButton').textContent = reviewing ? 'Back to Settings' : 'I understand — enter Sodium';
   showOnly('consentScreen');
   scrollTo({ top: 0, behavior: 'instant' });
 }
@@ -172,7 +172,7 @@ function toast(message, timeout = 3200) {
 function readableError(error) {
   console.error(error);
   if (error?.status === 429 || /rate limit/i.test(error?.message || '')) {
-    return 'Salty’s email service is cooling down after too many test emails. Wait about an hour, then request one fresh email.';
+    return 'Sodium’s email service is cooling down after too many test emails. Wait about an hour, then request one fresh email.';
   }
   return error?.message || 'Something went sideways. Please try again.';
 }
@@ -268,8 +268,8 @@ function runPreview() {
     { id:'past-event', author:userId, region_id:regionId, title:'Hobie Movie Night', start_time:new Date(Date.now() - 28 * 3600000).toISOString(), end_time:new Date(Date.now() - 26 * 3600000).toISOString(), venue_name:'Hobie Surf Shop', location_text:'Dana Point', description:'Good flick and a full house.', event_rsvps:[{ user_id:userId, profile:state.profile }] },
   ];
   state.perks = [
-    { id:'sv', name:'Saltyviewfinder Store Discount', brand_name:'Saltyviewfinder', offer_text:'Salty member discount', description:'Sodium merch, prints, and more.', store_url:'https://saltyviewfinder.com', active:true },
-    { id:'wata', name:'WATA Store Discount', brand_name:'WATA', offer_text:'Salty member discount', description:'Support WATA and save on store gear.', store_url:'https://cleanwata.org', active:true },
+    { id:'sv', name:'Saltyviewfinder Store Discount', brand_name:'Saltyviewfinder', offer_text:'Sodium member discount', description:'Sodium merch, prints, and more.', store_url:'https://saltyviewfinder.com', active:true },
+    { id:'wata', name:'WATA Store Discount', brand_name:'WATA', offer_text:'Sodium member discount', description:'Support WATA and save on store gear.', store_url:'https://cleanwata.org', active:true },
   ];
   state.roomMessages = [
     { id:'chat-1', region_id:regionId, author:'jonah', body:'Waist high at first point. Crowd is pretty mellow.', created_at:new Date(Date.now() - 22 * 60000).toISOString() },
@@ -278,7 +278,7 @@ function runPreview() {
   state.dmMessages = [{ id:'dm-1', sender:'jonah', recipient:userId, body:'Want to hit Lowers Friday?', created_at:new Date(Date.now() - 35 * 60000).toISOString(), read_at:null }];
   state.dmThreads = [{ memberId:'jonah', message:state.dmMessages[0] }];
   state.issueReports = [
-    { id:'issue-1', reporter:'jonah', reporter_profile:{ id:'jonah', name:'Jonah' }, category:'broken', description:'The Join surf button looked pressed, but my name did not appear until I reopened Salty.', expected_behavior:'My name should show under Surfers immediately.', screen:'Sessions', app_version:APP_VERSION, user_agent:'iPhone · Mobile Safari', status:'new', admin_notes:'', created_at:new Date(Date.now() - 48 * 60000).toISOString() },
+    { id:'issue-1', reporter:'jonah', reporter_profile:{ id:'jonah', name:'Jonah' }, category:'broken', description:'The Join surf button looked pressed, but my name did not appear until I reopened Sodium.', expected_behavior:'My name should show under Surfers immediately.', screen:'Sessions', app_version:APP_VERSION, user_agent:'iPhone · Mobile Safari', status:'new', admin_notes:'', created_at:new Date(Date.now() - 48 * 60000).toISOString() },
     { id:'issue-2', reporter:'mateo', reporter_profile:{ id:'mateo', name:'Mateo' }, category:'suggestion', description:'Could the event card make the address easier to tap?', expected_behavior:null, screen:'Events', app_version:APP_VERSION, user_agent:'iPhone · Home Screen app', status:'reviewing', admin_notes:'Check the map target size.', created_at:new Date(Date.now() - 26 * 3600000).toISOString() },
   ];
   renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderPerks(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderIssueReports(); showOnly('app');
@@ -293,7 +293,7 @@ function renderPreviewProfile() {
 function showWelcome() {
   if (isStandalone()) {
     openAuth('existing');
-    $('#authSubtitle').textContent = 'This saved app is not signed in yet. Verify once on this phone and it will open straight into Salty after that.';
+    $('#authSubtitle').textContent = 'This saved app is not signed in yet. Verify once on this phone and it will open straight into Sodium after that.';
     return;
   }
   showOnly('welcome');
@@ -311,7 +311,7 @@ function openAuth(mode, keepPending = false) {
   }
   $('#newMemberFields').classList.toggle('hidden', !isNew);
   $('#authTitle').textContent = isNew ? 'Join your crew' : 'Welcome back';
-  $('#authSubtitle').textContent = isNew ? 'Continue with Google or use one email code. Then finish your profile and stay signed in.' : 'Continue with Google, or use the email connected to your Salty profile. You only need this on a new device or after signing out.';
+  $('#authSubtitle').textContent = isNew ? 'Continue with Google or use one email code. Then finish your profile and stay signed in.' : 'Continue with Google, or use the email connected to your Sodium profile. You only need this on a new device or after signing out.';
   if (!keepPending) {
     $('#authMessage').classList.add('hidden');
     $('#authCodeBlock').classList.add('hidden');
@@ -334,7 +334,7 @@ function restorePendingAuth() {
   openAuth(state.authMode, true);
   $('#authEmail').value = pending.email;
   const message = $('#authMessage');
-  message.innerHTML = `<b>Use the newest code sent to ${esc(pending.email)}</b><br>Enter it below without leaving Salty. Every new email replaces the older code.`;
+  message.innerHTML = `<b>Use the newest code sent to ${esc(pending.email)}</b><br>Enter it below without leaving Sodium. Every new email replaces the older code.`;
   message.classList.remove('hidden');
   $('#authCodeBlock').classList.remove('hidden');
   setTimeout(() => $('#authCode').focus({ preventScroll: true }), 50);
@@ -392,7 +392,7 @@ async function sendMagicLink(event) {
   }));
   startEmailCooldown(submit);
   const message = $('#authMessage');
-  message.innerHTML = `<b>Check ${esc(email)}</b><br>Stay in Salty and enter the full ${CONFIG.emailOtpDigits}-digit code from the newest email. Every new email replaces the older code.`;
+  message.innerHTML = `<b>Check ${esc(email)}</b><br>Stay in Sodium and enter the full ${CONFIG.emailOtpDigits}-digit code from the newest email. Every new email replaces the older code.`;
   message.classList.remove('hidden');
   $('#authCodeBlock').classList.remove('hidden');
   setTimeout(() => $('#authCode').focus({ preventScroll: true }), 50);
@@ -454,7 +454,7 @@ async function verifyEmailCode() {
   if (error) {
     const message = $('#authMessage');
     const reason = esc(error.message || 'The code was rejected.');
-    message.innerHTML = `<b>Salty could not verify that code.</b><br>${reason}<br>Request one fresh email, stay on this screen, and use only its newest code.`;
+    message.innerHTML = `<b>Sodium could not verify that code.</b><br>${reason}<br>Request one fresh email, stay on this screen, and use only its newest code.`;
     message.classList.remove('hidden');
     toast('That code was rejected. Request one fresh code and enter it without opening any email link.', 7000);
     return;
@@ -468,7 +468,7 @@ async function verifyEmailLink() {
   const button = $('#verifyLinkButton');
   const message = $('#verifyMessage');
   if (!state.pendingTokenHash) {
-    message.textContent = 'This sign-in link is incomplete. Go back to Salty and request a new email.';
+    message.textContent = 'This sign-in link is incomplete. Go back to Sodium and request a new email.';
     message.classList.remove('hidden');
     return;
   }
@@ -479,7 +479,7 @@ async function verifyEmailLink() {
   });
   if (error) {
     button.disabled = false; button.textContent = 'Try again';
-    message.innerHTML = `${esc(readableError(error))}<br>Return to Salty and request a fresh email, or use the full ${CONFIG.emailOtpDigits}-digit code from that email.`;
+    message.innerHTML = `${esc(readableError(error))}<br>Return to Sodium and request a fresh email, or use the full ${CONFIG.emailOtpDigits}-digit code from that email.`;
     message.classList.remove('hidden');
     return;
   }
@@ -653,20 +653,20 @@ async function renderNotificationSettings() {
     status.textContent = 'This browser cannot receive web push notifications.';
   } else if (isIOSDevice() && !isStandalone()) {
     button.disabled = false;
-    button.textContent = 'Add Salty to Home Screen first';
+    button.textContent = 'Add Sodium to Home Screen first';
     status.textContent = 'On iPhone, notifications work from the installed Home Screen app.';
   } else if (permission === 'denied') {
     button.disabled = true;
     button.textContent = 'Notifications are blocked';
-    status.textContent = 'Open iPhone Settings → Notifications → Salty to allow them again.';
+    status.textContent = 'Open iPhone Settings → Notifications → Sodium to allow them again.';
   } else if (subscription) {
     button.disabled = false;
     button.textContent = 'Turn off on this device';
-    status.textContent = preferences.master_enabled ? 'Notifications are on for this device.' : 'All Salty notifications are paused.';
+    status.textContent = preferences.master_enabled ? 'Notifications are on for this device.' : 'All Sodium notifications are paused.';
   } else {
     button.disabled = false;
     button.textContent = 'Enable notifications on this device';
-    status.textContent = 'Get useful crew updates without needing to keep Salty open.';
+    status.textContent = 'Get useful crew updates without needing to keep Sodium open.';
   }
   $$('#notificationChoices input').forEach(input => { input.disabled = !supported; });
   $('#notificationMaster').disabled = !subscription;
@@ -695,7 +695,7 @@ async function enablePushNotifications() {
   if (!pushIsSupported()) throw new Error('This browser does not support notifications.');
   if (isIOSDevice() && !isStandalone()) {
     showInstallInstructions();
-    throw new Error('Add Salty to your Home Screen, open it there, then enable notifications.');
+    throw new Error('Add Sodium to your Home Screen, open it there, then enable notifications.');
   }
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') throw new Error('Notifications were not allowed. You can change this later in device settings.');
@@ -753,13 +753,13 @@ async function togglePushDevice() {
 
 function showInstallInstructions() {
   if (isStandalone()) {
-    toast('Salty is already installed on this phone.');
+    toast('Sodium is already installed on this phone.');
     return;
   }
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const steps = ios
-    ? ['Stay on this signed-in Salty screen.', 'Tap the Share button in your browser.', 'Choose “Add to Home Screen,” then tap “Add.”', 'Open Salty from the new Home Screen icon.']
-    : ['Stay on this signed-in Salty screen.', 'Open your browser menu and choose “Install app” or “Add to Home Screen.”', 'Confirm the installation, then open Salty from its icon.'];
+    ? ['Stay on this signed-in Sodium screen.', 'Tap the Share button in your browser.', 'Choose “Add to Home Screen,” then tap “Add.”', 'Open Sodium from the new Home Screen icon.']
+    : ['Stay on this signed-in Sodium screen.', 'Open your browser menu and choose “Install app” or “Add to Home Screen.”', 'Confirm the installation, then open Sodium from its icon.'];
   $('#installSteps').innerHTML = steps.map(step => `<li>${esc(step)}</li>`).join('');
   $('#nativeInstallButton').classList.toggle('hidden', !state.installPrompt);
   openSheet('installSheet');
@@ -800,7 +800,7 @@ async function showProfileSetup() {
   $('#profileAvatar').required = !state.profile.avatar_path;
   $('#profileSetupTitle').textContent = state.profile.onboarding_complete ? 'Edit your profile' : 'Build your profile';
   $('#profileSetupBack').classList.toggle('hidden', !state.profile.onboarding_complete);
-  $('#profileSubmit').textContent = state.profile.onboarding_complete ? 'Save changes' : 'Save profile and enter Salty';
+  $('#profileSubmit').textContent = state.profile.onboarding_complete ? 'Save changes' : 'Save profile and enter Sodium';
   $('#avatarPreview').textContent = state.profile.avatar_path ? 'CHANGE PHOTO' : 'ADD PHOTO';
   if (state.profile.avatar_path) {
     const signed = await db.storage.from(CONFIG.avatarBucket).createSignedUrl(state.profile.avatar_path, 3600);
@@ -861,7 +861,7 @@ async function saveLocation(event) {
       await Promise.all([loadSessions(), loadEvents(), loadRoomMessages()]);
     }
     event.currentTarget.reset(); closeSheet();
-    toast(`${region.name} is now part of Salty.`);
+    toast(`${region.name} is now part of Sodium.`);
   } catch (error) { toast(readableError(error), 6000); }
   finally { submit.disabled = false; }
 }
@@ -901,9 +901,9 @@ async function completeProfile(event) {
       }
     }
     $('#profileForm').reset();
-    await loadApp(); showOnly('app'); cleanAuthUrl(); offerInstallAfterAuth(); revealSharedTarget(); toast('Profile saved. Welcome to Salty.');
+    await loadApp(); showOnly('app'); cleanAuthUrl(); offerInstallAfterAuth(); revealSharedTarget(); toast('Profile saved. Welcome to Sodium.');
   } catch (error) { toast(readableError(error), 6000); }
-  finally { submit.disabled = false; submit.textContent = state.profile.onboarding_complete ? 'Save changes' : 'Save profile and enter Salty'; }
+  finally { submit.disabled = false; submit.textContent = state.profile.onboarding_complete ? 'Save changes' : 'Save profile and enter Sodium'; }
 }
 
 function normalizeSocialUrl(value) {
@@ -954,7 +954,7 @@ function renderChrome() {
   $('#spotsList').innerHTML = regionSpots.map(spot => `<option value="${esc(spot.name)}"></option>`).join('');
   $('#locationsList').innerHTML = [...new Set(regionSpots.map(spot => spot.general_location).filter(Boolean))].sort().map(location => `<option value="${esc(location)}"></option>`).join('');
   $('#peopleList').innerHTML = state.people.map(person => `<option value="${esc(person.name)}"></option>`).join('');
-  $('#drawerProfile').innerHTML = `${avatarMarkup(state.profile)}<div><h3>${esc(state.profile.name)}</h3><p>${esc(state.currentRegion.name)} · Salty Crew</p></div>`;
+  $('#drawerProfile').innerHTML = `${avatarMarkup(state.profile)}<div><h3>${esc(state.profile.name)}</h3><p>${esc(state.currentRegion.name)} · Sodium Crew</p></div>`;
   $('#betaFeedbackMenu')?.classList.toggle('hidden', !state.profile?.is_admin);
   renderEventRegions();
   renderChatRegions();
@@ -963,7 +963,7 @@ function renderChrome() {
 
 function setView(view) {
   if (view === 'beta-feedback' && !state.profile?.is_admin) {
-    toast('Only Salty admins can view beta feedback.');
+    toast('Only Sodium admins can view beta feedback.');
     return;
   }
   if (view !== state.view) state.previousView = state.view;
@@ -1095,7 +1095,7 @@ function renderRoomMessages() {
     return;
   }
   list.innerHTML = messages.map(message => {
-    const profile = memberById(message.author) || { id:message.author, name:'Salty member' };
+    const profile = memberById(message.author) || { id:message.author, name:'Sodium member' };
     const own = message.author === state.profile.id;
     const photo = state.chatPhotoUrls[message.id];
     return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.author)}">${own ? '' : avatarMarkup(profile, 'message-avatar')}<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time></div><div class="message-bubble">${photo ? `<img src="${esc(photo)}" alt="Photo shared by ${esc(profile.name)}">` : ''}${message.body ? `<p>${esc(message.body)}</p>` : ''}</div></div></article>`;
@@ -1141,7 +1141,7 @@ function renderDmPeople() {
   const existingThreads = new Set(state.dmThreads.map(thread => thread.memberId));
   const available = state.people.filter(person => person.id !== state.profile.id && !existingThreads.has(person.id));
   target.innerHTML = available.map(person => {
-    const region = state.regions.find(item => item.id === person.home_region)?.name || 'Salty Crew';
+    const region = state.regions.find(item => item.id === person.home_region)?.name || 'Sodium Crew';
     return `<button class="member-row" data-dm-member="${person.id}">${avatarMarkup(person)}<span><b>${esc(person.name)}</b><small>${esc(region)}</small></span><i>›</i></button>`;
   }).join('') || '<p class="dm-everyone">Everyone you have messaged is already in your inbox.</p>';
 }
@@ -1178,7 +1178,7 @@ function renderDmInbox() {
     return;
   }
   target.innerHTML = state.dmThreads.map(thread => {
-    const person = memberById(thread.memberId) || { id:thread.memberId, name:'Salty member' };
+    const person = memberById(thread.memberId) || { id:thread.memberId, name:'Sodium member' };
     const unread = thread.message.recipient === state.profile.id && !thread.message.read_at;
     const prefix = thread.message.sender === state.profile.id ? 'You: ' : '';
     return `<button class="dm-thread ${unread ? 'unread' : ''}" data-dm-member="${thread.memberId}">${avatarMarkup(person)}<span><b>${esc(person.name)}</b><p>${esc(prefix + thread.message.body)}</p></span><time>${esc(messageTime(thread.message.created_at))}</time>${unread ? '<i></i>' : ''}</button>`;
@@ -1279,7 +1279,7 @@ function renderPerks() {
     const code = perk.discount_code ? `<button class="perk-code" data-copy-perk="${perk.id}"><span>CODE</span><b>${esc(perk.discount_code)}</b><small>tap to copy</small></button>` : '';
     const edit = admin ? `<button class="perk-edit" data-edit-perk="${perk.id}" aria-label="Edit ${esc(perk.name)}"><svg><use href="#i-edit"/></svg></button>` : '';
     const status = admin && !perk.active ? '<span class="perk-draft">HIDDEN</span>' : '';
-    return `<article class="perk-card"><div class="perk-top"><span class="perk-mark">${esc(initials(perk.brand_name || perk.name))}</span><div><small>${esc(perk.brand_name || 'Salty partner')}</small><h3>${esc(perk.name)}</h3></div>${status}${edit}</div><strong class="perk-offer">${esc(perk.offer_text || 'Member perk')}</strong>${perk.description ? `<p>${esc(perk.description)}</p>` : ''}${code}${url ? `<a class="perk-link" href="${esc(url)}" target="_blank" rel="noopener">Open store <span>↗</span></a>` : ''}</article>`;
+    return `<article class="perk-card"><div class="perk-top"><span class="perk-mark">${esc(initials(perk.brand_name || perk.name))}</span><div><small>${esc(perk.brand_name || 'Sodium partner')}</small><h3>${esc(perk.name)}</h3></div>${status}${edit}</div><strong class="perk-offer">${esc(perk.offer_text || 'Member perk')}</strong>${perk.description ? `<p>${esc(perk.description)}</p>` : ''}${code}${url ? `<a class="perk-link" href="${esc(url)}" target="_blank" rel="noopener">Open store <span>↗</span></a>` : ''}</article>`;
   }).join('');
 }
 
@@ -1293,7 +1293,7 @@ function resetPerkComposer() {
 }
 
 function openPerkComposer(perkId = null) {
-  if (!state.profile?.is_admin) { toast('Only Salty admins can manage discounts.'); return; }
+  if (!state.profile?.is_admin) { toast('Only Sodium admins can manage discounts.'); return; }
   resetPerkComposer();
   const perk = perkId ? state.perks.find(item => item.id === perkId) : null;
   if (perk) {
@@ -1327,7 +1327,7 @@ async function deletePerk() {
 
 async function savePerk(event) {
   event.preventDefault();
-  if (!state.profile?.is_admin) { toast('Only Salty admins can manage discounts.'); return; }
+  if (!state.profile?.is_admin) { toast('Only Sodium admins can manage discounts.'); return; }
   const submit = $('#perkSubmit'); submit.disabled = true;
   try {
     const payload = {
@@ -1414,7 +1414,7 @@ async function saveIssueReport(event) {
     $('#issueReportForm').reset();
     $('#issueScreenshotLabel').textContent = 'Choose screenshot';
     closeSheet();
-    toast(screenshotFailed ? 'Report sent. The screenshot could not upload, but the details are saved.' : 'Report sent. Thank you for helping improve Salty.', 5000);
+    toast(screenshotFailed ? 'Report sent. The screenshot could not upload, but the details are saved.' : 'Report sent. Thank you for helping improve Sodium.', 5000);
     if (state.profile?.is_admin) await loadIssueReports({ silent:true });
   } catch (error) { toast(readableError(error), 6000); }
   finally { submit.disabled = false; submit.textContent = 'Send report'; }
@@ -1677,10 +1677,10 @@ function addEventToCalendar(eventId) {
   const start = new Date(item.start_time);
   const end = item.end_time ? new Date(item.end_time) : new Date(start.getTime() + 2 * 60 * 60 * 1000);
   const place = [item.venue_name, item.location_text, item.spot?.name, item.spot?.general_location].filter(Boolean).join(', ');
-  const body = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Salty//Events//EN','BEGIN:VEVENT',`UID:${item.id}@saltyviewfinder.com`,`DTSTAMP:${stamp(new Date())}`,`DTSTART:${stamp(start)}`,`DTEND:${stamp(end)}`,`SUMMARY:${clean(item.title)}`,`DESCRIPTION:${clean(item.description)}`,`LOCATION:${clean(place)}`,'END:VEVENT','END:VCALENDAR'].join('\r\n');
+  const body = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Sodium//Events//EN','BEGIN:VEVENT',`UID:${item.id}@saltyviewfinder.com`,`DTSTAMP:${stamp(new Date())}`,`DTSTART:${stamp(start)}`,`DTEND:${stamp(end)}`,`SUMMARY:${clean(item.title)}`,`DESCRIPTION:${clean(item.description)}`,`LOCATION:${clean(place)}`,'END:VEVENT','END:VCALENDAR'].join('\r\n');
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([body], { type:'text/calendar;charset=utf-8' }));
-  link.download = `${item.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'salty-event'}.ics`;
+  link.download = `${item.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'sodium-event'}.ics`;
   link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   toast('Calendar event ready.');
 }
@@ -1858,7 +1858,7 @@ function renderSessions() {
     const filmerRow = (session.wants_filmer || filmers.length)
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
       : '';
-    const starter = `<div class="session-starter">${avatarMarkup(session.author_profile, 'session-starter-avatar')}<span><b>${esc(session.author_profile?.name || 'Salty member')}</b> started this session</span></div>`;
+    const starter = `<div class="session-starter">${avatarMarkup(session.author_profile, 'session-starter-avatar')}<span><b>${esc(session.author_profile?.name || 'Sodium member')}</b> started this session</span></div>`;
     const schedule = pastSession
       ? schedulePills(scheduleParts(session.surf_time || session.ended_at || session.created_at), 'session-schedule')
       : sessionSchedulePills(session);
@@ -1901,7 +1901,7 @@ async function ensureSpot(name, generalLocation, regionId) {
 function renderSessionPeopleChips() {
   $('#sessionPeopleChips').innerHTML = state.sessionPeople.map((name, index) => {
     const member = state.people.find(person => person.name.toLowerCase() === name.toLowerCase());
-    return `<button type="button" class="${member ? 'linked-member' : ''}" data-remove-session-person="${index}" title="${member ? 'Salty member' : 'Added by name'}">${member ? `<svg><use href="#i-user"/></svg>` : ''}${esc(name)}<span>×</span></button>`;
+    return `<button type="button" class="${member ? 'linked-member' : ''}" data-remove-session-person="${index}" title="${member ? 'Sodium member' : 'Added by name'}">${member ? `<svg><use href="#i-user"/></svg>` : ''}${esc(name)}<span>×</span></button>`;
   }).join('');
 }
 
@@ -1915,7 +1915,7 @@ function renderSessionMemberSuggestions(rawQuery = $('#sessionPersonInput').valu
     return person.name.toLowerCase().includes(query) || (person.nickname || '').toLowerCase().includes(query);
   }).slice(0, 6);
   target.innerHTML = matches.map(person => {
-    const region = state.regions.find(item => item.id === person.home_region)?.name || 'Salty member';
+    const region = state.regions.find(item => item.id === person.home_region)?.name || 'Sodium member';
     const nickname = person.nickname ? ` · ${esc(person.nickname)}` : '';
     return `<button type="button" data-session-member="${person.id}">${avatarMarkup(person, 'member-suggestion-avatar')}<span><b>${esc(person.name)}</b><small>${esc(region)}${nickname}</small></span><em>Add</em></button>`;
   }).join('');
@@ -2084,7 +2084,7 @@ function renderPosts() {
       : '<div class="post-media-unavailable">Media unavailable</div>';
     const comments = post.post_comments.slice(-3).map(comment => `<p class="comment"><b>${esc(comment.author_profile?.name || 'Crew')}</b> ${esc(comment.body)}</p>`).join('');
     const edit = post.author === state.profile.id ? `<button class="post-edit-icon" type="button" data-edit-post="${post.id}" aria-label="Edit your Stoke post"><svg><use href="#i-edit"/></svg></button>` : '';
-    return `<article class="post-card"><div class="post-media">${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Salty')}</span>${edit}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>Surfer</b>${esc(post.surfer_name)}</span>` : ''}${post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : ''}<span class="credit filmer"><b>Filmer</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
+    return `<article class="post-card"><div class="post-media">${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>Surfer</b>${esc(post.surfer_name)}</span>` : ''}${post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : ''}<span class="credit filmer"><b>Filmer</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
   }).join('');
 }
 
@@ -2254,15 +2254,15 @@ async function renderProfile() {
 }
 
 function profileMarkup(profile, stats = {}) {
-  const region = state.regions.find(item => item.id === profile.home_region)?.name || 'Salty Crew';
+  const region = state.regions.find(item => item.id === profile.home_region)?.name || 'Sodium Crew';
   const sponsors = profile.sponsors?.length ? profile.sponsors : [];
   const nickname = profile.nickname ? `<p class="nickname">“${esc(profile.nickname)}”</p>` : '';
   const socialUrl = safeExternalUrl(profile.social_url);
   const social = socialUrl ? `<a class="profile-link" href="${esc(socialUrl)}" target="_blank" rel="noopener">Social profile ↗</a>` : '';
   const controls = stats.own
-    ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Salty</button><button class="secondary-button guide-invite-button" data-action="share-invite-guide">Invite a friend + guide</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
+    ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Sodium</button><button class="secondary-button guide-invite-button" data-action="share-invite-guide">Invite a friend + guide</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
     : `<div class="profile-actions"><button class="primary" data-dm-member="${profile.id}">Message ${esc(profile.name)}</button></div>`;
-  return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Salty Crew</p></div></div>${stats.own ? `<div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke shared</span></article></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>sessions surfed</span></article><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>sessions filmed</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>sessions organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations surfed</span></article></div><p class="stats-note">Only completed sessions count.</p>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${controls}<footer class="profile-footer"><b>SALTY</b>surf with your friends, not your feed</footer>`;
+  return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Sodium Crew</p></div></div>${stats.own ? `<div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke shared</span></article></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>sessions surfed</span></article><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>sessions filmed</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>sessions organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations surfed</span></article></div><p class="stats-note">Only completed sessions count.</p>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${controls}<footer class="profile-footer"><b>SODIUM</b>surf with your friends, not your feed</footer>`;
 }
 
 function safeExternalUrl(value) {
@@ -2276,7 +2276,7 @@ function renderMembers() {
   const list = $('#membersList');
   if (!list) return;
   list.innerHTML = state.people.map(profile => {
-    const region = state.regions.find(item => item.id === profile.home_region)?.name || 'Salty Crew';
+    const region = state.regions.find(item => item.id === profile.home_region)?.name || 'Sodium Crew';
     const nickname = profile.nickname ? ` · “${esc(profile.nickname)}”` : '';
     return `<button class="member-row" data-member="${profile.id}">${avatarMarkup(profile)}<span><b>${esc(profile.name)}</b><small>${esc(region)}${nickname}</small></span><i>›</i></button>`;
   }).join('');
@@ -2324,7 +2324,7 @@ function openGuide() {
   if (!pages.childElementCount) {
     pages.innerHTML = Array.from({ length:GUIDE_PAGE_COUNT }, (_, index) => {
       const page = String(index + 1).padStart(2, '0');
-      return `<img src="./docs/guide-v9/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
+      return `<img src="./docs/guide-v10/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
     }).join('');
   }
   viewer.classList.remove('hidden');
@@ -2341,10 +2341,10 @@ function closeGuide() {
 async function quickStartGuideFile() {
   const response = await fetch(quickStartGuideUrl());
   if (!response.ok) throw new Error('The Quick Start Guide could not be loaded.');
-  return new File([await response.blob()], 'SALTY_Quick_Start_Guide_V9.pdf', { type:'application/pdf' });
+  return new File([await response.blob()], 'SODIUM_Quick_Start_Guide_V10.pdf', { type:'application/pdf' });
 }
 
-async function shareSaltyContent({ title, text, url, file = null, copiedMessage }) {
+async function shareSodiumContent({ title, text, url, file = null, copiedMessage }) {
   if (navigator.share) {
     if (file && navigator.canShare?.({ files:[file] })) {
       await navigator.share({ title, text, url, files:[file] });
@@ -2364,13 +2364,13 @@ async function shareSaltyContent({ title, text, url, file = null, copiedMessage 
 
 async function shareGuide() {
   const url = quickStartGuideUrl();
-  const title = 'Salty Quick Start Guide';
-  const text = 'Here is the Salty Quick Start Guide.';
+  const title = 'Sodium Quick Start Guide';
+  const text = 'Here is the Sodium Quick Start Guide.';
   let file = null;
   try { file = await quickStartGuideFile(); }
   catch (_error) { /* The public guide link remains available as a fallback. */ }
   try {
-    await shareSaltyContent({ title, text, url, file, copiedMessage:'Quick Start Guide link copied.' });
+    await shareSodiumContent({ title, text, url, file, copiedMessage:'Quick Start Guide link copied.' });
   } catch (error) {
     if (error?.name !== 'AbortError') prompt('Copy the Quick Start Guide link:', url);
   }
@@ -2396,11 +2396,11 @@ async function shareSession(sessionId) {
 
   const spot = session.spot?.name || 'a surf';
   const area = session.spot?.general_location ? ` · ${session.spot.general_location}` : '';
-  const roles = session.wants_filmer ? 'Join to surf or volunteer to film.' : 'Open it in Salty to join the surf.';
-  const text = `${state.profile.name} shared a surf with you on Salty.\n\n${spot}${area}\n${sessionWhen(session)}\n${roles}`;
+  const roles = session.wants_filmer ? 'Join to surf or volunteer to film.' : 'Open it in Sodium to join the surf.';
+  const text = `${state.profile.name} shared a surf with you on Sodium.\n\n${spot}${area}\n${sessionWhen(session)}\n${roles}`;
   try {
-    await shareSaltyContent({
-      title:`${spot} surf on Salty`,
+    await shareSodiumContent({
+      title:`${spot} surf on Sodium`,
       text,
       url:url.href,
       copiedMessage:'Surf details and link copied.',
@@ -2430,10 +2430,10 @@ async function shareEvent(eventId) {
 
   const place = [item.venue_name || item.spot?.name, item.location_text || item.spot?.general_location].filter(Boolean).join(' · ');
   const timing = scheduleParts(item.start_time, item.end_time);
-  const text = `${state.profile.name} shared an event with you on Salty.\n\n${item.title}\n${timing.date} · ${timing.time}${place ? `\n${place}` : ''}\nOpen it in Salty to RSVP.`;
+  const text = `${state.profile.name} shared an event with you on Sodium.\n\n${item.title}\n${timing.date} · ${timing.time}${place ? `\n${place}` : ''}\nOpen it in Sodium to RSVP.`;
   try {
-    await shareSaltyContent({
-      title:`${item.title} on Salty`,
+    await shareSodiumContent({
+      title:`${item.title} on Sodium`,
       text,
       url:url.href,
       copiedMessage:'Event details and link copied.',
@@ -2453,17 +2453,17 @@ async function shareInvite({ includeGuide = false } = {}) {
   const url = new URL('./', location.href); url.searchParams.set('invite', result.data);
   if (inviteRegion?.id) url.searchParams.set('region', inviteRegion.id);
   const guideUrl = quickStartGuideUrl();
-  const title = "You're invited to Salty";
+  const title = "You're invited to Sodium";
   const text = includeGuide
-    ? `I'm inviting you to Salty${inviteRegion ? ` in ${inviteRegion.name}` : ''}, a private surf community. Hopefully it helps us surf more together.\n\nYour invite: ${url.href}\nQuick Start Guide: ${guideUrl}`
-    : `I'm inviting you to Salty${inviteRegion ? ` in ${inviteRegion.name}` : ''}, a private surf community. Hopefully it helps us surf more together.`;
+    ? `I'm inviting you to Sodium${inviteRegion ? ` in ${inviteRegion.name}` : ''}, a private surf community. Hopefully it helps us surf more together.\n\nYour invite: ${url.href}\nQuick Start Guide: ${guideUrl}`
+    : `I'm inviting you to Sodium${inviteRegion ? ` in ${inviteRegion.name}` : ''}, a private surf community. Hopefully it helps us surf more together.`;
   let file = null;
   if (includeGuide) {
     try { file = await quickStartGuideFile(); }
     catch (_error) { /* Both links remain in the share message. */ }
   }
   try {
-    await shareSaltyContent({
+    await shareSodiumContent({
       title,
       text,
       url:url.href,
@@ -2668,7 +2668,7 @@ document.addEventListener('change', async event => {
     await saveNotificationPreference(input.dataset.notificationPref, input.checked);
     await renderNotificationSettings();
     toast(input.dataset.notificationPref === 'master_enabled'
-      ? (input.checked ? 'Salty notifications resumed.' : 'All Salty notifications paused.')
+      ? (input.checked ? 'Sodium notifications resumed.' : 'All Sodium notifications paused.')
       : 'Notification preference saved.');
   } catch (error) {
     input.checked = !input.checked;
@@ -2769,7 +2769,7 @@ window.addEventListener('appinstalled', () => {
   $('#installNudge').classList.add('hidden');
   $('#installSettingsRow').classList.add('hidden');
   closeSheet();
-  toast('Salty was added to your Home Screen.');
+  toast('Sodium was added to your Home Screen.');
 });
 
 applyIconTheme(localStorage.getItem('salty:theme') || localStorage.getItem('salty:icon-theme') || 'ink');

@@ -1,4 +1,4 @@
-# Salty push deployment
+# Sodium push deployment
 
 The client public VAPID key is intentionally public in `app.js`. Never commit the private VAPID key or webhook secret.
 
