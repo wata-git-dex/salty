@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.87';
+const APP_VERSION = '1.88';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -72,7 +72,7 @@ const state = {
   marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent', sharingSessionId: null,
   guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
   postMemberTags: [], postCustomTags: [], qrInviteUrl: '', qrInviteRegionName: '',
-  nonprofitLogoUrls: {}, editingNonprofitId: null,
+  nonprofitLogoUrls: {}, editingNonprofitId: null, drawerScrollY: 0,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -345,7 +345,7 @@ function runPreview() {
 }
 
 function renderPreviewProfile() {
-  $('#profileView').innerHTML = profileMarkup(state.profile, { points:45, streak:3, stoke:4, surfed:12, surfMinutes:735, filmed:7, filmMinutes:410, organized:5, locations:2, photosShared:38, clipsShared:64, photosReceived:21, clipsReceived:96, own:true });
+  $('#profileView').innerHTML = profileMarkup(state.profile, { points:45, streak:3, stoke:4, surfed:12, surfMinutes:735, filmed:7, filmMinutes:410, organized:5, locations:4, clipHandoffs:3, clipsShared:64, clipsReceived:96, own:true });
   $('#streakBadge b').textContent = '3';
 }
 
@@ -3858,8 +3858,9 @@ async function renderProfile() {
     surfed:participationStats.surfed || 0, filmed:participationStats.filmed || 0,
     surfMinutes:participationStats.surf_minutes || 0, filmMinutes:participationStats.film_minutes || 0,
     organized:participationStats.organized || 0, locations:participationStats.locations || 0,
-    photosShared:participationStats.photos_shared || 0, clipsShared:participationStats.clips_shared || 0,
-    photosReceived:participationStats.photos_received || 0, clipsReceived:participationStats.clips_received || 0, own:true,
+    clipHandoffs:participationStats.clip_handoffs || 0,
+    clipsShared:participationStats.clips_shared || 0,
+    clipsReceived:participationStats.clips_received || 0, own:true,
   });
   $('#streakBadge b').textContent = streak.data?.current_streak || 0;
 }
@@ -3875,7 +3876,7 @@ function profileMarkup(profile, stats = {}) {
   const controls = stats.own
     ? `<div class="profile-actions"><details class="profile-share-menu"><summary><svg><use href="#i-share"/></svg><span><b>Share with friends</b><small>Invites, surf plans, clips, and setup help</small></span><svg class="profile-share-chevron"><use href="#i-chevron"/></svg></summary><div><button data-action="open-share-invite"><svg><use href="#i-surf"/></svg><span><b>Share a surf or clips</b><small>Plan a surf, claim one, send clips, or send a simple invite.</small></span></button><button data-action="show-invite-qr"><svg><use href="#i-qr"/></svg><span><b>Invite with a QR code</b><small>Let a friend scan a one-person invite from your screen.</small></span></button><button data-action="share-invite-overview"><svg><use href="#i-wave"/></svg><span><b>Invite + app overview</b><small>Send the invite with the quick visual explanation.</small></span></button><button data-action="share-invite-setup"><svg><use href="#i-settings"/></svg><span><b>Invite + phone setup</b><small>Send the invite with Home Screen setup instructions.</small></span></button></div></details><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
     : `<div class="profile-actions"><button class="primary" data-dm-member="${profile.id}">Message ${esc(profile.name)}</button></div>`;
-  const statSlides = stats.own ? `<section class="profile-stat-deck"><div class="profile-stat-tabs" role="tablist" aria-label="Profile stats"><button class="active" role="tab" aria-selected="true" data-profile-stat-tab="community">Community</button><button role="tab" aria-selected="false" data-profile-stat-tab="surf">Surf</button><button role="tab" aria-selected="false" data-profile-stat-tab="media">Film + photo</button></div><div class="profile-stat-panels"><section class="profile-stat-panel active" data-profile-stat-panel="community"><div class="profile-stat-heading"><span>Community activity</span><small>Points, streak, and Stoke</small></div><div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke posts</span></article></div></section><section class="profile-stat-panel" data-profile-stat-panel="surf"><div class="profile-stat-heading"><span>Surf stats</span><small>Completed sessions</small></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>sessions surfed</span></article><article class="profile-card stat"><b>${formatDuration(stats.surfMinutes)}</b><span>time in water</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations</span></article></div><p class="stat-data-note">Time starts when a session is started and stops when it is finished.</p></section><section class="profile-stat-panel" data-profile-stat-panel="media"><div class="profile-stat-heading"><span>Film + photo stats</span><small>Created and received</small></div><div class="media-stats"><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>sessions filmed</span></article><article class="profile-card stat"><b>${formatDuration(stats.filmMinutes)}</b><span>time filming</span></article><article class="profile-card stat"><b>${formatCount(stats.clipsShared)}</b><span>clips shared</span></article><article class="profile-card stat"><b>${formatCount(stats.photosShared)}</b><span>photos shared</span></article><article class="profile-card stat"><b>${formatCount(stats.clipsReceived)}</b><span>clips received</span></article><article class="profile-card stat"><b>${formatCount(stats.photosReceived)}</b><span>photos tagged</span></article></div></section></div></section>` : '';
+  const statSlides = stats.own ? `<section class="profile-stat-deck"><div class="profile-stat-tabs" role="tablist" aria-label="Profile stats"><button class="active" role="tab" aria-selected="true" data-profile-stat-tab="community">Community</button><button role="tab" aria-selected="false" data-profile-stat-tab="surf">Surf</button><button role="tab" aria-selected="false" data-profile-stat-tab="media">Film + photo</button></div><div class="profile-stat-panels"><section class="profile-stat-panel active" data-profile-stat-panel="community"><div class="profile-stat-heading"><span>Community activity</span><small>Stokens, streak, and Stoke</small></div><div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>Stokens</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke posts</span></article></div></section><section class="profile-stat-panel" data-profile-stat-panel="surf"><div class="profile-stat-heading"><span>Surf stats</span><small>Completed sessions</small></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>sessions surfed</span></article><article class="profile-card stat"><b>${formatDuration(stats.surfMinutes)}</b><span>time in water</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations</span></article></div><p class="stat-data-note">Locations combine completed sessions where you surfed or filmed. Time starts when a session is started and stops when it is finished.</p></section><section class="profile-stat-panel" data-profile-stat-panel="media"><div class="profile-stat-heading"><span>Film + photo stats</span><small>Clip deliveries—not Stoke posts</small></div><div class="media-stats"><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>sessions filmed</span></article><article class="profile-card stat"><b>${formatDuration(stats.filmMinutes)}</b><span>time filming</span></article><article class="profile-card stat"><b>${formatCount(stats.clipHandoffs)}</b><span>clip handoffs</span></article><article class="profile-card stat"><b>${formatCount(stats.clipsShared)}</b><span>clips delivered</span></article><article class="profile-card stat"><b>${formatCount(stats.clipsReceived)}</b><span>clips received</span></article></div></section></div></section>` : '';
   return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Sodium Crew</p></div></div>${stats.own ? personalWeeklyRecapMarkup() : ''}${statSlides}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${listingSection}${controls}<footer class="profile-footer"><b>SODIUM</b>surf with your friends, not your feed</footer>`;
 }
 
@@ -3933,8 +3934,23 @@ function subscribeRealtime() {
     .subscribe();
 }
 
-function openDrawer() { $('#drawer').classList.add('open'); $('#drawerScrim').classList.add('open'); }
-function closeDrawer() { $('#drawer').classList.remove('open'); $('#drawerScrim').classList.remove('open'); }
+function openDrawer() {
+  if ($('#drawer').classList.contains('open')) return;
+  state.drawerScrollY = window.scrollY;
+  document.body.style.top = `-${state.drawerScrollY}px`;
+  document.body.classList.add('drawer-open');
+  $('#drawer').classList.add('open');
+  $('#drawerScrim').classList.add('open');
+}
+function closeDrawer() {
+  const wasOpen = $('#drawer').classList.contains('open');
+  $('#drawer').classList.remove('open');
+  $('#drawerScrim').classList.remove('open');
+  if (!wasOpen) return;
+  document.body.classList.remove('drawer-open');
+  document.body.style.top = '';
+  window.scrollTo(0, state.drawerScrollY || 0);
+}
 function openSheet(id) { const sheet = $(`#${id}`); sheet.scrollTop = 0; sheet.classList.add('open'); $('#sheetScrim').classList.add('open'); }
 function closeSheet() { $$('.sheet').forEach(sheet => sheet.classList.remove('open')); $('#sheetScrim').classList.remove('open'); }
 
@@ -4557,6 +4573,7 @@ document.addEventListener('click', async event => {
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
     'open-session': () => openSessionComposer(),
     'open-share-invite': openShareInviteHub,
+    'open-nonprofits': () => { state.eventFilter = 'nonprofit'; renderEvents(); setView('events'); },
     'show-invite-qr': openInviteQr,
     'share-qr-invite': shareQrInvite,
     'share-session-external': () => shareSessionExternal(),

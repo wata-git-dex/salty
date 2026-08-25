@@ -30,7 +30,7 @@ The right-side drawer is grouped to prevent a long undifferentiated list:
 
 - Crew: Share + invite, Members, Clubs
 - Discover: Marketplace, Perks & discounts
-- Your Sodium: Points & streaks, Community rules
+- Your Sodium: Stokens & streaks, Community rules
 - App: Beta Feedback, Settings, About Sodium
 
 Nonprofit events live inside Events with Community / Nonprofit filters. They do not require another primary tab or drawer row.
@@ -41,7 +41,7 @@ Profile stats use three switchable panels:
 
 ### Community
 
-- Points
+- Stokens (the user-facing name for the existing participation-points ledger)
 - Active streak
 - Stoke posts
 
@@ -50,18 +50,21 @@ Profile stats use three switchable panels:
 - Completed sessions surfed
 - Time in water
 - Sessions organized
-- Locations surfed
+- Unique locations where the member surfed or filmed
 
 ### Film + photo
 
 - Completed sessions filmed
 - Time filming
-- Individual clips shared
-- Individual photos shared
-- Individual clips received through clip deliveries
-- Photos in which the member is tagged
+- Clip handoffs sent through Clip Delivery
+- Individual clips delivered through Clip Delivery
+- Individual clips received through Clip Delivery
 
-`clips received` means the literal number of delivered clip files. A delivery of 25 files adds 25, whether those files are waves, B-roll, or another kind of footage. It is not a wave count.
+`clips delivered` and `clips received` mean the literal number of files in Clip Delivery. A delivery of 25 files adds 25, whether those files are waves, B-roll, or another kind of footage. It is not a wave count, and Stoke posts do not inflate these totals.
+
+`locations` is one combined count of unique surf spots across completed sessions where the member surfed or filmed. Sodium does not split surf locations from film locations because both roles took place at the same surf location.
+
+`Stokens` is a safe user-facing rename. Legacy internal identifiers such as `points_events`, point-award functions, and database columns remain unchanged to preserve existing data and avoid a risky cosmetic migration.
 
 Sodium does not attempt to count waves automatically.
 
@@ -72,7 +75,7 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - A member can initiate a session as a surfer or filmer.
 - Other members can join to surf; filming is offered when the session asks for clips or already has a filmer.
 - A planned session becomes active when its organizer taps Start surf.
-- Stopping it moves it to Past sessions and awards eligible points once.
+- Stopping it moves it to Past sessions and awards eligible Stokens once.
 - Admin attribution can credit the person who actually initiated a session, including a pending nonmember who later claims it.
 - Sessions can be edited, cancelled, shared externally, or shared directly with an existing Sodium member.
 
@@ -111,8 +114,6 @@ Marketplace is a lightweight directory of what members make or do. It can link t
 - Use first names by default in fictional/sample community states.
 - Do not regenerate training PDFs or one-pagers for minor UI adjustments unless the user asks.
 
-## Immediate release checklist
+## Current release
 
-1. Re-run JavaScript and visual preview checks.
-2. Commit the v1.86 nonprofit work and v1.87 profile/menu work together as one coherent release.
-3. Push to `origin/main` and verify the deployed version, profile stat panels, Events filters, and grouped drawer.
+Version 1.88 repairs profile activity totals, combines surf and film locations, distinguishes Clip Delivery from Stoke posts, introduces Stokens as the participation currency's user-facing name, adds a Nonprofits drawer shortcut, and prevents the page behind the mobile drawer from scrolling.
