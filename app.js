@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.88';
+const APP_VERSION = '1.89';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -73,6 +73,8 @@ const state = {
   guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
   postMemberTags: [], postCustomTags: [], qrInviteUrl: '', qrInviteRegionName: '',
   nonprofitLogoUrls: {}, editingNonprofitId: null, drawerScrollY: 0,
+  googleDriveConnected: false, googleDriveChecked: false, googleDriveSyncTimer: null,
+  driveConnectResult: '',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -232,6 +234,7 @@ function startEmailCooldown(button, seconds = 60) {
 
 async function init() {
   const params = new URLSearchParams(location.search);
+  state.driveConnectResult = params.get('drive') || '';
   if (params.get('preview') === '1') {
     runPreview();
     return;
@@ -239,6 +242,8 @@ async function init() {
   state.guestClipToken = params.get('guest-clips')?.trim() || '';
   if (state.guestClipToken) {
     await loadGuestClipDelivery();
+    startGoogleDrivePolling();
+    syncGuestGoogleDriveDelivery();
     return;
   }
   if ('serviceWorker' in navigator && !/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
@@ -622,6 +627,18 @@ async function enterCommunity() {
   offerInstallAfterAuth();
   revealSharedTarget();
   showWhatsNew();
+  startGoogleDrivePolling();
+  if (state.driveConnectResult) {
+    const result = state.driveConnectResult;
+    state.driveConnectResult = '';
+    if (result === 'connected') {
+      state.googleDriveChecked = false;
+      await loadGoogleDriveStatus();
+      openClipDeliveryComposer();
+      toast('Google Drive connected. Choose the clip folder.');
+    } else if (result === 'cancelled') toast('Google Drive connection cancelled. Paste a link instead.');
+    else toast('Google Drive did not connect. Paste a link instead.', 6000);
+  }
 }
 
 async function loadApp() {
@@ -1152,7 +1169,7 @@ function setView(view) {
   if (!state.preview && view === 'chat') loadRoomMessages();
   if (!state.preview && view === 'dms') {
     loadDmInbox();
-    loadClipDeliveries();
+    loadClipDeliveries().then(syncMemberGoogleDriveDeliveries);
   }
   if (view === 'dms') renderInboxTabs();
   // Stoke stays a normal feed. Re-sign private media whenever it is opened so
@@ -1449,6 +1466,133 @@ function clipProviderLabel(provider) {
   return ({ google_drive:'Google Drive', dropbox:'Dropbox', icloud:'iCloud', other:'Clip link' })[provider] || 'Clip link';
 }
 
+async function googleDriveRequest(path, options = {}, authenticated = true) {
+  const headers = { ...(options.headers || {}) };
+  if (authenticated) {
+    const session = state.session || (await db.auth.getSession()).data.session;
+    if (!session?.access_token) throw new Error('Sign in again before connecting Google Drive.');
+    headers.Authorization = `Bearer ${session.access_token}`;
+  }
+  if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const response = await fetch(`/api/google-drive/${path}`, { ...options, headers });
+  const payload = response.headers.get('content-type')?.includes('application/json') ? await response.json() : {};
+  if (!response.ok) throw new Error(payload.error || 'Google Drive is unavailable. Paste the folder link instead.');
+  return payload;
+}
+
+function renderGoogleDriveCard() {
+  const card = $('#clipDriveCard');
+  if (!card) return;
+  const folderId = $('#clipGoogleFolderId').value;
+  const folderName = $('#clipGoogleFolderName').value;
+  card.classList.toggle('selected', Boolean(folderId));
+  $('#clipDriveConnect').classList.toggle('hidden', state.googleDriveConnected);
+  $('#clipDrivePick').classList.toggle('hidden', !state.googleDriveConnected);
+  $('#clipDriveDisconnect').classList.toggle('hidden', !state.googleDriveConnected);
+  $('#clipDriveHeading').textContent = folderId ? (folderName || 'Google Drive folder selected') : 'Pick a folder without copying its link';
+  $('#clipDriveStatus').textContent = folderId
+    ? 'Sodium counts completed video uploads while this delivery is open.'
+    : state.googleDriveConnected ? 'Connected. Choose only the folder for this delivery.' : 'Manual links always remain available.';
+  const automatic = Boolean(folderId);
+  $('.clip-count-fields').classList.toggle('google-tracked', automatic);
+  $('#clipUploadedCount').readOnly = automatic;
+}
+
+async function loadGoogleDriveStatus(force = false) {
+  if (state.preview || (!force && state.googleDriveChecked)) {
+    renderGoogleDriveCard();
+    return state.googleDriveConnected;
+  }
+  try {
+    const result = await googleDriveRequest('status', { method:'POST' });
+    state.googleDriveConnected = Boolean(result.connected);
+  } catch (error) {
+    console.warn('Optional Google Drive status unavailable:', error.message);
+    state.googleDriveConnected = false;
+  }
+  state.googleDriveChecked = true;
+  renderGoogleDriveCard();
+  return state.googleDriveConnected;
+}
+
+async function connectGoogleDrive() {
+  try {
+    const result = await googleDriveRequest('connect', { method:'POST' });
+    if (!result.authorizationUrl) throw new Error('Google Drive did not provide a connection page.');
+    location.href = result.authorizationUrl;
+  } catch (error) { toast(readableError(error), 6000); }
+}
+
+async function disconnectGoogleDrive() {
+  if (!confirm('Disconnect Google Drive from Sodium? Existing folder links will keep working with manual counts.')) return;
+  try {
+    await googleDriveRequest('disconnect', { method:'POST' });
+    state.googleDriveConnected = false;
+    state.googleDriveChecked = true;
+    $('#clipGoogleFolderId').value = '';
+    $('#clipGoogleFolderName').value = '';
+    renderGoogleDriveCard();
+    updateClipProviderHint();
+    toast('Google Drive disconnected. Paste links still work.');
+  } catch (error) { toast(readableError(error), 6000); }
+}
+
+let googlePickerPromise = null;
+function loadGooglePicker() {
+  if (window.google?.picker) return Promise.resolve();
+  if (googlePickerPromise) return googlePickerPromise;
+  googlePickerPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-google-picker]');
+    const ready = () => window.gapi.load('picker', { callback:resolve, onerror:() => reject(new Error('Google Picker did not load.')) });
+    if (existing) { existing.addEventListener('load', ready, { once:true }); return; }
+    const script = document.createElement('script');
+    script.src = 'https://apis.google.com/js/api.js';
+    script.async = true;
+    script.dataset.googlePicker = 'true';
+    script.onload = ready;
+    script.onerror = () => reject(new Error('Google Picker did not load.'));
+    document.head.append(script);
+  });
+  return googlePickerPromise;
+}
+
+async function pickGoogleDriveFolder() {
+  try {
+    const config = await googleDriveRequest('token', { method:'POST' });
+    await loadGooglePicker();
+    const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(true)
+      .setMimeTypes('application/vnd.google-apps.folder');
+    const picker = new google.picker.PickerBuilder()
+      .setAppId(config.appId)
+      .setDeveloperKey(config.apiKey)
+      .setOAuthToken(config.accessToken)
+      .addView(view)
+      .setTitle('Choose the clip folder')
+      .setCallback(data => {
+        if (data.action !== google.picker.Action.PICKED || !data.docs?.[0]) return;
+        const folder = data.docs[0];
+        $('#clipGoogleFolderId').value = folder.id || '';
+        $('#clipGoogleFolderName').value = folder.name || 'Google Drive folder';
+        $('#clipFolderUrl').value = folder.url || `https://drive.google.com/drive/folders/${folder.id}`;
+        $('#clipUploadedCount').value = '0';
+        renderGoogleDriveCard();
+        updateClipProviderHint();
+        updateClipProgressPreview();
+      })
+      .build();
+    picker.setVisible(true);
+  } catch (error) {
+    if (/reconnect/i.test(error.message)) {
+      state.googleDriveConnected = false;
+      state.googleDriveChecked = true;
+      renderGoogleDriveCard();
+    }
+    toast(`${readableError(error)} You can still paste the folder link.`, 7000);
+  }
+}
+
 async function loadGuestClipDelivery() {
   showOnly('guestClipScreen');
   const result = await db.rpc('get_guest_clip_delivery', { access_token:state.guestClipToken });
@@ -1458,11 +1602,55 @@ async function loadGuestClipDelivery() {
     return;
   }
   state.guestClipDelivery = result.data;
-  const delivery = result.data;
+  renderGuestClipDelivery();
+}
+
+function renderGuestClipDelivery() {
+  const delivery = state.guestClipDelivery;
+  if (!delivery) return;
   const ready = delivery.status === 'ready' || Number(delivery.uploaded_count) >= Number(delivery.expected_count);
   const percent = delivery.expected_count ? Math.min(100, Math.round(Number(delivery.uploaded_count) / Number(delivery.expected_count) * 100)) : 0;
   $('#guestClipContent').innerHTML = `<div class="guest-clip-summary"><span>${esc(delivery.sender_name)} SENT YOU</span><h1>${esc((delivery.subject_names || []).join(', ') || 'Your clips')}</h1><small>${delivery.session_spot ? `${esc(delivery.session_spot)}${delivery.session_location ? ` · ${esc(delivery.session_location)}` : ''}` : 'Sodium clip delivery'}</small><div class="clip-progress-copy"><b>${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}</b><span>${ready ? 'Clips ready' : `${percent}% uploaded`}</span></div><div class="clip-progress-track"><span style="width:${ready ? 100 : percent}%"></span></div>${delivery.note ? `<p>${esc(delivery.note)}</p>` : ''}<button class="guest-clip-join" data-action="guest-clip-join">Join Sodium + open clips</button><a class="guest-clip-open guest-clip-open-secondary" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener">${ready ? 'View clips without an account' : 'View uploading folder without an account'}</a></div>`;
   $('#guestClipAccountActions').classList.remove('hidden');
+}
+
+async function syncGoogleDriveDelivery(delivery) {
+  try {
+    const result = await googleDriveRequest('sync', { method:'POST', body:JSON.stringify({ deliveryId:delivery.id }) });
+    delivery.uploaded_count = result.uploadedCount;
+    delivery.status = result.status;
+    delivery.updated_at = new Date().toISOString();
+    return true;
+  } catch (error) {
+    console.warn('Google Drive clip count deferred:', error.message);
+    return false;
+  }
+}
+
+async function syncMemberGoogleDriveDeliveries() {
+  if (!state.profile || state.preview || document.visibilityState === 'hidden' || !['dms', 'dm'].includes(state.view)) return;
+  const deliveries = state.clipDeliveries.filter(item => item.tracking_mode === 'google_drive' && item.google_folder_id && item.status !== 'cancelled');
+  if (!deliveries.length) return;
+  const changed = (await Promise.all(deliveries.map(syncGoogleDriveDelivery))).some(Boolean);
+  if (changed) renderClipDeliveries();
+}
+
+async function syncGuestGoogleDriveDelivery() {
+  const delivery = state.guestClipDelivery;
+  if (!delivery || delivery.tracking_mode !== 'google_drive' || !delivery.google_folder_id || document.visibilityState === 'hidden') return;
+  try {
+    const result = await googleDriveRequest('sync', { method:'POST', body:JSON.stringify({ guestToken:state.guestClipToken }) }, false);
+    delivery.uploaded_count = result.uploadedCount;
+    delivery.status = result.status;
+    renderGuestClipDelivery();
+  } catch (error) { console.warn('Guest Google Drive clip count deferred:', error.message); }
+}
+
+function startGoogleDrivePolling() {
+  if (state.googleDriveSyncTimer) return;
+  const sync = () => state.guestClipToken ? syncGuestGoogleDriveDelivery() : syncMemberGoogleDriveDeliveries();
+  state.googleDriveSyncTimer = window.setInterval(sync, 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync(); });
 }
 
 async function joinFromGuestClip() {
@@ -1657,9 +1845,15 @@ function updateClipProgressPreview() {
 function updateClipProviderHint() {
   const provider = clipProviderFromUrl($('#clipFolderUrl').value);
   const hint = $('#clipProviderHint');
+  if ($('#clipGoogleFolderId').value) {
+    hint.textContent = 'Selected with Google Drive · completed video files count automatically while the delivery is viewed.';
+    hint.classList.add('clip-auto-count-note');
+    return;
+  }
+  hint.classList.remove('clip-auto-count-note');
   hint.textContent = provider === 'other'
-    ? 'Any HTTPS folder link works. Automatic provider tracking can be connected later.'
-    : `${clipProviderLabel(provider)} detected · this delivery is ready for provider tracking.`;
+    ? 'Any HTTPS folder link works.'
+    : `${clipProviderLabel(provider)} detected · manual clip counting stays available.`;
 }
 
 function clipSessionOptions(selected = '') {
@@ -1685,11 +1879,15 @@ function openClipDeliveryComposer(deliveryId = null, sessionId = '', recipientId
   $('#clipSession').innerHTML = clipSessionOptions(delivery?.session_id || sessionId);
   $('#clipSubjects').value = delivery ? clipSubjectNames(delivery) : '';
   $('#clipFolderUrl').value = delivery?.folder_url || '';
+  $('#clipGoogleFolderId').value = delivery?.google_folder_id || '';
+  $('#clipGoogleFolderName').value = delivery?.google_folder_name || '';
   $('#clipExpectedCount').value = delivery?.expected_count || 1;
   $('#clipUploadedCount').value = delivery?.uploaded_count || 0;
   $('#clipNote').value = delivery?.note || '';
   updateClipProviderHint();
   updateClipProgressPreview();
+  renderGoogleDriveCard();
+  loadGoogleDriveStatus();
   openSheet('clipDeliverySheet');
 }
 
@@ -1715,6 +1913,8 @@ async function saveClipDelivery(event) {
     if (!subjectNames.length || subjectNames.length > 20) throw new Error('Add the first name of the surfer in the clips.');
     if (subjectNames.some(name => name.length > 80)) throw new Error('Keep each surfer name under 80 characters.');
     const pendingRecipient = $('#clipRecipient').value === 'pending';
+    const googleFolderId = $('#clipGoogleFolderId').value.trim() || null;
+    const googleFolderName = $('#clipGoogleFolderName').value.trim() || null;
     const payload = {
       sender:state.profile.id,
       recipient:pendingRecipient ? null : $('#clipRecipient').value,
@@ -1725,19 +1925,27 @@ async function saveClipDelivery(event) {
       folder_url:url.href,
       expected_count:expectedCount,
       uploaded_count:uploadedCount,
-      tracking_mode:'manual',
+      tracking_mode:googleFolderId ? 'google_drive' : 'manual',
+      google_folder_id:googleFolderId,
+      google_folder_name:googleFolderName,
       note:$('#clipNote').value.trim() || null,
     };
     if ((!payload.recipient && !payload.recipient_name) || payload.recipient === state.profile.id) throw new Error('Choose a Sodium member or add the guest’s first name.');
-    const edited = Boolean(state.editingClipDeliveryId);
+    const editingDeliveryId = state.editingClipDeliveryId;
+    const edited = Boolean(editingDeliveryId);
     const result = edited
-      ? await db.from('clip_deliveries').update(payload).eq('id', state.editingClipDeliveryId).eq('sender', state.profile.id)
+      ? await db.from('clip_deliveries').update(payload).eq('id', editingDeliveryId).eq('sender', state.profile.id)
       : await db.from('clip_deliveries').insert(payload).select('id').single();
     if (result.error) throw result.error;
     const createdDeliveryId = edited ? null : result.data?.id;
     closeSheet();
     state.editingClipDeliveryId = null;
     await loadClipDeliveries();
+    if (googleFolderId) {
+      const savedDelivery = state.clipDeliveries.find(item => item.id === (createdDeliveryId || editingDeliveryId));
+      if (savedDelivery) await syncGoogleDriveDelivery(savedDelivery);
+      renderClipDeliveries();
+    }
     state.inboxTab = 'clips';
     state.clipBox = 'sent';
     setView('dms');
@@ -4523,7 +4731,7 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || editClipDeliveryNode || sessionClipsNode || ['make-invite', 'share-invite', 'share-invite-overview', 'share-invite-setup', 'share-invite-guide', 'show-invite-qr', 'share-qr-invite', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'open-clip-delivery', 'mark-clips-ready', 'delete-clip-delivery', 'save-post-draft', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || editClipDeliveryNode || sessionClipsNode || ['make-invite', 'share-invite', 'share-invite-overview', 'share-invite-setup', 'share-invite-guide', 'show-invite-qr', 'share-qr-invite', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'open-clip-delivery', 'mark-clips-ready', 'delete-clip-delivery', 'connect-google-drive', 'pick-google-folder', 'disconnect-google-drive', 'save-post-draft', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -4619,6 +4827,9 @@ document.addEventListener('click', async event => {
     'go-surfing': () => setView('surfing'),
     'open-dms': () => setView('dms'),
     'open-clip-delivery': () => openClipDeliveryComposer(),
+    'connect-google-drive': connectGoogleDrive,
+    'pick-google-folder': pickGoogleDriveFolder,
+    'disconnect-google-drive': disconnectGoogleDrive,
     'mark-clips-ready': markClipDeliveryReady,
     'delete-clip-delivery': deleteClipDelivery,
     'make-invite': openShareInviteHub,
@@ -4801,7 +5012,15 @@ $('#roomPhoto').addEventListener('change', event => {
   $(`#${id}`).addEventListener('input', updateClipProgressPreview);
   $(`#${id}`).addEventListener('change', updateClipProgressPreview);
 });
-$('#clipFolderUrl').addEventListener('input', updateClipProviderHint);
+$('#clipFolderUrl').addEventListener('input', () => {
+  const folderId = $('#clipGoogleFolderId').value;
+  if (folderId && !$('#clipFolderUrl').value.includes(folderId)) {
+    $('#clipGoogleFolderId').value = '';
+    $('#clipGoogleFolderName').value = '';
+    renderGoogleDriveCard();
+  }
+  updateClipProviderHint();
+});
 
 function fillKnownSpotLocation(spotInput, locationInput) {
   const name = spotInput.value.trim().toLowerCase();

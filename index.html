@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="description" content="Sodium — surf with your friends, not your feed.">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'sha256-3c89LCajFIcYa3gJG+BT+TDhA7lOkJhgrUVZoL4wcqY=' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https://maihhnwrstewzapsvrec.supabase.co; connect-src 'self' https://maihhnwrstewzapsvrec.supabase.co wss://maihhnwrstewzapsvrec.supabase.co; worker-src 'self'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'sha256-3c89LCajFIcYa3gJG+BT+TDhA7lOkJhgrUVZoL4wcqY=' https://cdn.jsdelivr.net https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https://maihhnwrstewzapsvrec.supabase.co; connect-src 'self' https://maihhnwrstewzapsvrec.supabase.co wss://maihhnwrstewzapsvrec.supabase.co https://www.googleapis.com; frame-src https://accounts.google.com https://docs.google.com https://drive.google.com; worker-src 'self'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
   <meta property="og:title" content="You're invited to Sodium">
   <meta property="og:description" content="A private surf community built to help friends surf and film together more often.">
   <meta property="og:site_name" content="Sodium">
@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=88-drawer-polish">
+  <link rel="stylesheet" href="./styles.css?v=89-drive-picker">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -69,7 +69,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.88</small>
+    <small class="boot-credit">Saltyview Productions · v1.89</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -516,6 +516,11 @@
         <label id="clipRecipientNameRow" class="hidden">Their first name<input id="clipRecipientName" maxlength="80" placeholder="Recipient's first name"><small>They will receive an invite that opens this delivery after signup.</small></label>
         <label>Clips of<input id="clipSubjects" type="text" maxlength="240" required placeholder="Surfer's first name"><small>The surfer in the footage. Separate multiple first names with commas.</small></label>
         <label>Related session <small>optional</small><select id="clipSession"><option value="">No linked session</option></select></label>
+        <div id="clipDriveCard" class="clip-drive-card">
+          <div><span>GOOGLE DRIVE · OPTIONAL</span><b id="clipDriveHeading">Pick a folder without copying its link</b><small id="clipDriveStatus">Manual links always remain available.</small></div>
+          <div class="clip-drive-actions"><button id="clipDriveConnect" type="button" class="secondary-button" data-action="connect-google-drive">Connect Drive</button><button id="clipDrivePick" type="button" class="secondary-button hidden" data-action="pick-google-folder">Choose folder</button><button id="clipDriveDisconnect" type="button" class="clip-drive-disconnect hidden" data-action="disconnect-google-drive">Disconnect</button></div>
+        </div>
+        <input id="clipGoogleFolderId" type="hidden"><input id="clipGoogleFolderName" type="hidden">
         <label>Link to clips<input id="clipFolderUrl" type="url" maxlength="2048" inputmode="url" required placeholder="https://drive.google.com/…"><small id="clipProviderHint">Drive, Dropbox, iCloud, or another HTTPS folder link.</small></label>
         <div class="clip-count-fields"><label>Total clips<input id="clipExpectedCount" type="number" inputmode="numeric" min="1" max="2000" required value="1"></label><label>Uploaded so far<input id="clipUploadedCount" type="number" inputmode="numeric" min="0" max="2000" required value="0"></label></div>
         <div id="clipProgressPreview" class="clip-progress-preview"><div><b>0 of 1</b><span>Uploading</span></div><i><span style="width:0%"></span></i><small>At 1 of 1, this automatically becomes Clips ready.</small></div>
@@ -539,9 +544,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.88</span>
-    <h3>Stokens and your real activity now count clearly.</h3>
-    <ul><li>Clips count as soon as you send the delivery—no acceptance required.</li><li>Locations combine the spots where you surfed or filmed.</li><li>Stoke posts earn Stokens without inflating your delivered-clip stats.</li></ul>
+    <span>NEW IN V1.89</span>
+    <h3>Google Drive folder picking is now optional.</h3>
+    <ul><li>Connect Drive once and choose the exact clip folder in Sodium.</li><li>Completed video uploads count automatically while a delivery is viewed.</li><li>Paste-a-link and manual counts still work exactly as before.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -556,6 +561,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
-  <script src="./app.js?v=88-stat-fixes" defer></script>
+  <script src="./app.js?v=89-drive-picker" defer></script>
 </body>
 </html>

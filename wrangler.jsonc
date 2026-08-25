@@ -5,7 +5,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": ".",
   "vars": {
-    "CF_ACCOUNT_ID": "bd47c21b1d04bbd68d667e2f1760d95f"
+    "CF_ACCOUNT_ID": "bd47c21b1d04bbd68d667e2f1760d95f",
+    "GOOGLE_APP_ID": "665265290167"
   },
   "observability": {
     "enabled": true

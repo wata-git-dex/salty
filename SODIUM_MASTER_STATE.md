@@ -6,9 +6,10 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.87.
-- This release combines the v1.86 nonprofit/event work with the v1.87 profile activity-stat and navigation work.
+- Current release: v1.89.
+- This release adds an optional limited-permission Google Drive folder picker and automatic completed-video counting without removing manual clip links.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
+- `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
 ## Core product
 
@@ -94,6 +95,9 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - Guest links expose only that delivery, not the Sodium community.
 - The clip outbox allows the sender to reopen, edit, and reshare deliveries.
 - A recipient joining Sodium can claim a prepared delivery.
+- Google Drive is optional. A filmer may connect with the narrow `drive.file` permission, choose one folder with Google Picker, and let Sodium refresh its completed-video count while a sender, recipient, or guest is viewing the delivery.
+- Sodium never requires the broad full-Drive read scope. Manual Drive, Dropbox, iCloud, and other HTTPS folder links remain the permanent fallback.
+- Google refresh tokens are encrypted server-side and are never stored in the browser or exposed through Supabase member policies.
 
 ## Events and nonprofits
 
@@ -117,3 +121,5 @@ Marketplace is a lightweight directory of what members make or do. It can link t
 ## Current release
 
 Version 1.88 repairs profile activity totals, combines surf and film locations, distinguishes Clip Delivery from Stoke posts, introduces Stokens as the participation currency's user-facing name, adds a Nonprofits drawer shortcut, and prevents the page behind the mobile drawer from scrolling.
+
+Version 1.89 adds the optional Google Drive folder picker and view-time clip counting. It does not add a paid background job, change existing clip-delivery records, or require members to connect Google.
