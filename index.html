@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=62-pink-theme-docs">
+  <link rel="stylesheet" href="./styles.css?v=63b-clear-invite-actions">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -67,7 +67,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.62</small>
+    <small class="boot-credit">Saltyview Productions · v1.63</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -320,8 +320,8 @@
 
     <section id="shareInviteSheet" class="sheet share-invite-sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
-      <h2>Share + invite</h2><p>Pick what you want your friend to do. Their invite remembers the task and opens the right place after signup.</p>
-      <div class="share-invite-choices"><button data-action="open-plan-invite"><svg><use href="#i-surf"/></svg><span><b>Plan a surf</b><small>They create the session and earn organizer credit.</small></span></button><button data-action="open-session-claim-list"><svg><use href="#i-check"/></svg><span><b>Claim a surf</b><small>Invite someone to claim a session you entered for them.</small></span></button><button data-action="open-pending-clip-delivery"><svg><use href="#i-folder"/></svg><span><b>Receive clips</b><small>Prepare their delivery, then invite them into it.</small></span></button></div>
+      <h2>What are you inviting them to do?</h2><p>Choose the situation that matches. Sodium creates the right invite and includes its one-page instructions.</p>
+      <div class="share-invite-choices"><button data-action="open-plan-invite"><svg><use href="#i-surf"/></svg><span><b>Invite them to plan a surf</b><small>Like Pierce: they told you they want to surf. They add tomorrow's plan and receive organizer credit.</small></span></button><button data-action="open-session-claim-list"><svg><use href="#i-check"/></svg><span><b>Invite them to claim a surf</b><small>You already entered their session. They join Sodium and take over the organizer credit.</small></span></button><button data-action="open-pending-clip-delivery"><svg><use href="#i-folder"/></svg><span><b>Send clips + invite to Sodium</b><small>Like Steve: create his clip delivery, then send the invite with clip instructions.</small></span></button></div>
       <div id="sessionClaimList" class="session-claim-list hidden"></div>
     </section>
 
@@ -448,9 +448,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.62</span>
-    <h3>Pick your Sodium look.</h3>
-    <ul><li>Pink is now a fifth full-app theme.</li><li>Your chosen colors stay saved on this device.</li><li>The standard Home Screen icon stays consistent.</li></ul>
+    <span>NEW IN V1.63</span>
+    <h3>Clearer invites. Editable history.</h3>
+    <ul><li>Invite someone to plan, claim, or receive clips.</li><li>Clip invites clearly include their instructions.</li><li>Creators can correct finished sessions.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -464,6 +464,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=62-pink-theme-docs" defer></script>
+  <script src="./app.js?v=63b-clear-invite-actions" defer></script>
 </body>
 </html>

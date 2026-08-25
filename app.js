@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.62';
+const APP_VERSION = '1.63';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
@@ -1452,7 +1452,7 @@ function clipDeliveryMarkup(delivery) {
   const progress = `${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}`;
   const date = messageTime(delivery.ready_at || delivery.updated_at || delivery.created_at);
   const edit = mine && !cancelled ? `<button class="clip-edit" data-edit-clip-delivery="${delivery.id}" aria-label="Edit clip delivery"><svg><use href="#i-edit"/></svg></button>` : '';
-  const pendingActions = mine && !delivery.recipient ? `<button class="clip-open" data-invite-clip-claim="${delivery.id}">Invite to Sodium</button><button class="clip-edit" data-share-guest-clips="${delivery.id}" title="Guest clip link">Guest link</button>` : '';
+  const pendingActions = mine && !delivery.recipient ? `<button class="clip-open" data-invite-clip-claim="${delivery.id}">Invite + clip instructions</button><button class="clip-edit guest-instructions" data-share-guest-clips="${delivery.id}" title="No account required">Guest link + instructions</button>` : '';
   const messages = (delivery.clip_delivery_messages || []).slice(-3).map(message => `<div class="guest-clip-message"><b>${esc(memberById(message.sender_user)?.name || message.guest_name || 'Guest')}</b><p>${esc(message.body)}</p></div>`).join('');
   const threadCount = (delivery.clip_delivery_messages || []).length;
   const thread = `<details class="clip-thread"><summary>Delivery chat${threadCount ? ` · ${threadCount}` : ''}</summary>${messages || '<small>No messages yet.</small>'}<form data-clip-message-form="${delivery.id}"><input maxlength="1000" required placeholder="Ask about a missing wave…"><button>Send</button></form></details>`;
@@ -1609,7 +1609,7 @@ async function saveClipDelivery(event) {
     state.inboxTab = 'clips';
     setView('dms');
     renderInboxTabs();
-    toast(pendingRecipient && !edited ? 'Delivery created. Choose Invite to Sodium or Guest link on its card.' : (uploadedCount >= expectedCount ? 'Clips ready.' : (edited ? 'Clip delivery updated.' : 'Clip delivery started.')));
+    toast(pendingRecipient && !edited ? 'Delivery created. Choose Invite + instructions or Guest link + instructions on its card.' : (uploadedCount >= expectedCount ? 'Clips ready.' : (edited ? 'Clip delivery updated.' : 'Clip delivery started.')));
   } catch (error) { toast(readableError(error), 6000); }
   finally { submit.disabled = false; }
 }
@@ -2404,7 +2404,7 @@ function renderSessions() {
       .filter(Boolean)
       .filter((name, index, names) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
     const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
-    const edit = !pastSession && mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="Edit surf"><svg><use href="#i-edit"/></svg></button>` : '';
+    const edit = mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="${pastSession ? 'Edit finished surf' : 'Edit surf'}"><svg><use href="#i-edit"/></svg></button>` : '';
     const share = !pastSession ? `<button class="session-share-icon" data-share-session="${session.id}" aria-label="Share this surf"><svg><use href="#i-share"/></svg></button>` : '';
     const sessionState = !pastSession && mine
       ? (session.when_label === 'Now'
@@ -2412,7 +2412,7 @@ function renderSessions() {
         : `<button class="session-state-icon start" data-start-session="${session.id}" aria-label="Start surf" title="Start surf"><svg><use href="#i-play"/></svg></button>`)
       : '';
     const sendClips = pastSession && (mine || myRsvp?.role === 'film') ? `<button class="session-send-clips" data-session-clips="${session.id}" aria-label="Send clips from this session" title="Send clips"><svg><use href="#i-folder"/></svg></button>` : '';
-    const tools = pastSession ? '<span class="past-badge">Finished</span>' : `<div class="session-card-tools">${sessionState}${share}${edit}</div>`;
+    const tools = pastSession ? `<div class="session-card-tools"><span class="past-badge">Finished</span>${edit}</div>` : `<div class="session-card-tools">${sessionState}${share}${edit}</div>`;
     const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;
     const filmAction = (session.wants_filmer || myRsvp?.role === 'film')
       ? `<button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : (filmers.length ? 'Film too' : 'I can film')}</button>`
@@ -2581,8 +2581,9 @@ async function createSession(event) {
     const later = $('[data-when="later"]').classList.contains('active');
     const surfTime = later ? $('#sessionTime').value : null;
     const existingSession = state.editingSessionId ? state.sessions.find(session => session.id === state.editingSessionId) : null;
+    const editingPastSession = Boolean(existingSession && isPastSession(existingSession));
     if (later && !surfTime) throw new Error('Pick a date and time.');
-    if (surfTime && new Date(surfTime) <= new Date()) throw new Error('Pick a future date and time.');
+    if (surfTime && new Date(surfTime) <= new Date() && !editingPastSession) throw new Error('Pick a future date and time.');
     const savedSurfTime = surfTime
       ? new Date(surfTime).toISOString()
       : existingSession?.when_label === 'Now'
@@ -2854,7 +2855,7 @@ function profileMarkup(profile, stats = {}) {
   const listings = state.listings.filter(item => item.owner_id === profile.id && (item.status === 'approved' || canEditListing(item))).slice(0, 3);
   const listingSection = listings.length ? `<article class="profile-card profile-listings"><div class="profile-listings-header"><h3>Makes / does</h3><button data-view="marketplace">Marketplace →</button></div>${listings.map(item => `<button class="profile-listing" data-listing="${item.id}"><span><b>${esc(item.title)}</b><small>${esc(item.category)}${item.status !== 'approved' ? ` · ${esc(item.status)}` : ''}</small></span><i>›</i></button>`).join('')}</article>` : '';
   const controls = stats.own
-    ? `<div class="profile-actions"><button class="primary" data-action="share-invite">Invite a friend to Sodium</button><button class="secondary-button overview-invite-button" data-action="share-invite-overview">Invite + app overview</button><button class="secondary-button setup-invite-button" data-action="share-invite-setup">Invite + phone setup</button><button class="secondary-button guide-invite-button" data-action="share-invite-guide">Invite + full manual</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
+    ? `<div class="profile-actions"><button class="primary" data-action="open-share-invite">Invite for a surf or clips</button><button class="secondary-button overview-invite-button" data-action="share-invite-overview">General invite + app overview</button><button class="secondary-button setup-invite-button" data-action="share-invite-setup">General invite + phone setup</button><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
     : `<div class="profile-actions"><button class="primary" data-dm-member="${profile.id}">Message ${esc(profile.name)}</button></div>`;
   return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Sodium Crew</p></div></div>${stats.own ? `<section class="profile-stat-group"><div class="profile-stat-heading"><span>Community activity</span><small>Points, streak, and posts</small></div><div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke shared</span></article></div></section><section class="profile-stat-group surf-stat-group"><div class="profile-stat-heading"><span>Surf stats</span><small>Completed sessions only</small></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>surfed</span></article><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>filmed</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations</span></article></div></section>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${listingSection}${controls}<footer class="profile-footer"><b>SODIUM</b>surf with your friends, not your feed</footer>`;
 }
@@ -3376,7 +3377,7 @@ document.addEventListener('click', async event => {
     'open-clip-delivery': () => openClipDeliveryComposer(),
     'mark-clips-ready': markClipDeliveryReady,
     'delete-clip-delivery': deleteClipDelivery,
-    'make-invite': () => shareInvite(),
+    'make-invite': openShareInviteHub,
     'share-invite': () => shareInvite(),
     'share-invite-guide': () => shareInvite({ includeGuide:true }),
     'share-invite-overview': () => shareInvite({ includeOverview:true }),

@@ -221,3 +221,7 @@ html[data-theme="foam"] .feedback-description p,html[data-theme="foam"] .feedbac
 .post-media-unavailable{min-height:260px;display:grid;place-items:center;background:var(--ink);color:var(--mut);font-size:12px;font-weight:800}
 .clip-delivery-title small{display:block;color:var(--mut);font-size:9.5px;margin-top:3px}
 .clip-subject-label{display:block;color:var(--hail);font:900 8px Archivo;letter-spacing:1.2px;margin-bottom:2px}
+
+/* v1.63: the two pending clip-share choices explain whether signup is required. */
+.clip-delivery-actions{flex-wrap:wrap}
+.clip-delivery-actions .clip-edit.guest-instructions{flex:1 1 100%;padding:0 9px}
