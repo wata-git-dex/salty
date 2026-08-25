@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.70';
+const APP_VERSION = '1.71';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
@@ -42,6 +42,7 @@ const NOTIFICATION_DEFAULTS = Object.freeze({
   session_updates: true,
   community_chat: false,
   clip_deliveries: true,
+  new_members: true,
 });
 
 // Upgrade runway: after moving Supabase to Pro, raise maxUploadBytes and replace
@@ -145,7 +146,7 @@ function applyIconTheme(theme = 'ink', announce = false) {
 }
 
 function showOnly(id) {
-  ['boot', 'welcome', 'consentScreen', 'authScreen', 'verifyScreen', 'profileSetup', 'app'].forEach(name => $(`#${name}`).classList.toggle('hidden', name !== id));
+  ['boot', 'welcome', 'consentScreen', 'authScreen', 'verifyScreen', 'guestClipScreen', 'profileSetup', 'app'].forEach(name => $(`#${name}`).classList.toggle('hidden', name !== id));
 }
 
 function consentStorageKey() { return `salty:consent:${CONSENT_VERSION}`; }
@@ -642,7 +643,7 @@ async function loadApp() {
   renderMembers();
   if (state.profile?.is_admin) await loadIssueReports({ silent:true });
   subscribeRealtime();
-  if (['surfing', 'feed', 'chat', 'events', 'dms', 'clips'].includes(state.pendingOpen)) {
+  if (['surfing', 'feed', 'chat', 'events', 'dms', 'clips', 'members'].includes(state.pendingOpen)) {
     if (state.pendingOpen === 'clips') {
       state.inboxTab = 'clips';
       setView('dms');
@@ -776,6 +777,7 @@ async function saveNotificationPreference(field, enabled) {
     session_updates: next.session_updates,
     community_chat: next.community_chat,
     clip_deliveries: next.clip_deliveries,
+    new_members: next.new_members,
     updated_at: new Date().toISOString(),
   }, { onConflict:'user_id' }).select().single();
   if (result.error) throw result.error;
@@ -1437,6 +1439,28 @@ function clipSubjectNames(delivery) {
   return names.length ? names.join(', ') : (delivery?.recipient_profile?.name || 'the surfer');
 }
 
+function clipShareCopy(delivery, recipientName) {
+  const fullName = String(recipientName || 'dude').trim();
+  const greeting = fullName.split(/\s+/)[0] || 'dude';
+  const subjects = Array.isArray(delivery?.subject_names) ? delivery.subject_names.filter(Boolean) : [];
+  const normalize = value => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+  const recipientFirst = normalize(greeting).split(' ')[0];
+  const samePerson = subjects.length === 1 && normalize(subjects[0]).split(' ')[0] === recipientFirst;
+  const clips = samePerson
+    ? `your ${formatCount(delivery.expected_count)} clips`
+    : `${formatCount(delivery.expected_count)} clips of ${clipSubjectNames(delivery)}`;
+  const session = delivery.session;
+  const date = session?.surf_time ? scheduleParts(session.surf_time).date : '';
+  const spot = session?.spot?.name || '';
+  const location = session?.spot?.general_location || '';
+  const place = [spot, location && normalize(location) !== normalize(spot) ? location : ''].filter(Boolean).join(' in ');
+  const context = date && place
+    ? ` from the ${date} session at ${place}`
+    : date ? ` from the ${date} session`
+      : place ? ` from the session at ${place}` : '';
+  return { greeting, sentence:`Yo ${greeting} — here are ${clips}${context}.` };
+}
+
 function clipDeliveryPercent(delivery) {
   if (!delivery?.expected_count) return 0;
   return Math.max(0, Math.min(100, Math.round((delivery.uploaded_count / delivery.expected_count) * 100)));
@@ -1455,12 +1479,12 @@ function clipDeliveryMarkup(delivery) {
   const shareAction = mine
     ? (delivery.recipient
       ? `<button class="clip-open clip-share-again" data-share-clip-delivery="${delivery.id}"><svg><use href="#i-share"/></svg>Share delivery again</button>`
-      : `<button class="clip-open" data-invite-clip-claim="${delivery.id}">Invite + clip instructions</button><button class="clip-edit guest-instructions" data-share-guest-clips="${delivery.id}" title="No account required">Guest link + instructions</button>`)
+      : `<button class="clip-open" data-invite-clip-claim="${delivery.id}">Invite to Sodium + send clips</button><button class="clip-edit guest-instructions" data-share-guest-clips="${delivery.id}" title="No account required">Private clip link · no account</button>`)
     : '';
   const messages = (delivery.clip_delivery_messages || []).slice(-3).map(message => `<div class="guest-clip-message"><b>${esc(memberById(message.sender_user)?.name || message.guest_name || 'Guest')}</b><p>${esc(message.body)}</p></div>`).join('');
   const threadCount = (delivery.clip_delivery_messages || []).length;
   const thread = `<details class="clip-thread"><summary><svg><use href="#i-chat"/></svg><span>Messages${threadCount ? ` · ${threadCount}` : ''}</span><b>Open</b></summary>${messages || '<small>No Sodium messages yet.</small>'}<form data-clip-message-form="${delivery.id}"><input maxlength="1000" required placeholder="Ask about a missing wave…"><button>Send</button></form></details>`;
-  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}${thread}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${shareAction}${edit}</div></article>`;
+  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><details class="clip-card-details"><summary><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-summary-meta"><span>${esc(formatCount(delivery.expected_count))} clips · ${esc(clipSessionLabel(delivery))}</span><svg><use href="#i-back"/></svg></div></summary><div class="clip-delivery-expanded"><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}${thread}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${shareAction}${edit}</div></div></details></article>`;
 }
 
 function renderInboxTabs() {
@@ -1689,6 +1713,8 @@ function revealSharedDelivery() {
     return;
   }
   card.classList.add('shared-target');
+  const details = card.querySelector('.clip-card-details');
+  if (details) details.open = true;
   requestAnimationFrame(() => card.scrollIntoView({ behavior:'smooth', block:'center' }));
   setTimeout(() => card.classList.remove('shared-target'), 3600);
 }
@@ -3152,14 +3178,15 @@ async function shareClipClaimInvite(deliveryId) {
   if (!delivery) { toast('That delivery is no longer available.'); return; }
   if (delivery.recipient) { await shareExistingClipDelivery(deliveryId); return; }
   const name = delivery.recipient_name || 'dude';
+  const copy = clipShareCopy(delivery, name);
   try {
     const invite = await createContextInvite({ purpose:'claim_delivery', deliveryId, name });
     const url = new URL('./', location.href); url.search = ''; url.hash = '';
     url.searchParams.set('invite', invite.code); url.searchParams.set('open', 'claim-delivery'); url.searchParams.set('delivery', delivery.id);
-    const text = `Yo ${name} — I’m sending you ${delivery.expected_count} clips of ${clipSubjectNames(delivery)} through Sodium. Join here and the delivery opens automatically.`;
+    const text = `${copy.sentence} Join Sodium here and the delivery opens automatically. You can sign in with Google or use your email, then save Sodium to your phone or computer.`;
     let file = null;
     try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
-    await shareSodiumContent({ title:'Your clips on Sodium', text, url:url.href, file, copiedMessage:`Clip invite for ${name} copied.` });
+    await shareSodiumContent({ title:'Your clips on Sodium', text, url:url.href, file, copiedMessage:`Clip invite for ${copy.greeting} copied.` });
   } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
 }
 
@@ -3167,12 +3194,13 @@ async function shareExistingClipDelivery(deliveryId) {
   const delivery = state.clipDeliveries.find(item => item.id === deliveryId && item.sender === state.profile.id && item.recipient);
   if (!delivery) { toast('That delivery is not available to share.'); return; }
   const name = delivery.recipient_profile?.name || delivery.recipient_name || 'dude';
+  const copy = clipShareCopy(delivery, name);
   const url = new URL('./', location.href); url.search = ''; url.hash = '';
   url.searchParams.set('open', 'clips'); url.searchParams.set('delivery', delivery.id);
-  const text = `Yo ${name} — here’s your Sodium delivery with ${delivery.expected_count} clips of ${clipSubjectNames(delivery)}. Open it here to check the upload, get the folder, or message me about a missing wave.`;
+  const text = `${copy.sentence} Open it here to get the folder or message me about a missing wave.`;
   let file = null;
   try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V1.png'); } catch (_error) { /* Delivery link remains available. */ }
-  try { await shareSodiumContent({ title:'Your Sodium clip delivery', text, url:url.href, file, copiedMessage:`${name}’s clip delivery copied.` }); }
+  try { await shareSodiumContent({ title:'Your Sodium clip delivery', text, url:url.href, file, copiedMessage:`${copy.greeting}’s clip delivery copied.` }); }
   catch (error) { if (error?.name !== 'AbortError') prompt('Copy this clip delivery:', `${text}\n${url.href}`); }
 }
 
@@ -3183,7 +3211,8 @@ async function shareGuestClipLink(deliveryId) {
   if (result.error) { toast(readableError(result.error), 6000); return; }
   const url = new URL('./', location.href); url.search = ''; url.hash = ''; url.searchParams.set('guest-clips', result.data);
   const name = delivery.recipient_name || delivery.recipient_profile?.name || 'dude';
-  const text = `Yo ${name} — get your ${delivery.expected_count} clips of ${clipSubjectNames(delivery)} here. No Sodium account needed. This private link only opens your clip delivery.`;
+  const copy = clipShareCopy(delivery, name);
+  const text = `${copy.sentence} No Sodium account needed—this private link only opens your clip delivery.`;
   let file = null;
   try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
   try { await shareSodiumContent({ title:'Your clips from Sodium', text, url:url.href, file, copiedMessage:'Private guest clip link copied.' }); }
