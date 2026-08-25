@@ -58,6 +58,7 @@ create table public.sessions (
   note text,
   status text not null default 'active' check (status in ('active','ended','archived')),
   created_at timestamptz not null default now(),
+  started_at timestamptz,
   ended_at timestamptz,
   points_awarded_at timestamptz,
   check ((status = 'active' and ended_at is null) or status <> 'active')
@@ -154,6 +155,31 @@ create table public.dm_messages (
       or (attachment_path is not null and attachment_type is not null and attachment_size is not null))
 );
 
+create table public.nonprofit_organizations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(trim(name)) between 2 and 160),
+  website_url text check (website_url is null or website_url ~ '^https://'),
+  logo_url text check (logo_url is null or logo_url ~ '^https://'),
+  logo_path text,
+  summary text check (summary is null or char_length(trim(summary)) between 1 and 500),
+  active boolean not null default true,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index nonprofit_organizations_name_key
+  on public.nonprofit_organizations (lower(name));
+
+insert into public.nonprofit_organizations (name, website_url, logo_url, summary, active)
+values (
+  'Water Access To All',
+  'https://www.cleanwata.org/',
+  'https://static.wixstatic.com/media/db3616_5f5b48a47c2546be9449580e11170c9a~mv2.png/v1/fill/w_240,h_240,al_c,q_90/Wata%20-%20Icon%20-%20Black%20and%20Blue.png',
+  'Clean-water access through sustainable filtration systems and community-led partnerships.',
+  true
+);
+
 create table public.events (
   id uuid primary key default gen_random_uuid(),
   author uuid references public.profiles(id) on delete cascade not null,
@@ -165,9 +191,19 @@ create table public.events (
   venue_name text,
   location_text text,
   description text,
+  event_kind text not null default 'community' check (event_kind in ('community', 'nonprofit')),
+  nonprofit_id uuid references public.nonprofit_organizations(id) on delete set null,
+  official_url text check (official_url is null or official_url ~ '^https://'),
+  external_source text not null default 'manual' check (external_source in ('manual', 'calendar_feed')),
+  external_event_id text,
   created_at timestamptz not null default now(),
-  check (end_time is null or start_time is null or end_time > start_time)
+  check (end_time is null or start_time is null or end_time > start_time),
+  check (event_kind = 'community' or nonprofit_id is not null)
 );
+
+create unique index events_external_source_key
+  on public.events (nonprofit_id, external_source, external_event_id)
+  where external_event_id is not null;
 
 create table public.event_rsvps (
   event_id uuid references public.events(id) on delete cascade not null,
@@ -645,6 +681,7 @@ alter table public.post_likes enable row level security;
 alter table public.connections enable row level security;
 alter table public.room_messages enable row level security;
 alter table public.dm_messages enable row level security;
+alter table public.nonprofit_organizations enable row level security;
 alter table public.events enable row level security;
 alter table public.event_rsvps enable row level security;
 alter table public.points_events enable row level security;
@@ -707,9 +744,11 @@ create policy dms_insert_sender on public.dm_messages for insert with check (
   and (attachment_path is null or split_part(attachment_path, '/', 1) = auth.uid()::text)
 );
 create policy dms_delete_sender on public.dm_messages for delete using (sender = auth.uid());
+create policy nonprofit_organizations_read on public.nonprofit_organizations for select using (public.is_member() and (active or public.is_admin()));
+create policy nonprofit_organizations_admin_write on public.nonprofit_organizations for all using (public.is_admin()) with check (public.is_admin());
 create policy events_read on public.events for select using (public.is_member());
-create policy events_insert_own on public.events for insert with check (public.is_member() and author = auth.uid());
-create policy events_update_own on public.events for update using (author = auth.uid()) with check (author = auth.uid());
+create policy events_insert_own on public.events for insert with check (public.is_member() and author = auth.uid() and (event_kind = 'community' or public.is_admin()));
+create policy events_update_own on public.events for update using (author = auth.uid() or public.is_admin()) with check ((author = auth.uid() or public.is_admin()) and (event_kind = 'community' or public.is_admin()));
 create policy events_delete_own on public.events for delete using (author = auth.uid() or public.is_admin());
 create policy event_rsvps_read on public.event_rsvps for select using (public.is_member());
 create policy event_rsvps_insert_own on public.event_rsvps for insert with check (public.is_member() and user_id = auth.uid());
@@ -787,7 +826,7 @@ alter default privileges in schema public revoke all on tables from anon, authen
 grant select on public.regions to authenticated;
 grant select (id, name, nickname, home_region, sponsors, social_url, avatar_path, onboarding_complete, created_at) on public.profiles to authenticated;
 grant update (name, nickname, phone, home_region, sponsors, social_url, avatar_path, onboarding_complete) on public.profiles to authenticated;
-grant select, insert, update, delete on public.spots, public.brands, public.sessions, public.session_rsvps, public.posts, public.post_comments, public.room_messages, public.events, public.rewards, public.notification_preferences, public.push_subscriptions, public.beta_issue_reports to authenticated;
+grant select, insert, update, delete on public.spots, public.brands, public.sessions, public.session_rsvps, public.posts, public.post_comments, public.room_messages, public.nonprofit_organizations, public.events, public.rewards, public.notification_preferences, public.push_subscriptions, public.beta_issue_reports to authenticated;
 grant select, insert, delete on public.post_tags, public.post_likes, public.dm_messages, public.event_rsvps, public.mutes to authenticated;
 grant select on public.connections, public.points_events, public.streaks, public.notification_queue to authenticated;
 grant select, insert, update on public.reward_claims, public.reports to authenticated;
@@ -816,6 +855,11 @@ on conflict (id) do update set public = excluded.public, file_size_limit = exclu
 -- Private beta screenshots, visible only to their reporter and Sodium admins.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('salty-feedback', 'salty-feedback', false, 10485760, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+-- Member-visible nonprofit profile images, managed by Sodium admins.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('sodium-nonprofits', 'sodium-nonprofits', false, 5242880, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do update set public = excluded.public, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 create policy salty_media_read on storage.objects for select to authenticated using (bucket_id = 'salty-media' and public.is_member());
@@ -861,8 +905,18 @@ using (bucket_id = 'salty-feedback' and ((storage.foldername(name))[1] = auth.ui
 create policy salty_feedback_delete_own_or_admin on storage.objects for delete to authenticated
 using (bucket_id = 'salty-feedback' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
 
+create policy sodium_nonprofits_read on storage.objects for select to authenticated
+using (bucket_id = 'sodium-nonprofits' and public.is_member());
+create policy sodium_nonprofits_insert_admin on storage.objects for insert to authenticated
+with check (bucket_id = 'sodium-nonprofits' and public.is_admin());
+create policy sodium_nonprofits_update_admin on storage.objects for update to authenticated
+using (bucket_id = 'sodium-nonprofits' and public.is_admin())
+with check (bucket_id = 'sodium-nonprofits' and public.is_admin());
+create policy sodium_nonprofits_delete_admin on storage.objects for delete to authenticated
+using (bucket_id = 'sodium-nonprofits' and public.is_admin());
+
 -- Realtime tables used by the later chat phase and live core/feed refreshes.
-alter publication supabase_realtime add table public.sessions, public.session_rsvps, public.posts, public.post_comments, public.post_likes, public.room_messages, public.dm_messages;
+alter publication supabase_realtime add table public.sessions, public.session_rsvps, public.posts, public.post_comments, public.post_likes, public.room_messages, public.dm_messages, public.nonprofit_organizations;
 
 -- Nightly stale-session safety net. Unschedule the legacy job if this script is adapted/re-run.
 select cron.schedule(

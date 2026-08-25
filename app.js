@@ -12,6 +12,7 @@ const CONFIG = Object.freeze({
   avatarBucket: 'salty-avatars',
   chatBucket: 'salty-chat',
   feedbackBucket: 'salty-feedback',
+  nonprofitBucket: 'sodium-nonprofits',
   marketplaceBucket: 'sodium-marketplace',
   maxUploadBytes: 50 * 1024 * 1024,
   maxStreamClipBytes: 1024 * 1024 * 1024,
@@ -19,12 +20,13 @@ const CONFIG = Object.freeze({
   maxAvatarBytes: 8 * 1024 * 1024,
   maxChatPhotoBytes: 10 * 1024 * 1024,
   maxFeedbackScreenshotBytes: 10 * 1024 * 1024,
+  maxNonprofitLogoBytes: 5 * 1024 * 1024,
   maxMarketplaceImageBytes: 8 * 1024 * 1024,
   maxClipSeconds: 90,
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.84';
+const APP_VERSION = '1.87';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -56,7 +58,7 @@ const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
 });
 
 const state = {
-  session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [], perks: [], listings: [],
+  session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [], nonprofits: [], perks: [], listings: [],
   regionMemberships: [],
   roomMessages: [], dmMessages: [], dmThreads: [], clipDeliveries: [], chatPhotoUrls: {}, activeDmMember: null,
   currentRegion: null, eventRegion: null, chatRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
@@ -65,11 +67,12 @@ const state = {
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
   consentNext: 'new', sessionPeople: [], editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
   notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '', pendingDeliveryId: '',
-  calendarMonth: null, calendarDate: '',
+  calendarMonth: null, calendarDate: '', eventFilter: 'all',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
   marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent', sharingSessionId: null,
   guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
   postMemberTags: [], postCustomTags: [], qrInviteUrl: '', qrInviteRegionName: '',
+  nonprofitLogoUrls: {}, editingNonprofitId: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -306,8 +309,12 @@ function runPreview() {
   state.posts = [];
   const previewEventStart = new Date(Date.now() + 5 * 86400000);
   previewEventStart.setHours(18, 30, 0, 0);
+  const previewNonprofit = { id:'preview-nonprofit', name:'Coast & Water Collective', website_url:'https://example.org', logo_url:null, summary:'Local volunteers protecting clean water and public coastlines.', active:true };
+  const previewWata = { id:'preview-wata', name:'Water Access To All', website_url:'https://www.cleanwata.org/', logo_url:'https://static.wixstatic.com/media/db3616_5f5b48a47c2546be9449580e11170c9a~mv2.png/v1/fill/w_240,h_240,al_c,q_90/Wata%20-%20Icon%20-%20Black%20and%20Blue.png', summary:'Clean-water access through sustainable filtration systems and community-led partnerships.', active:true };
+  state.nonprofits = [previewWata, previewNonprofit];
   state.events = [
     { id:'preview-event', author:userId, region_id:regionId, title:'Friday Night Surf Film', start_time:previewEventStart.toISOString(), end_time:new Date(previewEventStart.getTime() + 2 * 3600000).toISOString(), venue_name:'Hobie Surf Shop', location_text:'Dana Point', description:'A surf film, tacos, and the crew.', event_rsvps:[{ user_id:userId, profile:state.profile }, { user_id:'jonah', profile:state.people[1] }] },
+    { id:'preview-nonprofit-event', author:userId, region_id:regionId, title:'Saturday Beach Cleanup', event_kind:'nonprofit', nonprofit_id:previewNonprofit.id, nonprofit:previewNonprofit, start_time:new Date(Date.now() + 3 * 86400000).toISOString(), end_time:new Date(Date.now() + 3 * 86400000 + 2 * 3600000).toISOString(), venue_name:'North Beach', location_text:'San Clemente', description:'Bring gloves, water, and a friend.', official_url:'https://example.org/events', event_rsvps:[{ user_id:'mateo', profile:state.people[2] }] },
     { id:'past-event', author:userId, region_id:regionId, title:'Hobie Movie Night', start_time:new Date(Date.now() - 28 * 3600000).toISOString(), end_time:new Date(Date.now() - 26 * 3600000).toISOString(), venue_name:'Hobie Surf Shop', location_text:'Dana Point', description:'Good flick and a full house.', event_rsvps:[{ user_id:userId, profile:state.profile }] },
   ];
   state.perks = [
@@ -333,12 +340,12 @@ function runPreview() {
     { id:'issue-1', reporter:'jonah', reporter_profile:{ id:'jonah', name:'Jonah' }, category:'broken', description:'The Join surf button looked pressed, but my name did not appear until I reopened Sodium.', expected_behavior:'My name should show under Surfers immediately.', screen:'Sessions', app_version:APP_VERSION, user_agent:'iPhone · Mobile Safari', status:'new', admin_notes:'', created_at:new Date(Date.now() - 48 * 60000).toISOString() },
     { id:'issue-2', reporter:'mateo', reporter_profile:{ id:'mateo', name:'Mateo' }, category:'suggestion', description:'Could the event card make the address easier to tap?', expected_behavior:null, screen:'Events', app_version:APP_VERSION, user_agent:'iPhone · Home Screen app', status:'reviewing', admin_notes:'Check the map target size.', created_at:new Date(Date.now() - 26 * 3600000).toISOString() },
   ];
-  renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderPerks(); renderMarketplace(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderClipDeliveries(); renderIssueReports(); showOnly('app');
+  renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderWeeklyRecaps(); renderPerks(); renderMarketplace(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderClipDeliveries(); renderIssueReports(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
 
 function renderPreviewProfile() {
-  $('#profileView').innerHTML = profileMarkup(state.profile, { points:45, streak:3, stoke:4, surfed:12, filmed:7, organized:5, locations:2, own:true });
+  $('#profileView').innerHTML = profileMarkup(state.profile, { points:45, streak:3, stoke:4, surfed:12, surfMinutes:735, filmed:7, filmMinutes:410, organized:5, locations:2, photosShared:38, clipsShared:64, photosReceived:21, clipsReceived:96, own:true });
   $('#streakBadge b').textContent = '3';
 }
 
@@ -618,18 +625,21 @@ async function enterCommunity() {
 }
 
 async function loadApp() {
-  const [regionsResult, spotsResult, peopleResult, membershipsResult] = await Promise.all([
+  const [regionsResult, spotsResult, peopleResult, membershipsResult, nonprofitsResult] = await Promise.all([
     db.from('regions').select('*').order('name'),
     db.from('spots').select('*').order('name'),
     db.from('profiles').select('id,name,nickname,home_region,sponsors,social_url,avatar_path,onboarding_complete').eq('onboarding_complete', true).order('name'),
     db.from('region_memberships').select('*').eq('user_id', state.profile.id),
+    db.from('nonprofit_organizations').select('*').order('name'),
   ]);
   const membershipsUnavailable = membershipsResult.error && /region_memberships/i.test(membershipsResult.error.message || '');
-  const firstError = regionsResult.error || spotsResult.error || peopleResult.error || (membershipsUnavailable ? null : membershipsResult.error);
+  const nonprofitsUnavailable = nonprofitsResult.error && /nonprofit_organizations/i.test(nonprofitsResult.error.message || '');
+  const firstError = regionsResult.error || spotsResult.error || peopleResult.error || (membershipsUnavailable ? null : membershipsResult.error) || (nonprofitsUnavailable ? null : nonprofitsResult.error);
   if (firstError) throw firstError;
   state.regions = (regionsResult.data || []).filter(region => region.is_active !== false);
   state.spots = spotsResult.data;
   state.people = peopleResult.data;
+  state.nonprofits = nonprofitsUnavailable ? [] : nonprofitsResult.data || [];
   state.regionMemberships = membershipsUnavailable
     ? [{ user_id:state.profile.id, region_id:state.profile.home_region, is_home:true, notifications_enabled:true }]
     : membershipsResult.data || [];
@@ -644,7 +654,7 @@ async function loadApp() {
     || state.regions.find(region => region.name === 'California') || state.regions[0];
   state.eventRegion = state.currentRegion;
   state.chatRegion = state.currentRegion;
-  await loadAvatarUrls();
+  await Promise.all([loadAvatarUrls(), loadNonprofitLogoUrls()]);
   renderChrome();
   await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadListings(), loadRoomMessages(), loadDmInbox(), loadClipDeliveries(), loadNotificationPreferences()]);
   await renderProfile();
@@ -1047,6 +1057,23 @@ async function loadAvatarUrls() {
   state.avatarUrls = Object.fromEntries(entries);
 }
 
+async function loadNonprofitLogoUrls() {
+  const entries = await Promise.all((state.nonprofits || []).filter(item => item.logo_path).map(async item => {
+    const result = await db.storage.from(CONFIG.nonprofitBucket).createSignedUrl(item.logo_path, 3600);
+    return [item.id, result.error ? null : result.data.signedUrl];
+  }));
+  state.nonprofitLogoUrls = Object.fromEntries(entries.filter(([, url]) => url));
+}
+
+async function reloadNonprofits() {
+  const result = await db.from('nonprofit_organizations').select('*').order('name');
+  if (result.error) throw result.error;
+  state.nonprofits = result.data || [];
+  await loadNonprofitLogoUrls();
+  renderChrome();
+  renderEvents();
+}
+
 function avatarMarkup(profile, className = 'avatar') {
   const url = state.avatarUrls[profile?.id];
   return url ? `<span class="${className}"><img src="${esc(url)}" alt="${esc(profile.name)}"></span>` : `<span class="${className}">${esc(initials(profile?.name))}</span>`;
@@ -1078,6 +1105,14 @@ function renderChrome() {
   $('#spotsList').innerHTML = regionSpots.map(spot => `<option value="${esc(spot.name)}"></option>`).join('');
   $('#locationsList').innerHTML = [...new Set(regionSpots.map(spot => spot.general_location).filter(Boolean))].sort().map(location => `<option value="${esc(location)}"></option>`).join('');
   $('#peopleList').innerHTML = state.people.map(person => `<option value="${esc(person.name)}"></option>`).join('');
+  const nonprofitSelect = $('#eventNonprofit');
+  if (nonprofitSelect) {
+    const selected = nonprofitSelect.value;
+    nonprofitSelect.innerHTML = '<option value="">Choose an organization</option>'
+      + state.nonprofits.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join('')
+      + '<option value="new">+ Add a nonprofit</option>';
+    if ([...nonprofitSelect.options].some(option => option.value === selected)) nonprofitSelect.value = selected;
+  }
   $('#drawerProfile').innerHTML = `${avatarMarkup(state.profile)}<div><h3>${esc(state.profile.name)}</h3><p>${esc(state.currentRegion.name)} · Sodium Crew</p></div>`;
   $('#betaFeedbackMenu')?.classList.toggle('hidden', !state.profile?.is_admin);
   renderEventRegions();
@@ -1762,12 +1797,18 @@ function revealSharedDelivery() {
 
 async function loadEvents() {
   if (!state.eventRegion) return;
-  const result = await db.from('events')
-    .select('*,spot:spots(*),author_profile:profiles!events_author_fkey(id,name),event_rsvps(user_id,profile:profiles!event_rsvps_user_id_fkey(id,name))')
+  let result = await db.from('events')
+    .select('*,spot:spots(*),nonprofit:nonprofit_organizations(*),author_profile:profiles!events_author_fkey(id,name),event_rsvps(user_id,created_at,profile:profiles!event_rsvps_user_id_fkey(id,name))')
     .eq('region_id', state.eventRegion.id).order('start_time', { ascending: true });
+  if (result.error && /nonprofit|event_kind|official_url|relationship/i.test(result.error.message || '')) {
+    result = await db.from('events')
+      .select('*,spot:spots(*),author_profile:profiles!events_author_fkey(id,name),event_rsvps(user_id,created_at,profile:profiles!event_rsvps_user_id_fkey(id,name))')
+      .eq('region_id', state.eventRegion.id).order('start_time', { ascending: true });
+  }
   if (result.error) { toast(readableError(result.error)); return; }
   state.events = result.data || [];
   renderEvents();
+  renderWeeklyRecaps();
   if (state.view === 'calendar') renderCalendar();
 }
 
@@ -2234,12 +2275,25 @@ function resetEventComposer() {
   $('#eventDate').value = localDateValue(start);
   $('#eventStartClock').value = localTimeValue(start);
   $('#eventEndClock').value = localTimeValue(end);
+  $('#eventKindField').classList.toggle('hidden', !state.profile?.is_admin);
+  $('#eventNonprofit').value = '';
+  $('#eventNonprofitLogoLabel').textContent = 'Choose logo';
+  updateEventKindUi();
   updateDateChoiceLabels();
+}
+
+function updateEventKindUi() {
+  const nonprofit = state.profile?.is_admin && ($('input[name="eventKind"]:checked')?.value === 'nonprofit');
+  $('#eventNonprofitFields').classList.toggle('hidden', !nonprofit);
+  $('#eventNewNonprofitFields').classList.toggle('hidden', !nonprofit || $('#eventNonprofit').value !== 'new');
+  $('#eventNonprofit').required = Boolean(nonprofit);
+  $('#eventNonprofitName').required = Boolean(nonprofit && $('#eventNonprofit').value === 'new');
+  $('#eventNonprofitWebsite').required = Boolean(nonprofit && $('#eventNonprofit').value === 'new');
 }
 
 function openEventComposer(eventId = null) {
   resetEventComposer();
-  const item = eventId ? state.events.find(event => event.id === eventId && event.author === state.profile.id) : null;
+  const item = eventId ? state.events.find(event => event.id === eventId && (event.author === state.profile.id || state.profile?.is_admin)) : null;
   if (item) {
     state.editingEventId = item.id;
     const start = new Date(item.start_time);
@@ -2253,9 +2307,98 @@ function openEventComposer(eventId = null) {
     $('#eventVenue').value = item.venue_name || item.spot?.name || '';
     $('#eventLocation').value = item.location_text || item.spot?.general_location || '';
     $('#eventDescription').value = item.description || '';
+    const eventKind = item.event_kind || 'community';
+    const kindInput = $(`input[name="eventKind"][value="${eventKind}"]`);
+    if (kindInput) kindInput.checked = true;
+    $('#eventNonprofit').value = item.nonprofit_id || '';
+    $('#eventOfficialUrl').value = item.official_url || '';
+    updateEventKindUi();
     updateDateChoiceLabels();
   }
   openSheet('eventSheet');
+}
+
+function validateNonprofitLogo(file) {
+  if (!file) return;
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Use a JPG, PNG, or WebP logo.');
+  if (file.size > CONFIG.maxNonprofitLogoBytes) throw new Error('Nonprofit logos must be 5 MB or smaller.');
+}
+
+async function uploadNonprofitLogo(nonprofitId, file) {
+  validateNonprofitLogo(file);
+  const cleanName = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'logo';
+  const path = `${nonprofitId}/${Date.now()}-${cleanName}`;
+  const result = await db.storage.from(CONFIG.nonprofitBucket).upload(path, file, { contentType:file.type, upsert:false });
+  if (result.error) throw result.error;
+  return path;
+}
+
+function resetNonprofitComposer() {
+  state.editingNonprofitId = null;
+  $('#nonprofitForm').reset();
+  $('#nonprofitSheetTitle').textContent = 'Add a nonprofit';
+  $('#nonprofitSubmit').textContent = 'Save nonprofit';
+  $('#nonprofitActive').checked = true;
+  $('#nonprofitLogoLabel').textContent = 'Choose logo';
+  $('#nonprofitLogoPreview').classList.add('hidden');
+  $('#nonprofitLogoPreview img').removeAttribute('src');
+}
+
+function openNonprofitComposer(nonprofitId = null) {
+  if (!state.profile?.is_admin) return;
+  resetNonprofitComposer();
+  const nonprofit = state.nonprofits.find(item => item.id === nonprofitId);
+  if (nonprofit) {
+    state.editingNonprofitId = nonprofit.id;
+    $('#nonprofitSheetTitle').textContent = 'Edit nonprofit';
+    $('#nonprofitSubmit').textContent = 'Save changes';
+    $('#nonprofitName').value = nonprofit.name || '';
+    $('#nonprofitWebsite').value = nonprofit.website_url || '';
+    $('#nonprofitSummary').value = nonprofit.summary || '';
+    $('#nonprofitActive').checked = nonprofit.active !== false;
+    const logo = state.nonprofitLogoUrls[nonprofit.id] || safeExternalUrl(nonprofit.logo_url);
+    if (logo) {
+      $('#nonprofitLogoPreview img').src = logo;
+      $('#nonprofitLogoPreview').classList.remove('hidden');
+      $('#nonprofitLogoLabel').textContent = 'Replace logo';
+    }
+  }
+  openSheet('nonprofitSheet');
+}
+
+async function saveNonprofit(event) {
+  event.preventDefault();
+  const submit = $('#nonprofitSubmit');
+  submit.disabled = true;
+  try {
+    const existing = state.nonprofits.find(item => item.id === state.editingNonprofitId);
+    const file = $('#nonprofitLogo').files[0];
+    if (file) validateNonprofitLogo(file);
+    const payload = {
+      name: $('#nonprofitName').value.trim(),
+      website_url: requiredHttpsUrl($('#nonprofitWebsite').value, 'organization website'),
+      summary: $('#nonprofitSummary').value.trim() || null,
+      active: $('#nonprofitActive').checked,
+      created_by: existing?.created_by || state.profile.id,
+    };
+    let result = existing
+      ? await db.from('nonprofit_organizations').update(payload).eq('id', existing.id).select().single()
+      : await db.from('nonprofit_organizations').insert(payload).select().single();
+    if (result.error) throw result.error;
+    if (file) {
+      const logoPath = await uploadNonprofitLogo(result.data.id, file);
+      const logoUpdate = await db.from('nonprofit_organizations').update({ logo_path:logoPath }).eq('id', result.data.id);
+      if (logoUpdate.error) {
+        await db.storage.from(CONFIG.nonprofitBucket).remove([logoPath]);
+        throw logoUpdate.error;
+      }
+      if (existing?.logo_path) await db.storage.from(CONFIG.nonprofitBucket).remove([existing.logo_path]);
+    }
+    closeSheet();
+    await reloadNonprofits();
+    toast(existing ? 'Nonprofit updated.' : 'Nonprofit added. Events can be added whenever it is ready.');
+  } catch (error) { toast(readableError(error), 5000); }
+  finally { submit.disabled = false; }
 }
 
 function isPastEvent(item, now = Date.now()) {
@@ -2277,23 +2420,77 @@ function renderEventCard(item, past = false) {
   return `<article class="event-card ${past ? 'past-card' : ''}" data-event-id="${item.id}"><div class="event-main"><div class="event-heading"><h2>${esc(item.title)}</h2>${tools}</div>${schedulePills(timing, 'event-schedule')}${place ? `<a class="event-place" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg><span>${esc(place)}</span><b>Map ↗</b></a>` : ''}${item.description ? `<p class="event-description">${esc(item.description)}</p>` : ''}<div class="event-going"><div class="event-stack">${crew}</div><b>${going.length} ${past ? 'went' : 'going'}</b></div>${actions}</div></article>`;
 }
 
+function nonprofitLogoMarkup(nonprofit) {
+  const logo = state.nonprofitLogoUrls[nonprofit?.id] || safeExternalUrl(nonprofit?.logo_url);
+  return logo
+    ? `<span class="nonprofit-logo"><img src="${esc(logo)}" alt=""></span>`
+    : `<span class="nonprofit-logo nonprofit-initials">${esc(initials(nonprofit?.name))}</span>`;
+}
+
+function renderNonprofitEventRow(item) {
+  const going = item.event_rsvps || [];
+  const mine = going.some(rsvp => rsvp.user_id === state.profile.id);
+  const start = new Date(item.start_time);
+  const month = new Intl.DateTimeFormat([], { month:'short' }).format(start).toUpperCase();
+  const day = start.getDate();
+  const time = new Intl.DateTimeFormat([], { hour:'numeric', minute:'2-digit' }).format(start);
+  const place = item.venue_name || item.location_text || item.spot?.name || '';
+  const officialUrl = safeExternalUrl(item.official_url);
+  const edit = state.profile?.is_admin ? `<button class="nonprofit-row-edit" data-edit-event="${item.id}" aria-label="Edit ${esc(item.title)}"><svg><use href="#i-edit"/></svg></button>` : '';
+  return `<article class="nonprofit-event-row" data-event-id="${item.id}"><span class="nonprofit-event-date"><b>${esc(month)}</b><strong>${day}</strong></span><div class="nonprofit-event-copy"><span class="nonprofit-event-time"><i></i>${esc(time)}</span><h4>${esc(item.title)}</h4>${place ? `<small>${esc(place)}</small>` : ''}<div class="nonprofit-event-actions"><button class="small-action surf ${mine ? 'on' : ''}" data-event-rsvp="${item.id}">${mine ? 'Going ✓' : 'RSVP'}</button><button class="nonprofit-calendar" data-event-calendar="${item.id}"><svg><use href="#i-calendar"/></svg>Calendar</button>${officialUrl ? `<a href="${esc(officialUrl)}" target="_blank" rel="noopener">Event info ↗</a>` : ''}</div></div>${edit}</article>`;
+}
+
+function renderNonprofitShelf(items) {
+  const upcoming = items.filter(item => !isPastEvent(item));
+  const byOrganization = new Map();
+  if (state.eventFilter === 'nonprofit') {
+    state.nonprofits.filter(item => item.active !== false || state.profile?.is_admin).forEach(nonprofit => {
+      byOrganization.set(nonprofit.id, { nonprofit, events:[] });
+    });
+  }
+  upcoming.forEach(item => {
+    const nonprofit = item.nonprofit || state.nonprofits.find(entry => entry.id === item.nonprofit_id);
+    if (!nonprofit) return;
+    if (!byOrganization.has(nonprofit.id)) byOrganization.set(nonprofit.id, { nonprofit, events:[] });
+    byOrganization.get(nonprofit.id).events.push(item);
+  });
+  const groups = [...byOrganization.values()].sort((a, b) => (b.events.length - a.events.length) || a.nonprofit.name.localeCompare(b.nonprofit.name));
+  const add = state.profile?.is_admin ? `<button class="nonprofit-add" data-action="open-nonprofit">+ Organization</button>` : '';
+  if (!groups.length) return `<section class="nonprofit-shelf empty-nonprofit-shelf"><div class="nonprofit-shelf-heading"><span><i></i>NONPROFIT EVENTS</span>${add || '<small>Local ways to show up</small>'}</div><p>No nonprofit organizations have been added yet.</p></section>`;
+  return `<section class="nonprofit-shelf"><div class="nonprofit-shelf-heading"><span><i></i>NONPROFIT EVENTS</span>${add || `<small>${groups.length} ${groups.length === 1 ? 'organization' : 'organizations'} · tap to explore</small>`}</div><div class="nonprofit-card-list">${groups.map(({ nonprofit, events }) => {
+    const next = events[0];
+    const website = safeExternalUrl(nonprofit.website_url);
+    const summary = nonprofit.summary ? `<p>${esc(nonprofit.summary)}</p>` : '';
+    const status = next ? `${events.length} upcoming · next ${new Intl.DateTimeFormat([], { month:'short', day:'numeric' }).format(new Date(next.start_time))}` : 'No events scheduled';
+    const edit = state.profile?.is_admin ? `<button class="nonprofit-card-edit" data-edit-nonprofit="${nonprofit.id}" aria-label="Edit ${esc(nonprofit.name)}"><svg><use href="#i-edit"/></svg></button>` : '';
+    const empty = events.length ? '' : '<p class="nonprofit-no-events">No events scheduled yet. Check the organization website for current work and ways to help.</p>';
+    return `<article class="nonprofit-card ${nonprofit.active === false ? 'inactive' : ''}"><div class="nonprofit-card-head"><button class="nonprofit-card-toggle" data-nonprofit-toggle="${nonprofit.id}" aria-expanded="false">${nonprofitLogoMarkup(nonprofit)}<span class="nonprofit-card-copy"><b>${esc(nonprofit.name)}</b><small><i></i>${esc(status)}</small></span><svg><use href="#i-chevron"/></svg></button>${edit}</div><div class="nonprofit-card-events hidden" data-nonprofit-events="${nonprofit.id}">${summary}${website ? `<a class="nonprofit-website" href="${esc(website)}" target="_blank" rel="noopener">Visit website ↗</a>` : ''}${empty}<div>${events.map(renderNonprofitEventRow).join('')}</div></div></article>`;
+  }).join('')}</div></section>`;
+}
+
 function renderEvents() {
   const feed = $('#eventsFeed');
   if (!feed || !state.eventRegion) return;
   const now = Date.now();
-  const upcoming = state.events.filter(item => !isPastEvent(item, now));
-  const past = state.events.filter(item => isPastEvent(item, now)).sort((a, b) => new Date(b.end_time || b.start_time) - new Date(a.end_time || a.start_time));
+  const kind = item => item.event_kind || 'community';
+  const visible = state.events.filter(item => state.eventFilter === 'all' || kind(item) === state.eventFilter);
+  const upcoming = visible.filter(item => !isPastEvent(item, now));
+  const communityUpcoming = upcoming.filter(item => kind(item) === 'community');
+  const nonprofitEvents = visible.filter(item => kind(item) === 'nonprofit');
+  const past = visible.filter(item => kind(item) === 'community' && isPastEvent(item, now)).sort((a, b) => new Date(b.end_time || b.start_time) - new Date(a.end_time || a.start_time));
   const plannedLabel = $('#eventsPlanned');
   if (plannedLabel) plannedLabel.textContent = upcoming.length ? `${upcoming.length} PLANNED` : 'NO EVENTS PLANNED';
-  if (!state.events.length) {
+  $$('#eventKindFilters [data-event-filter]').forEach(button => button.classList.toggle('active', button.dataset.eventFilter === state.eventFilter));
+  if (!visible.length && !(state.eventFilter === 'nonprofit' && state.nonprofits.length)) {
     feed.innerHTML = `<div class="empty"><span>EVENTS</span><h2>No events in ${esc(state.eventRegion.name)} yet</h2><p>Add a comp, movie night, or meetup and the crew can RSVP.</p></div>`;
     return;
   }
-  const upcomingMarkup = upcoming.length
-    ? upcoming.map(item => renderEventCard(item)).join('')
-    : '<div class="empty compact-empty"><span>OPEN</span><h2>No upcoming events</h2><p>Past events are saved below.</p></div>';
+  const nonprofitMarkup = state.eventFilter !== 'community' && (nonprofitEvents.length || state.eventFilter === 'nonprofit') ? renderNonprofitShelf(nonprofitEvents) : '';
+  const upcomingMarkup = communityUpcoming.length
+    ? `<div class="community-event-list">${communityUpcoming.map(item => renderEventCard(item)).join('')}</div>`
+    : (state.eventFilter === 'community' ? '<div class="empty compact-empty"><span>OPEN</span><h2>No upcoming community events</h2><p>Add a comp, movie night, or meetup for the crew.</p></div>' : '');
   const pastMarkup = past.length ? `<details class="past-items"><summary><span><b>Past events</b><small>${past.length} ended</small></span><svg><use href="#i-chevron"/></svg></summary><div>${past.map(item => renderEventCard(item, true)).join('')}</div></details>` : '';
-  feed.innerHTML = `${upcomingMarkup}${pastMarkup}`;
+  feed.innerHTML = `${nonprofitMarkup}${upcomingMarkup}${pastMarkup}`;
 }
 
 async function createEvent(event) {
@@ -2301,6 +2498,7 @@ async function createEvent(event) {
   const submit = $('#eventForm button[type="submit"]');
   submit.disabled = true;
   try {
+    const existingEvent = state.editingEventId ? state.events.find(item => item.id === state.editingEventId) : null;
     await joinLocation(state.eventRegion, false);
     const date = $('#eventDate').value;
     const start = new Date(`${date}T${$('#eventStartClock').value}`);
@@ -2308,8 +2506,35 @@ async function createEvent(event) {
     if (end <= start) end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
     if (!Number.isFinite(start.getTime()) || start <= new Date()) throw new Error('Pick a future date and time.');
     if (!Number.isFinite(end.getTime()) || end <= start) throw new Error('The event end time must be after its start time.');
+    const eventKind = state.profile?.is_admin ? ($('input[name="eventKind"]:checked')?.value || 'community') : 'community';
+    let nonprofitId = null;
+    if (eventKind === 'nonprofit') {
+      nonprofitId = $('#eventNonprofit').value;
+      if (nonprofitId === 'new') {
+        const nonprofitLogo = $('#eventNonprofitLogo').files[0];
+        if (nonprofitLogo) validateNonprofitLogo(nonprofitLogo);
+        const nonprofitPayload = {
+          name: $('#eventNonprofitName').value.trim(),
+          website_url: requiredHttpsUrl($('#eventNonprofitWebsite').value, 'organization website'),
+          summary: $('#eventNonprofitSummary').value.trim() || null,
+          created_by: state.profile.id,
+        };
+        const organization = await db.from('nonprofit_organizations').insert(nonprofitPayload).select().single();
+        if (organization.error) throw organization.error;
+        if (nonprofitLogo) {
+          const logoPath = await uploadNonprofitLogo(organization.data.id, nonprofitLogo);
+          const logoUpdate = await db.from('nonprofit_organizations').update({ logo_path:logoPath }).eq('id', organization.data.id).select().single();
+          if (logoUpdate.error) throw logoUpdate.error;
+          organization.data = logoUpdate.data;
+        }
+        state.nonprofits.push(organization.data);
+        await loadNonprofitLogoUrls();
+        nonprofitId = organization.data.id;
+      }
+      if (!nonprofitId) throw new Error('Choose the nonprofit hosting this event.');
+    }
     const payload = {
-      author: state.profile.id,
+      author: existingEvent?.author || state.profile.id,
       region_id: state.eventRegion.id,
       title: $('#eventTitle').value.trim(),
       spot_id: null,
@@ -2318,6 +2543,10 @@ async function createEvent(event) {
       venue_name: $('#eventVenue').value.trim() || null,
       location_text: $('#eventLocation').value.trim(),
       description: $('#eventDescription').value.trim() || null,
+      event_kind: eventKind,
+      nonprofit_id: nonprofitId,
+      official_url: eventKind === 'nonprofit' ? optionalHttpsUrl($('#eventOfficialUrl').value, 'official event page') : null,
+      external_source: 'manual',
     };
     const result = state.editingEventId
       ? await db.from('events').update(payload).eq('id', state.editingEventId).eq('author', state.profile.id)
@@ -2327,6 +2556,22 @@ async function createEvent(event) {
     resetEventComposer(); closeSheet(); await loadEvents(); toast(edited ? 'Event updated.' : 'Event shared with the crew.');
   } catch (error) { toast(readableError(error), 5000); }
   finally { submit.disabled = false; }
+}
+
+function optionalHttpsUrl(value, label = 'URL') {
+  const clean = String(value || '').trim();
+  if (!clean) return null;
+  let parsed;
+  try { parsed = new URL(/^https?:\/\//i.test(clean) ? clean : `https://${clean}`); }
+  catch (_error) { throw new Error(`Enter a valid ${label}.`); }
+  if (parsed.protocol !== 'https:') throw new Error(`${label[0].toUpperCase()}${label.slice(1)} must use HTTPS.`);
+  return parsed.href;
+}
+
+function requiredHttpsUrl(value, label) {
+  const url = optionalHttpsUrl(value, label);
+  if (!url) throw new Error(`Enter the ${label}.`);
+  return url;
 }
 
 async function toggleEventRsvp(eventId) {
@@ -2481,6 +2726,113 @@ function spotMapUrl(spot) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
+function currentWeekBounds() {
+  const now = new Date();
+  const start = new Date(now);
+  const day = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  return { start, end };
+}
+
+function dateInCurrentWeek(value) {
+  if (!value) return false;
+  const date = new Date(value);
+  const { start, end } = currentWeekBounds();
+  return Number.isFinite(date.getTime()) && date >= start && date < end;
+}
+
+function completedThisWeek(session) {
+  return ['ended', 'archived'].includes(session.status) && dateInCurrentWeek(session.ended_at || session.surf_time || session.created_at);
+}
+
+function sessionCrewNames(session) {
+  return [
+    session.initiator_profile?.name || session.initiator_name || session.author_profile?.name,
+    ...(session.participant_names || []),
+    session.featured_surfer_name,
+    ...(session.session_rsvps || []).map(rsvp => rsvp.profile?.name),
+  ].filter(Boolean).filter((name, index, names) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
+}
+
+function strongestCrewPair(sessions, memberName = '') {
+  const pairs = new Map();
+  sessions.forEach(session => {
+    const names = sessionCrewNames(session).sort((a, b) => a.localeCompare(b));
+    for (let first = 0; first < names.length; first += 1) {
+      for (let second = first + 1; second < names.length; second += 1) {
+        if (memberName && ![names[first], names[second]].some(name => name.toLowerCase() === memberName.toLowerCase())) continue;
+        const key = `${names[first]}|||${names[second]}`;
+        pairs.set(key, (pairs.get(key) || 0) + 1);
+      }
+    }
+  });
+  const best = [...pairs.entries()].sort((first, second) => second[1] - first[1])[0];
+  if (!best) return null;
+  return { names:best[0].split('|||'), count:best[1] };
+}
+
+function weeklyPersonalStats(profileId = state.profile?.id) {
+  const sessions = state.sessions.filter(completedThisWeek).filter(session => session.author === profileId || session.initiator_user === profileId || (session.session_rsvps || []).some(rsvp => rsvp.user_id === profileId));
+  let surfed = 0;
+  let filmed = 0;
+  let organized = 0;
+  sessions.forEach(session => {
+    const rsvpRole = (session.session_rsvps || []).find(rsvp => rsvp.user_id === profileId)?.role;
+    const role = session.author === profileId ? session.author_role : rsvpRole;
+    if (role === 'film') filmed += 1;
+    else if (role === 'surf') surfed += 1;
+    const initiator = session.initiator_user || (!session.initiator_name ? session.author : null);
+    if (initiator === profileId) organized += 1;
+  });
+  const stoke = state.posts.filter(post => post.author === profileId && dateInCurrentWeek(post.created_at)).length;
+  const events = state.events.filter(item => item.region_id === state.currentRegion?.id && dateInCurrentWeek(item.start_time) && (item.event_rsvps || []).some(rsvp => rsvp.user_id === profileId)).length;
+  const clips = state.clipDeliveries.filter(item => (item.sender === profileId || item.recipient === profileId) && dateInCurrentWeek(item.updated_at || item.created_at)).length;
+  return { sessions, surfed, filmed, organized, stoke, events, clips };
+}
+
+function personalWeeklyRecapMarkup() {
+  const stats = weeklyPersonalStats();
+  const total = stats.surfed + stats.filmed + stats.stoke + stats.events + stats.clips;
+  const pair = strongestCrewPair(stats.sessions, state.profile?.name || '');
+  const pairCopy = pair && pair.count > 1 ? `<p>You and <b>${esc(pair.names.find(name => name.toLowerCase() !== state.profile.name.toLowerCase()) || pair.names[1])}</b> showed up together ${pair.count} times.</p>` : '';
+  const moments = [
+    stats.surfed ? [stats.surfed, 'surfed'] : null,
+    stats.filmed ? [stats.filmed, 'filmed'] : null,
+    stats.organized ? [stats.organized, 'organized'] : null,
+    stats.stoke ? [stats.stoke, 'Stoke'] : null,
+    stats.events ? [stats.events, stats.events === 1 ? 'event' : 'events'] : null,
+    stats.clips ? [stats.clips, stats.clips === 1 ? 'clip handoff' : 'clip handoffs'] : null,
+  ].filter(Boolean);
+  const activityCopy = total
+    ? `<div class="personal-week-stats">${moments.map(([count, label]) => `<span><b>${count}</b> ${label}</span>`).join('')}</div><p>You showed up for the crew this week.</p>${pairCopy}`
+    : '<p>Your week is open. Join a surf, film a friend, or show up for a community event.</p>';
+  return `<section class="profile-stat-group personal-week"><div class="profile-stat-heading"><span>Your week</span><small>Automatic · ${esc(state.currentRegion?.name || 'current location')}</small></div><article class="profile-card personal-week-card"><svg><use href="#i-wave"/></svg><div>${activityCopy}</div></article></section>`;
+}
+
+function renderWeeklyRecaps() {
+  const target = $('#weeklyCommunityRecap');
+  if (!target || !state.currentRegion) return;
+  const sessions = state.sessions.filter(completedThisWeek);
+  const names = new Set(sessions.flatMap(sessionCrewNames).map(name => name.toLowerCase()));
+  const stoke = state.posts.filter(post => dateInCurrentWeek(post.created_at)).length;
+  const localEvents = state.events.filter(item => item.region_id === state.currentRegion.id);
+  const eventRsvps = localEvents.filter(item => dateInCurrentWeek(item.start_time)).reduce((sum, item) => sum + (item.event_rsvps || []).length, 0);
+  const nonprofitRsvps = localEvents.filter(item => (item.event_kind || 'community') === 'nonprofit' && dateInCurrentWeek(item.start_time)).reduce((sum, item) => sum + (item.event_rsvps || []).length, 0);
+  const pair = strongestCrewPair(sessions);
+  const lines = [];
+  if (sessions.length) lines.push(`<span><b>${sessions.length}</b> completed ${sessions.length === 1 ? 'surf' : 'surfs'} · <b>${names.size}</b> crew involved</span>`);
+  if (pair && pair.count > 1) lines.push(`<span><b>${esc(pair.names[0])}</b> and <b>${esc(pair.names[1])}</b> showed up together ${pair.count} times</span>`);
+  if (stoke) lines.push(`<span><b>${stoke}</b> new Stoke ${stoke === 1 ? 'post' : 'posts'} shared</span>`);
+  if (nonprofitRsvps) lines.push(`<span><b>${nonprofitRsvps}</b> nonprofit event ${nonprofitRsvps === 1 ? 'RSVP' : 'RSVPs'}</span>`);
+  else if (eventRsvps) lines.push(`<span><b>${eventRsvps}</b> community event ${eventRsvps === 1 ? 'RSVP' : 'RSVPs'}</span>`);
+  const { start } = currentWeekBounds();
+  const weekLabel = new Intl.DateTimeFormat([], { month:'short', day:'numeric' }).format(start);
+  target.innerHTML = `<details class="weekly-recap-card" ${lines.length ? '' : 'open'}><summary><span class="weekly-recap-mark"><svg><use href="#i-wave"/></svg></span><span><small>WEEK OF ${esc(weekLabel.toUpperCase())}</small><b>${esc(state.currentRegion.name)} crew recap</b></span><svg class="weekly-recap-chevron"><use href="#i-chevron"/></svg></summary><div class="weekly-recap-body">${lines.length ? lines.slice(0, 4).join('') : '<span>The crew’s week is just getting started. Make a plan and give someone something to join.</span>'}</div></details>`;
+}
+
 function renderSessions() {
   const now = Date.now();
   const active = state.sessions.filter(session => !isPastSession(session, now));
@@ -2491,6 +2843,7 @@ function renderSessions() {
     ? `<i></i>${liveNow} IN THE WATER${planned ? ` · ${planned} PLANNED` : ''}`
     : (planned ? `${planned} PLANNED` : 'NO SURFS PLANNED');
   const feed = $('#sessionsFeed');
+  renderWeeklyRecaps();
   if (!state.sessions.length) {
     feed.innerHTML = `<div class="empty"><span>OPEN</span><h2>No surfs planned in ${esc(state.currentRegion.name)} yet</h2><p>Share when you're heading out and give the crew something to join.</p></div>`;
     return;
@@ -2693,14 +3046,20 @@ async function createSession(event) {
     const editingPastSession = Boolean(existingSession && isPastSession(existingSession));
     if (later && !surfTime) throw new Error('Pick a date and time.');
     if (surfTime && new Date(surfTime) <= new Date() && !editingPastSession) throw new Error('Pick a future date and time.');
+    const now = new Date().toISOString();
     const savedSurfTime = surfTime
       ? new Date(surfTime).toISOString()
       : existingSession?.when_label === 'Now'
         ? existingSession.surf_time
-        : existingSession ? new Date().toISOString() : null;
+        : now;
+    const startedAt = later
+      ? null
+      : existingSession?.when_label === 'Now'
+        ? (existingSession.started_at || existingSession.surf_time || now)
+        : now;
     const payload = {
       author: state.profile.id, spot_id: spot.id, region_id: state.currentRegion.id,
-      when_label: later ? 'Scheduled' : 'Now', surf_time: savedSurfTime,
+      when_label: later ? 'Scheduled' : 'Now', surf_time: savedSurfTime, started_at: startedAt,
       author_role: $('[data-session-role].active').dataset.sessionRole,
       featured_surfer_name: null, featured_surfer_user: null, participant_names: state.sessionPeople,
       wants_filmer: $('#wantsFilmer').checked, note: $('#sessionNote').value.trim() || null,
@@ -2733,7 +3092,8 @@ async function setRsvp(sessionId, role) {
 }
 
 async function startSession(sessionId) {
-  const result = await db.from('sessions').update({ when_label: 'Now', surf_time: new Date().toISOString() }).eq('id', sessionId).eq('author', state.profile.id).eq('status', 'active');
+  const startedAt = new Date().toISOString();
+  const result = await db.from('sessions').update({ when_label: 'Now', surf_time: startedAt, started_at: startedAt }).eq('id', sessionId).eq('author', state.profile.id).eq('status', 'active');
   if (result.error) { toast(readableError(result.error)); return; }
   await loadSessions(); toast('Session started — the crew can see you are out now.');
 }
@@ -2783,6 +3143,7 @@ async function loadPosts() {
     return { ...post, media_url:mediaUrls[0] || null, media_urls:mediaUrls };
   }));
   renderPosts();
+  renderWeeklyRecaps();
 }
 
 async function streamRequest(path, options = {}) {
@@ -3495,7 +3856,10 @@ async function renderProfile() {
   $('#profileView').innerHTML = profileMarkup(state.profile, {
     points:total, streak:streak.data?.current_streak || 0, stoke:participationStats.stoke ?? posts.count ?? 0,
     surfed:participationStats.surfed || 0, filmed:participationStats.filmed || 0,
-    organized:participationStats.organized || 0, locations:participationStats.locations || 0, own:true,
+    surfMinutes:participationStats.surf_minutes || 0, filmMinutes:participationStats.film_minutes || 0,
+    organized:participationStats.organized || 0, locations:participationStats.locations || 0,
+    photosShared:participationStats.photos_shared || 0, clipsShared:participationStats.clips_shared || 0,
+    photosReceived:participationStats.photos_received || 0, clipsReceived:participationStats.clips_received || 0, own:true,
   });
   $('#streakBadge b').textContent = streak.data?.current_streak || 0;
 }
@@ -3511,7 +3875,16 @@ function profileMarkup(profile, stats = {}) {
   const controls = stats.own
     ? `<div class="profile-actions"><details class="profile-share-menu"><summary><svg><use href="#i-share"/></svg><span><b>Share with friends</b><small>Invites, surf plans, clips, and setup help</small></span><svg class="profile-share-chevron"><use href="#i-chevron"/></svg></summary><div><button data-action="open-share-invite"><svg><use href="#i-surf"/></svg><span><b>Share a surf or clips</b><small>Plan a surf, claim one, send clips, or send a simple invite.</small></span></button><button data-action="show-invite-qr"><svg><use href="#i-qr"/></svg><span><b>Invite with a QR code</b><small>Let a friend scan a one-person invite from your screen.</small></span></button><button data-action="share-invite-overview"><svg><use href="#i-wave"/></svg><span><b>Invite + app overview</b><small>Send the invite with the quick visual explanation.</small></span></button><button data-action="share-invite-setup"><svg><use href="#i-settings"/></svg><span><b>Invite + phone setup</b><small>Send the invite with Home Screen setup instructions.</small></span></button></div></details><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
     : `<div class="profile-actions"><button class="primary" data-dm-member="${profile.id}">Message ${esc(profile.name)}</button></div>`;
-  return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Sodium Crew</p></div></div>${stats.own ? `<section class="profile-stat-group"><div class="profile-stat-heading"><span>Community activity</span><small>Points, streak, and posts</small></div><div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke shared</span></article></div></section><section class="profile-stat-group surf-stat-group"><div class="profile-stat-heading"><span>Surf stats</span><small>Completed sessions only</small></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>surfed</span></article><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>filmed</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations</span></article></div></section>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${listingSection}${controls}<footer class="profile-footer"><b>SODIUM</b>surf with your friends, not your feed</footer>`;
+  const statSlides = stats.own ? `<section class="profile-stat-deck"><div class="profile-stat-tabs" role="tablist" aria-label="Profile stats"><button class="active" role="tab" aria-selected="true" data-profile-stat-tab="community">Community</button><button role="tab" aria-selected="false" data-profile-stat-tab="surf">Surf</button><button role="tab" aria-selected="false" data-profile-stat-tab="media">Film + photo</button></div><div class="profile-stat-panels"><section class="profile-stat-panel active" data-profile-stat-panel="community"><div class="profile-stat-heading"><span>Community activity</span><small>Points, streak, and Stoke</small></div><div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke posts</span></article></div></section><section class="profile-stat-panel" data-profile-stat-panel="surf"><div class="profile-stat-heading"><span>Surf stats</span><small>Completed sessions</small></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>sessions surfed</span></article><article class="profile-card stat"><b>${formatDuration(stats.surfMinutes)}</b><span>time in water</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations</span></article></div><p class="stat-data-note">Time starts when a session is started and stops when it is finished.</p></section><section class="profile-stat-panel" data-profile-stat-panel="media"><div class="profile-stat-heading"><span>Film + photo stats</span><small>Created and received</small></div><div class="media-stats"><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>sessions filmed</span></article><article class="profile-card stat"><b>${formatDuration(stats.filmMinutes)}</b><span>time filming</span></article><article class="profile-card stat"><b>${formatCount(stats.clipsShared)}</b><span>clips shared</span></article><article class="profile-card stat"><b>${formatCount(stats.photosShared)}</b><span>photos shared</span></article><article class="profile-card stat"><b>${formatCount(stats.clipsReceived)}</b><span>clips received</span></article><article class="profile-card stat"><b>${formatCount(stats.photosReceived)}</b><span>photos tagged</span></article></div></section></div></section>` : '';
+  return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Sodium Crew</p></div></div>${stats.own ? personalWeeklyRecapMarkup() : ''}${statSlides}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${listingSection}${controls}<footer class="profile-footer"><b>SODIUM</b>surf with your friends, not your feed</footer>`;
+}
+
+function formatDuration(minutes) {
+  const total = Math.max(0, Math.round(Number(minutes) || 0));
+  if (total < 60) return `${total}m`;
+  const hours = Math.floor(total / 60);
+  const remainder = total % 60;
+  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
 }
 
 function safeExternalUrl(value) {
@@ -3973,6 +4346,7 @@ async function shareInvite({ includeGuide = false, includeOverview = false, incl
 
 document.addEventListener('click', async event => {
   const actionNode = event.target.closest('[data-action]');
+  const profileStatTabNode = event.target.closest('[data-profile-stat-tab]');
   const carouselDirectionNode = event.target.closest('[data-carousel-direction]');
   const viewNode = event.target.closest('[data-view]');
   const regionNode = event.target.closest('[data-region]');
@@ -4000,6 +4374,17 @@ document.addEventListener('click', async event => {
   const sessionRoleNode = event.target.closest('[data-session-role]');
   const memberNode = event.target.closest('[data-member]');
   const iconThemeNode = event.target.closest('[data-icon-theme]');
+  if (profileStatTabNode) {
+    const deck = profileStatTabNode.closest('.profile-stat-deck');
+    const selected = profileStatTabNode.dataset.profileStatTab;
+    deck?.querySelectorAll('[data-profile-stat-tab]').forEach(button => {
+      const active = button.dataset.profileStatTab === selected;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+    deck?.querySelectorAll('[data-profile-stat-panel]').forEach(panel => panel.classList.toggle('active', panel.dataset.profileStatPanel === selected));
+    return;
+  }
   if (inviteSessionClaimNode) { await shareSessionClaimInvite(inviteSessionClaimNode.dataset.inviteSessionClaim); return; }
   if (inviteClipClaimNode) { await shareClipClaimInvite(inviteClipClaimNode.dataset.inviteClipClaim); return; }
   if (shareClipDeliveryNode) { await shareExistingClipDelivery(shareClipDeliveryNode.dataset.shareClipDelivery); return; }
@@ -4023,9 +4408,12 @@ document.addEventListener('click', async event => {
   }
   if (shareSessionMemberNode) { await shareSessionToMember(shareSessionMemberNode.dataset.shareSessionMember); return; }
   const eventRegionNode = event.target.closest('[data-event-region]');
+  const eventFilterNode = event.target.closest('[data-event-filter]');
+  const nonprofitToggleNode = event.target.closest('[data-nonprofit-toggle]');
   const eventRsvpNode = event.target.closest('[data-event-rsvp]');
   const eventCalendarNode = event.target.closest('[data-event-calendar]');
   const editEventNode = event.target.closest('[data-edit-event]');
+  const editNonprofitNode = event.target.closest('[data-edit-nonprofit]');
   const editPerkNode = event.target.closest('[data-edit-perk]');
   const copyPerkNode = event.target.closest('[data-copy-perk]');
   const chatRegionNode = event.target.closest('[data-chat-region]');
@@ -4055,6 +4443,16 @@ document.addEventListener('click', async event => {
     renderClipDeliveries();
   }
   if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
+  if (eventFilterNode) {
+    state.eventFilter = eventFilterNode.dataset.eventFilter;
+    renderEvents();
+  }
+  if (nonprofitToggleNode) {
+    const id = nonprofitToggleNode.dataset.nonprofitToggle;
+    const panel = document.querySelector(`[data-nonprofit-events="${CSS.escape(id)}"]`);
+    const expanded = panel?.classList.toggle('hidden') === false;
+    nonprofitToggleNode.setAttribute('aria-expanded', String(expanded));
+  }
   if (viewNode) setView(viewNode.dataset.view);
   if (memberNode) openMember(memberNode.dataset.member);
   if (dmMemberNode) await openDm(dmMemberNode.dataset.dmMember);
@@ -4089,8 +4487,8 @@ document.addEventListener('click', async event => {
     $('#regionMenu').classList.remove('open'); renderChrome();
     if (state.preview) {
       state.sessions = state.previewSessions.filter(session => session.region_id === state.currentRegion.id);
-      renderSessions();
-    } else await loadSessions();
+      renderSessions(); renderEvents();
+    } else await Promise.all([loadSessions(), loadEvents()]);
   }
   if (eventRegionNode) {
     const region = state.regions.find(item => item.id === eventRegionNode.dataset.eventRegion);
@@ -4126,6 +4524,7 @@ document.addEventListener('click', async event => {
   if (eventRsvpNode) await toggleEventRsvp(eventRsvpNode.dataset.eventRsvp);
   if (eventCalendarNode) addEventToCalendar(eventCalendarNode.dataset.eventCalendar);
   if (editEventNode) openEventComposer(editEventNode.dataset.editEvent);
+  if (editNonprofitNode) openNonprofitComposer(editNonprofitNode.dataset.editNonprofit);
   if (editPerkNode) openPerkComposer(editPerkNode.dataset.editPerk);
   if (copyPerkNode) {
     const perk = state.perks.find(item => item.id === copyPerkNode.dataset.copyPerk);
@@ -4181,6 +4580,7 @@ document.addEventListener('click', async event => {
     },
     'save-post-draft': savePostDraft,
     'open-event': () => openEventComposer(),
+    'open-nonprofit': () => openNonprofitComposer(),
     'open-perk': () => openPerkComposer(),
     'open-listing': () => openListingComposer(),
     'open-location': () => { $('#locationForm').reset(); openSheet('locationSheet'); },
@@ -4238,6 +4638,7 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'sessionForm') await createSession(event);
   else if (event.target.id === 'postForm') await savePost(event);
   else if (event.target.id === 'eventForm') await createEvent(event);
+  else if (event.target.id === 'nonprofitForm') await saveNonprofit(event);
   else if (event.target.id === 'perkForm') await savePerk(event);
   else if (event.target.id === 'listingForm') await saveListing(event);
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
@@ -4277,6 +4678,22 @@ document.addEventListener('change', async event => {
       $('#listingImagePreview').innerHTML = `<img src="${esc(URL.createObjectURL(file))}" alt="Selected listing image">`;
     } catch (error) {
       toast(readableError(error), 5000); event.target.value = '';
+    }
+    return;
+  }
+  if (event.target.id === 'nonprofitLogo' || event.target.id === 'eventNonprofitLogo') {
+    const file = event.target.files[0];
+    const label = event.target.id === 'nonprofitLogo' ? $('#nonprofitLogoLabel') : $('#eventNonprofitLogoLabel');
+    if (!file) { label.textContent = 'Choose logo'; return; }
+    try {
+      validateNonprofitLogo(file);
+      label.textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB`;
+      if (event.target.id === 'nonprofitLogo') {
+        $('#nonprofitLogoPreview img').src = URL.createObjectURL(file);
+        $('#nonprofitLogoPreview').classList.remove('hidden');
+      }
+    } catch (error) {
+      toast(readableError(error), 5000); event.target.value = ''; label.textContent = 'Choose logo';
     }
     return;
   }
@@ -4396,6 +4813,8 @@ $('#sessionPersonInput').addEventListener('keydown', event => {
   $(`#${id}`).addEventListener('input', refreshChoice);
   $(`#${id}`).addEventListener('change', refreshChoice);
 });
+$$('input[name="eventKind"]').forEach(input => input.addEventListener('change', updateEventKindUi));
+$('#eventNonprofit').addEventListener('change', updateEventKindUi);
 $('#sessionPersonInput').addEventListener('keydown', event => {
   if (event.key !== 'Enter' && event.key !== ',') return;
   event.preventDefault();

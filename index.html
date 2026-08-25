@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="description" content="Sodium — surf with your friends, not your feed.">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'sha256-3c89LCajFIcYa3gJG+BT+TDhA7lOkJhgrUVZoL4wcqY=' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://maihhnwrstewzapsvrec.supabase.co; media-src 'self' blob: https://maihhnwrstewzapsvrec.supabase.co; connect-src 'self' https://maihhnwrstewzapsvrec.supabase.co wss://maihhnwrstewzapsvrec.supabase.co; worker-src 'self'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'sha256-3c89LCajFIcYa3gJG+BT+TDhA7lOkJhgrUVZoL4wcqY=' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https://maihhnwrstewzapsvrec.supabase.co; connect-src 'self' https://maihhnwrstewzapsvrec.supabase.co wss://maihhnwrstewzapsvrec.supabase.co; worker-src 'self'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
   <meta property="og:title" content="You're invited to Sodium">
   <meta property="og:description" content="A private surf community built to help friends surf and film together more often.">
   <meta property="og:site_name" content="Sodium">
@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=84-qr-invites">
+  <link rel="stylesheet" href="./styles.css?v=87-activity-stats">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -68,7 +68,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.84</small>
+    <small class="boot-credit">Saltyview Productions · v1.87</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -196,6 +196,7 @@
       </header>
 
       <div id="view-surfing" class="app-view active">
+        <section id="weeklyCommunityRecap" class="weekly-recap" aria-live="polite"></section>
         <div class="section-label surf-section-label"><span>Surf plans</span><div class="surf-section-actions"><span id="liveCount" class="live">NO SURFS PLANNED</span><button class="surf-calendar-button" data-action="open-calendar"><svg><use href="#i-calendar"/></svg>Calendar</button></div></div>
         <div id="sessionsFeed"></div>
         <p class="hint">Now sessions clear after 18 hours. Planned sessions stay visible through their scheduled surf.</p>
@@ -230,6 +231,7 @@
       <div id="view-events" class="app-view">
         <div id="eventRegions" class="event-regions"></div>
         <div class="section-label surf-section-label events-section-label"><span>Events</span><div class="surf-section-actions"><span id="eventsPlanned" class="live event-live">NO EVENTS PLANNED</span><button class="surf-calendar-button" data-action="open-events-calendar"><svg><use href="#i-calendar"/></svg>Calendar</button></div></div>
+        <div id="eventKindFilters" class="event-kind-filters" role="group" aria-label="Filter events"><button class="active" data-event-filter="all">All</button><button data-event-filter="community">Community</button><button data-event-filter="nonprofit"><svg><use href="#i-heart"/></svg>Nonprofit</button></div>
         <div id="eventsFeed"></div>
       </div>
 
@@ -277,16 +279,24 @@
       <button class="drawer-close" data-action="close-drawer" aria-label="Close menu"><svg><use href="#i-close"/></svg></button>
       <div id="drawerProfile" class="drawer-profile"></div>
       <nav>
-        <button data-action="open-share-invite"><svg><use href="#i-share"/></svg>Share + invite</button>
-        <button data-view="members"><svg><use href="#i-user"/></svg>Members</button>
-        <button data-view="clubs"><svg><use href="#i-circle"/></svg>Clubs <b class="soon">SOON</b></button>
-        <button data-view="marketplace"><svg><use href="#i-store"/></svg>Marketplace</button>
-        <button data-view="perks"><svg><use href="#i-diamond"/></svg>Perks &amp; discounts</button>
-        <button data-view="points"><svg><use href="#i-flame"/></svg>Points &amp; streaks</button>
-        <button data-view="rules"><svg><use href="#i-list"/></svg>Sodium Community Rules</button>
-        <button id="betaFeedbackMenu" class="hidden" data-view="beta-feedback"><svg><use href="#i-bug"/></svg>Beta Feedback <b id="betaFeedbackBadge" class="admin-count hidden">0</b></button>
-        <button data-view="settings"><svg><use href="#i-settings"/></svg>Settings</button>
-        <button data-view="about"><svg><use href="#i-info"/></svg>About Sodium</button>
+        <div class="drawer-nav-group"><span>CREW</span>
+          <button data-action="open-share-invite"><svg><use href="#i-share"/></svg>Share + invite</button>
+          <button data-view="members"><svg><use href="#i-user"/></svg>Members</button>
+          <button data-view="clubs"><svg><use href="#i-circle"/></svg>Clubs <b class="soon">SOON</b></button>
+        </div>
+        <div class="drawer-nav-group"><span>DISCOVER</span>
+          <button data-view="marketplace"><svg><use href="#i-store"/></svg>Marketplace</button>
+          <button data-view="perks"><svg><use href="#i-diamond"/></svg>Perks &amp; discounts</button>
+        </div>
+        <div class="drawer-nav-group"><span>YOUR SODIUM</span>
+          <button data-view="points"><svg><use href="#i-flame"/></svg>Points &amp; streaks</button>
+          <button data-view="rules"><svg><use href="#i-list"/></svg>Community rules</button>
+        </div>
+        <div class="drawer-nav-group"><span>APP</span>
+          <button id="betaFeedbackMenu" class="hidden" data-view="beta-feedback"><svg><use href="#i-bug"/></svg>Beta Feedback <b id="betaFeedbackBadge" class="admin-count hidden">0</b></button>
+          <button data-view="settings"><svg><use href="#i-settings"/></svg>Settings</button>
+          <button data-view="about"><svg><use href="#i-info"/></svg>About Sodium</button>
+        </div>
       </nav>
       <footer class="drawer-foot"><strong>SODIUM</strong><small>developed by saltyview productions</small></footer>
     </aside>
@@ -392,12 +402,37 @@
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2 id="eventSheetTitle">Add an event</h2><p>Comps, movie nights, and meetups for <b id="eventRegionName">your area</b>.</p>
       <form id="eventForm">
+        <fieldset id="eventKindField" class="event-kind-picker hidden"><legend>Event type</legend><div><label><input type="radio" name="eventKind" value="community" checked><span>Community</span></label><label><input type="radio" name="eventKind" value="nonprofit"><span>Nonprofit</span></label></div><small>Only Sodium admins can publish an event on behalf of a nonprofit.</small></fieldset>
+        <section id="eventNonprofitFields" class="event-nonprofit-fields hidden">
+          <label>Organization<select id="eventNonprofit"><option value="">Choose an organization</option><option value="new">+ Add a nonprofit</option></select></label>
+          <div id="eventNewNonprofitFields" class="event-new-nonprofit hidden">
+            <label>Organization name<input id="eventNonprofitName" maxlength="160" placeholder="Nonprofit name"></label>
+            <label>Organization website<input id="eventNonprofitWebsite" type="url" inputmode="url" maxlength="500" placeholder="https://nonprofit.org"></label>
+            <label>Short description<textarea id="eventNonprofitSummary" maxlength="500" placeholder="What does this organization do?"></textarea></label>
+            <label class="nonprofit-logo-upload"><span>Organization logo <small>optional · JPG, PNG or WebP · 5 MB max</small></span><input id="eventNonprofitLogo" type="file" accept="image/jpeg,image/png,image/webp"><span class="nonprofit-file-picker"><svg><use href="#i-photo"/></svg><b id="eventNonprofitLogoLabel">Choose logo</b></span></label>
+          </div>
+          <label>Official event page <small>optional</small><input id="eventOfficialUrl" type="url" inputmode="url" maxlength="500" placeholder="https://nonprofit.org/events/..."></label>
+        </section>
         <label>Event name<input id="eventTitle" maxlength="160" required placeholder="Event name"></label>
         <fieldset class="event-when"><legend>When</legend><label class="date-choice"><svg><use href="#i-calendar"/></svg><span><small>Date</small><strong id="eventDateDisplay">Choose a date</strong></span><input id="eventDate" type="date" required aria-label="Event date"></label><div class="event-clock-choices"><label class="date-choice compact"><svg><use href="#i-clock"/></svg><span><small>Starts</small><strong id="eventStartDisplay">Choose start time</strong></span><input id="eventStartClock" type="time" required aria-label="Event start time"></label><label class="date-choice compact"><svg><use href="#i-clock"/></svg><span><small>Ends</small><strong id="eventEndDisplay">Choose end time</strong></span><input id="eventEndClock" type="time" required aria-label="Event end time"></label></div></fieldset>
         <label>Venue <small>optional</small><input id="eventVenue" maxlength="160" placeholder="Venue name"></label>
         <label>Address or map location<input id="eventLocation" maxlength="300" required placeholder="Address or meeting area"><small>Use a shop name, street address, beach, or general meeting area.</small></label>
         <label>Description<textarea id="eventDescription" maxlength="1200" placeholder="What should the crew know?"></textarea></label>
         <button id="eventSubmit" class="primary" type="submit">Share event</button>
+      </form>
+    </section>
+
+    <section id="nonprofitSheet" class="sheet nonprofit-sheet" aria-modal="true" role="dialog">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <h2 id="nonprofitSheetTitle">Add a nonprofit</h2><p>Create an organization profile now; events can be added whenever the nonprofit is ready.</p>
+      <form id="nonprofitForm">
+        <label>Organization name<input id="nonprofitName" maxlength="160" required placeholder="Nonprofit name"></label>
+        <label>Website<input id="nonprofitWebsite" type="url" inputmode="url" maxlength="500" required placeholder="https://nonprofit.org"></label>
+        <label>Short description<textarea id="nonprofitSummary" maxlength="500" placeholder="What does this organization do?"></textarea></label>
+        <label class="nonprofit-logo-upload"><span>Profile image or logo <small>optional · JPG, PNG or WebP · 5 MB max</small></span><input id="nonprofitLogo" type="file" accept="image/jpeg,image/png,image/webp"><span class="nonprofit-file-picker"><svg><use href="#i-photo"/></svg><b id="nonprofitLogoLabel">Choose logo</b></span></label>
+        <div id="nonprofitLogoPreview" class="nonprofit-logo-preview hidden"><img alt="Nonprofit logo preview"></div>
+        <label class="toggle-row"><span>Visible to members<small>Turn this off to hide the profile without deleting it.</small></span><input id="nonprofitActive" type="checkbox" role="switch" checked></label>
+        <button id="nonprofitSubmit" class="primary" type="submit">Save nonprofit</button>
       </form>
     </section>
 
@@ -493,9 +528,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.84</span>
-    <h3>Invite a friend standing next to you.</h3>
-    <ul><li>Open Share with friends and choose Invite with a QR code.</li><li>Your friend scans your screen to open their private Sodium invite.</li><li>You can still text or AirDrop the same link instead.</li></ul>
+    <span>NEW IN V1.87</span>
+    <h3>Your surf, film, and photo stats now have their own space.</h3>
+    <ul><li>Swipe through Community, Surf, and Film + photo stats on your profile.</li><li>Started and finished sessions now track time in the water or behind the camera.</li><li>The menu is grouped into shorter, easier-to-scan sections.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -510,6 +545,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
-  <script src="./app.js?v=84-qr-invites" defer></script>
+  <script src="./app.js?v=87-activity-stats" defer></script>
 </body>
 </html>

@@ -2,6 +2,8 @@
 
 Private, invite-only surf community PWA. Static HTML/CSS/vanilla JavaScript hosted at `https://community.saltyviewfinder.com/` through Cloudflare Pages, with Supabase Auth, Postgres, Realtime, and Storage. The former `app.saltyviewfinder.com` address redirects to the community URL.
 
+Current cross-thread product decisions and release status are consolidated in [`SODIUM_MASTER_STATE.md`](./SODIUM_MASTER_STATE.md).
+
 ## First-time setup
 
 1. Open the Supabase SQL Editor and run all of `supabase/schema.sql` once.
@@ -47,6 +49,10 @@ Before release v1.60, run `supabase/session-attribution-invites-v1-migration.sql
 Release v1.82 adds multiple linked member tags to Stoke through the existing `post_tags` relationship and author-written visual labels through `supabase/stoke-visual-tags-v1-migration.sql`. The migration is additive, preserves every existing post, and is safe to run more than once.
 
 Before release v1.61, run `supabase/push-test-notification-v1-migration.sql` once. It adds a signed-in, self-only, rate-limited notification test so each member can verify their own installed device from Settings. Sodium continues to suppress self-notifications for content a member created.
+
+Before release v1.86, run `supabase/nonprofit-events-weekly-recap-v1-migration.sql` once. It adds a lightweight, admin-managed nonprofit layer inside Events while preserving every existing event as a community event. Organization cards can exist without a scheduled event and include a private Storage-backed logo, short description, and website; Water Access To All is seeded as the first placeholder. Members can RSVP and export nonprofit events to their calendar. The data model includes stable external-source IDs so a future server-side calendar importer can sync approved feeds without changing the member experience. Weekly crew and personal recaps are calculated automatically from existing participation data and require no journal entry.
+
+Before release v1.87, run `supabase/profile-activity-stats-v1-migration.sql` once. It records the real start time when a member taps **Start surf**, keeps scheduled times separate from active time, and expands profile stats into Community, Surf, and Film + photo views. Older sessions retain all existing counts; a duration is only backfilled when the old timestamps safely describe a manually started session, so auto-archived plans cannot inflate time totals.
 
 On iPhone, Web Push requires iOS 16.4 or later and the installed Home Screen app. Each member opens **Settings → Enable notifications on this device**, accepts Apple's prompt, and can then enable or disable new surfs, Stoke, DMs, events, surf updates, and Community Chat individually. Community Chat is off by default.
 
