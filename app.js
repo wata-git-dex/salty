@@ -22,14 +22,17 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.60';
+const APP_VERSION = '1.61';
 const CONSENT_VERSION = '1.0';
-const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V12.pdf';
-const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V8.png';
-const SETUP_PATH = './docs/SODIUM_Setup_One_Pager_V1.png';
+const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
+const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
+const SETUP_PATH = './docs/SODIUM_Setup_One_Pager_V2.png';
+const PLAN_SURF_PATH = './docs/SODIUM_Plan_A_Surf_One_Pager_V1.png';
+const GET_CLIPS_PATH = './docs/SODIUM_Get_Your_Clips_One_Pager_V1.png';
 const GUIDE_PAGE_COUNT = 4;
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
+const WHATS_NEW_SEEN_KEY = 'salty:whats-new-seen';
 const NOTIFICATION_DEFAULTS = Object.freeze({
   master_enabled: true,
   new_sessions: true,
@@ -589,6 +592,7 @@ async function enterCommunity() {
   cleanAuthUrl();
   offerInstallAfterAuth();
   revealSharedTarget();
+  showWhatsNew();
 }
 
 async function loadApp() {
@@ -647,6 +651,22 @@ function offerInstallAfterAuth() {
   $('#installNudge').classList.toggle('hidden', installed || Boolean(localStorage.getItem(INSTALL_DISMISSED_KEY)));
 }
 
+function showWhatsNew() {
+  if (localStorage.getItem(WHATS_NEW_SEEN_KEY) === APP_VERSION) return;
+  window.setTimeout(() => $('#whatsNewCard')?.classList.remove('hidden'), 650);
+}
+
+function closeWhatsNew() {
+  localStorage.setItem(WHATS_NEW_SEEN_KEY, APP_VERSION);
+  $('#whatsNewCard')?.classList.add('hidden');
+}
+
+function openNotificationSettings() {
+  closeWhatsNew();
+  setView('settings');
+  window.setTimeout(() => $('#notificationSettings')?.scrollIntoView({ behavior:'smooth', block:'start' }), 80);
+}
+
 function isIOSDevice() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
@@ -688,6 +708,14 @@ async function currentPushSubscription() {
 async function renderNotificationSettings() {
   const card = $('#notificationSettings');
   if (!card) return;
+  if (!$('#notificationTestButton')) {
+    const testButton = document.createElement('button');
+    testButton.id = 'notificationTestButton';
+    testButton.className = 'notification-test-button';
+    testButton.dataset.action = 'test-notification';
+    testButton.innerHTML = '<svg><use href="#i-send"/></svg>Send me a test notification';
+    card.insertBefore(testButton, $('#notificationChoices'));
+  }
   const preferences = { ...NOTIFICATION_DEFAULTS, ...(state.notificationPreferences || {}) };
   $$('[data-notification-pref]').forEach(input => { input.checked = Boolean(preferences[input.dataset.notificationPref]); });
   const supported = pushIsSupported();
@@ -719,6 +747,7 @@ async function renderNotificationSettings() {
   $$('#notificationChoices input').forEach(input => { input.disabled = !supported; });
   $('#notificationMaster').disabled = !subscription;
   $('#notificationMaster').checked = Boolean(subscription && preferences.master_enabled);
+  $('#notificationTestButton').disabled = !subscription || !preferences.master_enabled;
 }
 
 async function saveNotificationPreference(field, enabled) {
@@ -797,6 +826,25 @@ async function togglePushDevice() {
   } catch (error) {
     toast(readableError(error), 6000);
     await renderNotificationSettings();
+  }
+}
+
+async function sendTestNotification() {
+  const subscription = await currentPushSubscription();
+  if (!subscription) {
+    toast('Enable notifications on this device first.', 5000);
+    return;
+  }
+  const button = $('#notificationTestButton');
+  button.disabled = true;
+  try {
+    const result = await db.rpc('send_test_notification');
+    if (result.error) throw result.error;
+    toast('Test sent. Lock your phone or leave Sodium for the clearest test.', 6000);
+  } catch (error) {
+    toast(readableError(error), 6000);
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -2859,7 +2907,7 @@ function openGuide() {
   if (!pages.childElementCount) {
     pages.innerHTML = Array.from({ length:GUIDE_PAGE_COUNT }, (_, index) => {
       const page = String(index + 1).padStart(2, '0');
-      return `<img src="./docs/guide-v12/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
+      return `<img src="./docs/guide-v13/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
     }).join('');
   }
   viewer.classList.remove('hidden');
@@ -2876,7 +2924,7 @@ function closeGuide() {
 async function quickStartGuideFile() {
   const response = await fetch(quickStartGuideUrl());
   if (!response.ok) throw new Error('The Quick Start Guide could not be loaded.');
-  return new File([await response.blob()], 'SODIUM_Quick_Start_Guide_V12.pdf', { type:'application/pdf' });
+  return new File([await response.blob()], 'SODIUM_Quick_Start_Guide_V13.pdf', { type:'application/pdf' });
 }
 
 function overviewUrl() {
@@ -2886,7 +2934,7 @@ function overviewUrl() {
 async function overviewFile() {
   const response = await fetch(overviewUrl());
   if (!response.ok) throw new Error('The Sodium overview could not be loaded.');
-  return new File([await response.blob()], 'SODIUM_App_Overview_One_Pager_V8.png', { type:'image/png' });
+  return new File([await response.blob()], 'SODIUM_App_Overview_One_Pager_V9.png', { type:'image/png' });
 }
 
 function setupGuideUrl() {
@@ -2896,7 +2944,13 @@ function setupGuideUrl() {
 async function setupGuideFile() {
   const response = await fetch(setupGuideUrl());
   if (!response.ok) throw new Error('The Sodium phone setup guide could not be loaded.');
-  return new File([await response.blob()], 'SODIUM_Setup_One_Pager_V1.png', { type:'image/png' });
+  return new File([await response.blob()], 'SODIUM_Setup_One_Pager_V2.png', { type:'image/png' });
+}
+
+async function taskGuideFile(path, filename) {
+  const response = await fetch(new URL(path, location.href).href);
+  if (!response.ok) throw new Error('The task guide could not be loaded.');
+  return new File([await response.blob()], filename, { type:'image/png' });
 }
 
 async function shareSodiumContent({ title, text, url, file = null, copiedMessage }) {
@@ -2955,7 +3009,9 @@ async function sharePlanSurfInvite(event) {
     if (invite.region?.id) url.searchParams.set('region', invite.region.id);
     const text = `Yo ${name} — use this Sodium invite to post the surf you’re planning. Add the spot, time, surfers, and whether you want clips. You’ll get the organizer credit.`;
     closeSheet();
-    await shareSodiumContent({ title:'Plan a surf on Sodium', text, url:url.href, copiedMessage:`Planning invite for ${name} copied.` });
+    let file = null;
+    try { file = await taskGuideFile(PLAN_SURF_PATH, 'SODIUM_Plan_A_Surf_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
+    await shareSodiumContent({ title:'Plan a surf on Sodium', text, url:url.href, file, copiedMessage:`Planning invite for ${name} copied.` });
   } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
 }
 
@@ -2968,7 +3024,9 @@ async function shareSessionClaimInvite(sessionId) {
     url.searchParams.set('invite', invite.code); url.searchParams.set('open', 'claim-session'); url.searchParams.set('session', session.id);
     if (invite.region?.id) url.searchParams.set('region', invite.region.id);
     const text = `Yo ${session.initiator_name} — I added the ${session.spot?.name || 'surf'} session you organized to Sodium. Join here to claim it and its organizer credit.`;
-    await shareSodiumContent({ title:'Claim your surf on Sodium', text, url:url.href, copiedMessage:`Claim invite for ${session.initiator_name} copied.` });
+    let file = null;
+    try { file = await taskGuideFile(PLAN_SURF_PATH, 'SODIUM_Plan_A_Surf_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
+    await shareSodiumContent({ title:'Claim your surf on Sodium', text, url:url.href, file, copiedMessage:`Claim invite for ${session.initiator_name} copied.` });
   } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
 }
 
@@ -2981,7 +3039,9 @@ async function shareClipClaimInvite(deliveryId) {
     const url = new URL('./', location.href); url.search = ''; url.hash = '';
     url.searchParams.set('invite', invite.code); url.searchParams.set('open', 'claim-delivery'); url.searchParams.set('delivery', delivery.id);
     const text = `Yo ${name} — I’m sending you ${delivery.expected_count} clips of ${clipSubjectNames(delivery)} through Sodium. Join here and the delivery opens automatically.`;
-    await shareSodiumContent({ title:'Your clips on Sodium', text, url:url.href, copiedMessage:`Clip invite for ${name} copied.` });
+    let file = null;
+    try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
+    await shareSodiumContent({ title:'Your clips on Sodium', text, url:url.href, file, copiedMessage:`Clip invite for ${name} copied.` });
   } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
 }
 
@@ -2993,7 +3053,9 @@ async function shareGuestClipLink(deliveryId) {
   const url = new URL('./', location.href); url.search = ''; url.hash = ''; url.searchParams.set('guest-clips', result.data);
   const name = delivery.recipient_name || delivery.recipient_profile?.name || 'dude';
   const text = `Yo ${name} — get your ${delivery.expected_count} clips of ${clipSubjectNames(delivery)} here. No Sodium account needed. This private link only opens your clip delivery.`;
-  try { await shareSodiumContent({ title:'Your clips from Sodium', text, url:url.href, copiedMessage:'Private guest clip link copied.' }); }
+  let file = null;
+  try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
+  try { await shareSodiumContent({ title:'Your clips from Sodium', text, url:url.href, file, copiedMessage:'Private guest clip link copied.' }); }
   catch (error) { if (error?.name !== 'AbortError') prompt('Copy this guest clip link:', `${text}\n${url.href}`); }
 }
 
@@ -3288,6 +3350,9 @@ document.addEventListener('click', async event => {
     'delete-post': deletePost,
     'show-install': showInstallInstructions,
     'toggle-push-device': togglePushDevice,
+    'test-notification': sendTestNotification,
+    'close-whats-new': closeWhatsNew,
+    'whats-new-notifications': openNotificationSettings,
     'dismiss-install': dismissInstallNudge,
     'native-install': runNativeInstall,
     'close-sheet': closeSheet,

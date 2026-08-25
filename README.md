@@ -44,6 +44,8 @@ Before release v1.59, run `supabase/clip-deliveries-v1-migration.sql` once. It a
 
 Before release v1.60, run `supabase/session-attribution-invites-v1-migration.sql` once. It separates the member who entered a session from the person who initiated it, preserves all existing sessions, adds claimable task-specific invitations, allows pending clip recipients, and adds isolated guest clip links with a delivery-only message thread. Guest links never expose sessions, community chat, profiles, or other member data.
 
+Before release v1.61, run `supabase/push-test-notification-v1-migration.sql` once. It adds a signed-in, self-only, rate-limited notification test so each member can verify their own installed device from Settings. Sodium continues to suppress self-notifications for content a member created.
+
 On iPhone, Web Push requires iOS 16.4 or later and the installed Home Screen app. Each member opens **Settings → Enable notifications on this device**, accepts Apple's prompt, and can then enable or disable new surfs, Stoke, DMs, events, surf updates, and Community Chat individually. Community Chat is off by default.
 
 ## Free-tier media limits
@@ -61,6 +63,6 @@ Admins can create, edit, hide, and delete discounts from the Perks screen. Delet
 
 ## Current member guide
 
-The member documentation has three levels. `docs/SODIUM_App_Overview_One_Pager_V8.png` is the simple first-contact overview. `docs/SODIUM_Setup_One_Pager_V1.png` is the four-step phone setup sheet. `docs/SODIUM_Quick_Start_Guide_V12.pdf` is the optional four-page manual; its in-app pages live in `docs/guide-v12/`. Profile sharing offers the invite alone, the app overview, phone setup, or the full manual.
+The member documentation has three levels. `docs/SODIUM_App_Overview_One_Pager_V9.png` is the simple first-contact overview. `docs/SODIUM_Setup_One_Pager_V2.png` is the four-step phone setup sheet. `docs/SODIUM_Quick_Start_Guide_V13.pdf` is the optional four-page manual; its in-app pages live in `docs/guide-v13/`. Task-specific invites attach `SODIUM_Plan_A_Surf_One_Pager_V1.png` or `SODIUM_Get_Your_Clips_One_Pager_V1.png`, including the no-account guest delivery path.
 
 Before deploying Marketplace to a fresh Supabase project, run `supabase/marketplace-v1-migration.sql` after the base schema. It is additive, preserves existing data, enables RLS, and creates the private `sodium-marketplace` image bucket.
