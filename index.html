@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=88-stoken-coin">
+  <link rel="stylesheet" href="./styles.css?v=88-drawer-polish">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -280,24 +280,33 @@
       <button class="drawer-close" data-action="close-drawer" aria-label="Close menu"><svg><use href="#i-close"/></svg></button>
       <div id="drawerProfile" class="drawer-profile"></div>
       <nav>
-        <div class="drawer-nav-group"><span>CREW</span>
-          <button data-action="open-share-invite"><svg><use href="#i-share"/></svg>Share + invite</button>
-          <button data-view="members"><svg><use href="#i-user"/></svg>Members</button>
-          <button data-view="clubs"><svg><use href="#i-circle"/></svg>Clubs <b class="soon">SOON</b></button>
+        <div class="drawer-nav-group drawer-app-group"><span>APP</span>
+          <div class="drawer-nav-card">
+            <button data-view="settings"><svg><use href="#i-settings"/></svg><span>Settings</span><b class="drawer-chevron">›</b></button>
+            <button data-view="about"><svg><use href="#i-info"/></svg><span>About Sodium</span><b class="drawer-chevron">›</b></button>
+          </div>
         </div>
-        <div class="drawer-nav-group"><span>DISCOVER</span>
-          <button data-view="marketplace"><svg><use href="#i-store"/></svg>Marketplace</button>
-          <button data-view="perks"><svg><use href="#i-diamond"/></svg>Perks &amp; discounts</button>
-          <button data-action="open-nonprofits"><svg><use href="#i-heart"/></svg>Nonprofits</button>
+        <div class="drawer-guide-links"><span>GUIDES &amp; INSTRUCTIONS</span><button data-action="open-guide">Quick Start Guide</button><button data-action="open-master-guide">Complete instruction manual</button></div>
+        <section class="drawer-beta-card">
+          <div><span>FOR BETA TESTERS</span><strong>Something feel off?</strong><small>Report anything broken, confusing, or worth adding.</small></div>
+          <button data-action="open-issue-report"><svg><use href="#i-bug"/></svg>Report an issue <b class="drawer-chevron">›</b></button>
+          <button id="betaFeedbackMenu" class="drawer-beta-admin hidden" data-view="beta-feedback">Review beta reports <b id="betaFeedbackBadge" class="admin-count hidden">0</b></button>
+        </section>
+        <div class="drawer-nav-group"><span>COMMUNITY</span>
+          <div class="drawer-nav-card">
+            <button data-view="members"><svg><use href="#i-user"/></svg><span>Members</span><b class="drawer-chevron">›</b></button>
+            <button data-action="open-share-invite"><svg><use href="#i-share"/></svg><span>Share + invite</span><b class="drawer-chevron">›</b></button>
+            <button data-view="rules"><svg><use href="#i-list"/></svg><span>Community rules</span><b class="drawer-chevron">›</b></button>
+            <button data-view="points"><svg><use href="#i-stoken"/></svg><span>Stokens &amp; streaks</span><b class="drawer-chevron">›</b></button>
+            <button data-view="clubs"><svg><use href="#i-circle"/></svg><span>Clubs</span><b class="soon">SOON</b></button>
+          </div>
         </div>
-        <div class="drawer-nav-group"><span>YOUR SODIUM</span>
-          <button data-view="points"><svg><use href="#i-stoken"/></svg>Stokens &amp; streaks</button>
-          <button data-view="rules"><svg><use href="#i-list"/></svg>Community rules</button>
-        </div>
-        <div class="drawer-nav-group"><span>APP</span>
-          <button id="betaFeedbackMenu" class="hidden" data-view="beta-feedback"><svg><use href="#i-bug"/></svg>Beta Feedback <b id="betaFeedbackBadge" class="admin-count hidden">0</b></button>
-          <button data-view="settings"><svg><use href="#i-settings"/></svg>Settings</button>
-          <button data-view="about"><svg><use href="#i-info"/></svg>About Sodium</button>
+        <div class="drawer-nav-group"><span>EXPLORE</span>
+          <div class="drawer-nav-card">
+            <button data-view="marketplace"><svg><use href="#i-store"/></svg><span>Marketplace</span><b class="drawer-chevron">›</b></button>
+            <button data-view="perks"><svg><use href="#i-diamond"/></svg><span>Perks &amp; discounts</span><b class="drawer-chevron">›</b></button>
+            <button data-action="open-nonprofits"><svg><use href="#i-heart"/></svg><span>Nonprofits</span><b class="drawer-chevron">›</b></button>
+          </div>
         </div>
       </nav>
       <footer class="drawer-foot"><strong>SODIUM</strong><small>developed by saltyview productions</small></footer>
