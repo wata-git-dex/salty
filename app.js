@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.75';
+const APP_VERSION = '1.76';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -1401,7 +1401,6 @@ async function loadGuestClipDelivery() {
   const result = await db.rpc('get_guest_clip_delivery', { access_token:state.guestClipToken });
   if (result.error || !result.data) {
     $('#guestClipContent').innerHTML = '<h1>This clip link is not available</h1><p>Ask the filmer for a fresh Sodium guest link.</p>';
-    $('#guestClipChat').classList.add('hidden');
     $('#guestClipAccountActions').classList.add('hidden');
     return;
   }
@@ -1409,10 +1408,7 @@ async function loadGuestClipDelivery() {
   const delivery = result.data;
   const ready = delivery.status === 'ready' || Number(delivery.uploaded_count) >= Number(delivery.expected_count);
   const percent = delivery.expected_count ? Math.min(100, Math.round(Number(delivery.uploaded_count) / Number(delivery.expected_count) * 100)) : 0;
-  const messages = (delivery.messages || []).map(message => `<div class="guest-clip-message"><b>${esc(message.name || 'Guest')}</b><small>${esc(messageTime(message.created_at))}</small><p>${esc(message.body)}</p></div>`).join('');
   $('#guestClipContent').innerHTML = `<div class="guest-clip-summary"><span>${esc(delivery.sender_name)} SENT YOU</span><h1>${esc((delivery.subject_names || []).join(', ') || 'Your clips')}</h1><small>${delivery.session_spot ? `${esc(delivery.session_spot)}${delivery.session_location ? ` · ${esc(delivery.session_location)}` : ''}` : 'Sodium clip delivery'}</small><div class="clip-progress-copy"><b>${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}</b><span>${ready ? 'Clips ready' : `${percent}% uploaded`}</span></div><div class="clip-progress-track"><span style="width:${ready ? 100 : percent}%"></span></div>${delivery.note ? `<p>${esc(delivery.note)}</p>` : ''}<button class="guest-clip-join" data-action="guest-clip-join">Join Sodium + open clips</button><a class="guest-clip-open guest-clip-open-secondary" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener">${ready ? 'View clips without an account' : 'View uploading folder without an account'}</a></div>`;
-  $('#guestClipMessages').innerHTML = messages;
-  $('#guestClipChat').classList.remove('hidden');
   $('#guestClipAccountActions').classList.remove('hidden');
 }
 
@@ -1441,17 +1437,6 @@ async function joinFromGuestClip() {
   url.searchParams.set('open', 'claim-delivery');
   url.searchParams.set('delivery', state.guestClipDelivery.id);
   location.href = url.href;
-}
-
-async function sendGuestClipMessage(event) {
-  event.preventDefault();
-  const button = $('#guestClipMessageForm button[type="submit"]'); button.disabled = true;
-  const result = await db.rpc('add_guest_clip_message', { access_token:state.guestClipToken, display_name:$('#guestClipName').value.trim(), message_body:$('#guestClipMessage').value.trim() });
-  button.disabled = false;
-  if (result.error) { toast(readableError(result.error), 6000); return; }
-  $('#guestClipMessage').value = '';
-  await loadGuestClipDelivery();
-  toast('Message sent to the filmer.');
 }
 
 async function sendMemberClipMessage(event) {
@@ -3655,7 +3640,6 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
   else if (event.target.id === 'clipDeliveryForm') await saveClipDelivery(event);
   else if (event.target.id === 'planInviteForm') await sharePlanSurfInvite(event);
-  else if (event.target.id === 'guestClipMessageForm') await sendGuestClipMessage(event);
   else if (event.target.matches('[data-clip-message-form]')) await sendMemberClipMessage(event);
   else if (event.target.id === 'locationForm') await saveLocation(event);
   else if (event.target.id === 'issueReportForm') await saveIssueReport(event);
