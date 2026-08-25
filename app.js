@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.73';
+const APP_VERSION = '1.74';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -1401,7 +1401,8 @@ async function loadGuestClipDelivery() {
   const result = await db.rpc('get_guest_clip_delivery', { access_token:state.guestClipToken });
   if (result.error || !result.data) {
     $('#guestClipContent').innerHTML = '<h1>This clip link is not available</h1><p>Ask the filmer for a fresh Sodium guest link.</p>';
-    $('#guestClipMessageForm').classList.add('hidden');
+    $('#guestClipChat').classList.add('hidden');
+    $('#guestClipAccountActions').classList.add('hidden');
     return;
   }
   state.guestClipDelivery = result.data;
@@ -1409,8 +1410,28 @@ async function loadGuestClipDelivery() {
   const ready = delivery.status === 'ready' || Number(delivery.uploaded_count) >= Number(delivery.expected_count);
   const percent = delivery.expected_count ? Math.min(100, Math.round(Number(delivery.uploaded_count) / Number(delivery.expected_count) * 100)) : 0;
   const messages = (delivery.messages || []).map(message => `<div class="guest-clip-message"><b>${esc(message.name || 'Guest')}</b><small>${esc(messageTime(message.created_at))}</small><p>${esc(message.body)}</p></div>`).join('');
-  $('#guestClipContent').innerHTML = `<div class="guest-clip-summary"><span>${esc(delivery.sender_name)} SENT YOU</span><h1>${esc((delivery.subject_names || []).join(', ') || 'Your clips')}</h1><small>${delivery.session_spot ? `${esc(delivery.session_spot)}${delivery.session_location ? ` · ${esc(delivery.session_location)}` : ''}` : 'Sodium clip delivery'}</small><div class="clip-progress-copy"><b>${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}</b><span>${ready ? 'Clips ready' : `${percent}% uploaded`}</span></div><div class="clip-progress-track"><span style="width:${ready ? 100 : percent}%"></span></div>${delivery.note ? `<p>${esc(delivery.note)}</p>` : ''}<a class="guest-clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener">${ready ? 'Open your clips' : 'View uploading folder'}</a></div><div class="guest-clip-thread">${messages || '<div class="guest-clip-message"><b>Delivery chat</b><p>Ask the filmer about a missing wave or anything in this folder.</p></div>'}</div>`;
-  $('#guestClipMessageForm').classList.remove('hidden');
+  $('#guestClipContent').innerHTML = `<div class="guest-clip-summary"><span>${esc(delivery.sender_name)} SENT YOU</span><h1>${esc((delivery.subject_names || []).join(', ') || 'Your clips')}</h1><small>${delivery.session_spot ? `${esc(delivery.session_spot)}${delivery.session_location ? ` · ${esc(delivery.session_location)}` : ''}` : 'Sodium clip delivery'}</small><div class="clip-progress-copy"><b>${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}</b><span>${ready ? 'Clips ready' : `${percent}% uploaded`}</span></div><div class="clip-progress-track"><span style="width:${ready ? 100 : percent}%"></span></div>${delivery.note ? `<p>${esc(delivery.note)}</p>` : ''}<button class="guest-clip-join" data-action="guest-clip-join">Join Sodium + open clips</button><a class="guest-clip-open guest-clip-open-secondary" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener">${ready ? 'View clips without an account' : 'View uploading folder without an account'}</a></div>`;
+  $('#guestClipMessages').innerHTML = messages;
+  $('#guestClipChat').classList.remove('hidden');
+  $('#guestClipAccountActions').classList.remove('hidden');
+}
+
+async function joinFromGuestClip() {
+  const buttons = $$('[data-action="guest-clip-join"]');
+  buttons.forEach(button => { button.disabled = true; });
+  const result = await db.rpc('get_or_create_guest_clip_invite', { access_token:state.guestClipToken });
+  buttons.forEach(button => { button.disabled = false; });
+  if (result.error || !result.data) {
+    toast(result.error ? readableError(result.error) : 'Ask the filmer for a fresh Sodium invite.', 6000);
+    return;
+  }
+  const url = new URL('./', location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('invite', result.data);
+  url.searchParams.set('open', 'claim-delivery');
+  url.searchParams.set('delivery', state.guestClipDelivery.id);
+  location.href = url.href;
 }
 
 async function sendGuestClipMessage(event) {
@@ -1487,7 +1508,7 @@ function clipDeliveryMarkup(delivery) {
   const shareAction = mine
     ? (delivery.recipient
       ? `<button class="clip-open clip-share-again" data-share-clip-delivery="${delivery.id}"><svg><use href="#i-share"/></svg>Share delivery again</button>`
-      : `<button class="clip-open" data-invite-clip-claim="${delivery.id}">Invite to Sodium + send clips</button><button class="clip-edit guest-instructions" data-share-guest-clips="${delivery.id}" title="No account required">Private clip link · no account</button>`)
+      : `<button class="clip-open" data-invite-clip-claim="${delivery.id}">Invite to Sodium + send clips</button><button class="clip-edit guest-instructions" data-share-guest-clips="${delivery.id}" title="Account optional">Private clip link · account optional</button>`)
     : '';
   const messages = (delivery.clip_delivery_messages || []).slice(-3).map(message => `<div class="guest-clip-message"><b>${esc(memberById(message.sender_user)?.name || message.guest_name || 'Guest')}</b><p>${esc(message.body)}</p></div>`).join('');
   const threadCount = (delivery.clip_delivery_messages || []).length;
@@ -3220,7 +3241,7 @@ async function shareGuestClipLink(deliveryId) {
   const url = new URL('./', location.href); url.search = ''; url.hash = ''; url.searchParams.set('guest-clips', result.data);
   const name = delivery.recipient_name || delivery.recipient_profile?.name || 'dude';
   const copy = clipShareCopy(delivery, name);
-  const text = `${copy.sentence} No Sodium account needed—this private link only opens your clip delivery.`;
+  const text = `${copy.sentence} Open the clips without an account, or join Sodium from the same page.`;
   let file = null;
   try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
   try { await shareSodiumContent({ title:'Your clips from Sodium', text, url:url.href, file, copiedMessage:'Private guest clip link copied.' }); }
@@ -3545,6 +3566,7 @@ document.addEventListener('click', async event => {
     'google-auth': signInWithGoogle,
     'verify-code': verifyEmailCode,
     'verify-link': verifyEmailLink,
+    'guest-clip-join': joinFromGuestClip,
     'open-drawer': openDrawer,
     'close-drawer': closeDrawer,
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
