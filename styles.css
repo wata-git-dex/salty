@@ -159,7 +159,7 @@ html[data-theme="pink"] .surf-section-label>span{color:#1b0911}
 .avatar img{min-width:100%;min-height:100%}
 .member-row .avatar{flex:0 0 48px!important}
 .member-row>span:not(.avatar){flex:1;min-width:0}
-.streak svg{width:17px;height:17px;fill:#f6a23c22;color:var(--sodium)}
+.streak svg{width:18px;height:18px;fill:none;color:var(--sodium);stroke-width:1.8}
 .spot-location{display:inline-flex;align-items:center;gap:5px;margin:-2px 0 11px;color:var(--hail);font-size:12px;font-weight:700;text-decoration:none}
 .spot-location svg{width:13px;height:13px}
 .surf-section-actions{display:flex;align-items:center;gap:9px}.surf-calendar-button{display:flex;align-items:center;gap:5px;padding:7px 9px;border:1px solid #54abec55;border-radius:10px;background:#54abec12;color:var(--hail);font-size:10px;font-weight:900;text-transform:none;letter-spacing:0}.surf-calendar-button svg{width:14px;height:14px}.session-join-label,.session-owner-note{display:block;margin:0 0 7px;color:var(--mut2);font-size:9.5px;font-weight:800;letter-spacing:.7px;line-height:1.4}.session-join-label{color:var(--hail);text-transform:uppercase}.session-owner-note{font-weight:600;letter-spacing:0}
