@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.69';
+const APP_VERSION = '1.70';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
@@ -62,7 +62,7 @@ const state = {
   notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '', pendingDeliveryId: '',
   calendarMonth: null, calendarDate: '',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
-  marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages',
+  marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent',
   guestClipToken: '', guestClipDelivery: null,
 };
 
@@ -1471,19 +1471,30 @@ function renderInboxTabs() {
   });
   $('#dmInboxMessages')?.classList.toggle('active', state.inboxTab === 'messages');
   $('#dmInboxClips')?.classList.toggle('active', state.inboxTab === 'clips');
+  $$('[data-clip-box]').forEach(button => {
+    const active = button.dataset.clipBox === state.clipBox;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+  });
 }
 
 function renderClipDeliveries() {
   const target = $('#clipDeliveries');
   if (!target || !state.profile) return;
-  const deliveries = [...state.clipDeliveries].sort((a, b) => {
+  const mine = state.profile.id;
+  const allDeliveries = [...state.clipDeliveries].sort((a, b) => {
     const statusOrder = { uploading:0, ready:1, cancelled:2 };
     return (statusOrder[a.status] - statusOrder[b.status]) || new Date(b.updated_at) - new Date(a.updated_at);
   });
+  const deliveries = allDeliveries.filter(item => state.clipBox === 'sent' ? item.sender === mine : item.recipient === mine);
+  const sentCount = allDeliveries.filter(item => item.sender === mine).length;
+  const receivedCount = allDeliveries.filter(item => item.recipient === mine).length;
+  if ($('#clipSentCount')) $('#clipSentCount').textContent = String(sentCount);
+  if ($('#clipReceivedCount')) $('#clipReceivedCount').textContent = String(receivedCount);
   target.innerHTML = deliveries.length
     ? deliveries.map(clipDeliveryMarkup).join('')
-    : '<div class="empty clip-empty"><span>CLIPS</span><h2>No deliveries yet</h2><p>Send a folder once and Sodium keeps the handoff with the session and conversation.</p></div>';
-  const incomingUploading = deliveries.filter(item => item.recipient === state.profile.id && item.status === 'uploading').length;
+    : `<div class="empty clip-empty"><span>${state.clipBox === 'sent' ? 'OUTBOX' : 'RECEIVED'}</span><h2>${state.clipBox === 'sent' ? 'No clips sent yet' : 'No clips received yet'}</h2><p>${state.clipBox === 'sent' ? 'Every delivery you create will stay here so you can edit, reopen, or share it again.' : 'Clip deliveries sent to you will appear here.'}</p></div>`;
+  const incomingUploading = allDeliveries.filter(item => item.recipient === state.profile.id && item.status === 'uploading').length;
   const badge = $('#clipReadyBadge');
   if (badge) {
     badge.textContent = incomingUploading > 99 ? '99+' : String(incomingUploading);
@@ -1506,13 +1517,23 @@ function renderDmClipDeliveries() {
 
 async function loadClipDeliveries() {
   if (!state.profile || state.preview) return;
-  const result = await db.from('clip_deliveries')
+  let result = await db.from('clip_deliveries')
     .select('*,sender_profile:profiles!clip_deliveries_sender_fkey(id,name,nickname,avatar_path),recipient_profile:profiles!clip_deliveries_recipient_fkey(id,name,nickname,avatar_path),session:sessions!clip_deliveries_session_id_fkey(id,surf_time,when_label,status,spot:spots(name,general_location)),clip_delivery_messages(id,sender_user,guest_name,body,created_at)')
     .or(`sender.eq.${state.profile.id},recipient.eq.${state.profile.id}`)
     .order('updated_at', { ascending:false }).limit(250);
   if (result.error) {
-    console.warn('Clip deliveries are not ready:', result.error.message);
-    return;
+    console.warn('Clip delivery messages did not load; showing delivery history without messages:', result.error.message);
+    result = await db.from('clip_deliveries')
+      .select('*,sender_profile:profiles!clip_deliveries_sender_fkey(id,name,nickname,avatar_path),recipient_profile:profiles!clip_deliveries_recipient_fkey(id,name,nickname,avatar_path),session:sessions!clip_deliveries_session_id_fkey(id,surf_time,when_label,status,spot:spots(name,general_location))')
+      .or(`sender.eq.${state.profile.id},recipient.eq.${state.profile.id}`)
+      .order('updated_at', { ascending:false }).limit(250);
+    if (result.error) {
+      console.warn('Clip deliveries are not ready:', result.error.message);
+      const target = $('#clipDeliveries');
+      if (target) target.innerHTML = '<div class="empty clip-empty"><span>OUTBOX</span><h2>Could not load sent clips</h2><p>Close and reopen Sodium. If this remains, report the error from Settings.</p></div>';
+      return;
+    }
+    result.data = (result.data || []).map(delivery => ({ ...delivery, clip_delivery_messages:[] }));
   }
   state.clipDeliveries = result.data || [];
   renderClipDeliveries();
@@ -1618,6 +1639,7 @@ async function saveClipDelivery(event) {
     state.editingClipDeliveryId = null;
     await loadClipDeliveries();
     state.inboxTab = 'clips';
+    state.clipBox = 'sent';
     setView('dms');
     renderInboxTabs();
     if (pendingRecipient && createdDeliveryId) {
@@ -3126,8 +3148,9 @@ async function shareSessionClaimInvite(sessionId) {
 }
 
 async function shareClipClaimInvite(deliveryId) {
-  const delivery = state.clipDeliveries.find(item => item.id === deliveryId && item.sender === state.profile.id && !item.recipient);
-  if (!delivery) { toast('That delivery already has a Sodium recipient.'); return; }
+  const delivery = state.clipDeliveries.find(item => item.id === deliveryId && item.sender === state.profile.id);
+  if (!delivery) { toast('That delivery is no longer available.'); return; }
+  if (delivery.recipient) { await shareExistingClipDelivery(deliveryId); return; }
   const name = delivery.recipient_name || 'dude';
   try {
     const invite = await createContextInvite({ purpose:'claim_delivery', deliveryId, name });
@@ -3332,6 +3355,7 @@ document.addEventListener('click', async event => {
   const listingNode = event.target.closest('[data-listing]');
   const editListingNode = event.target.closest('[data-edit-listing]');
   const inboxTabNode = event.target.closest('[data-inbox-tab]');
+  const clipBoxNode = event.target.closest('[data-clip-box]');
   const editClipDeliveryNode = event.target.closest('[data-edit-clip-delivery]');
   const sessionClipsNode = event.target.closest('[data-session-clips]');
   if (carouselDirectionNode) {
@@ -3344,6 +3368,10 @@ document.addEventListener('click', async event => {
   if (inboxTabNode) {
     state.inboxTab = inboxTabNode.dataset.inboxTab;
     renderInboxTabs();
+  }
+  if (clipBoxNode) {
+    state.clipBox = clipBoxNode.dataset.clipBox;
+    renderClipDeliveries();
   }
   if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
   if (viewNode) setView(viewNode.dataset.view);
@@ -3451,6 +3479,7 @@ document.addEventListener('click', async event => {
     'open-plan-invite': () => { closeSheet(); $('#planInviteForm').reset(); openSheet('planInviteSheet'); },
     'open-session-claim-list': showSessionClaimList,
     'open-pending-clip-delivery': () => { closeSheet(); openClipDeliveryComposer(); $('#clipRecipient').value = 'pending'; updateClipRecipientUi(); },
+    'open-clip-outbox': () => { closeSheet(); state.inboxTab = 'clips'; state.clipBox = 'sent'; setView('dms'); renderClipDeliveries(); },
     'open-calendar': openCrewCalendar,
     'open-events-calendar': openEventsCalendar,
     'calendar-prev': () => changeCalendarMonth(-1),
