@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.74';
+const APP_VERSION = '1.75';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -1422,6 +1422,15 @@ async function joinFromGuestClip() {
   const result = await db.rpc('get_or_create_guest_clip_invite', { access_token:state.guestClipToken });
   buttons.forEach(button => { button.disabled = false; });
   if (result.error || !result.data) {
+    if (/already connected/i.test(result.error?.message || '') && state.guestClipDelivery?.id) {
+      const appUrl = new URL('./', location.href);
+      appUrl.search = '';
+      appUrl.hash = '';
+      appUrl.searchParams.set('open', 'clips');
+      appUrl.searchParams.set('delivery', state.guestClipDelivery.id);
+      location.href = appUrl.href;
+      return;
+    }
     toast(result.error ? readableError(result.error) : 'Ask the filmer for a fresh Sodium invite.', 6000);
     return;
   }
