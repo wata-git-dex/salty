@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.65';
+const APP_VERSION = '1.66';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
@@ -2524,8 +2524,7 @@ function resetSessionComposer() {
   if (admin) {
     $('#sessionInitiator').disabled = false;
     $('#sessionInitiatorName').disabled = false;
-    $('#sessionInitiatorFields').classList.remove('credit-locked');
-    $('#sessionInitiatorLockNote').classList.add('hidden');
+    $('#sessionInitiatorTransferNote').classList.add('hidden');
     $('#sessionInitiator').innerHTML = `<option value="${state.profile.id}">Me · ${esc(state.profile.name)}</option>` + state.people.filter(person => person.id !== state.profile.id).map(person => `<option value="${person.id}">${esc(person.name)} · Sodium member</option>`).join('') + '<option value="pending">Not on Sodium yet…</option>';
     $('#sessionInitiator').value = state.profile.id;
     $('#sessionInitiatorName').value = '';
@@ -2569,11 +2568,7 @@ function openSessionComposer(sessionId = null) {
       $('#sessionInitiator').value = session.initiator_user || 'pending';
       $('#sessionInitiatorName').value = session.initiator_user ? '' : (session.initiator_name || '');
       $('#sessionInitiatorNameRow').classList.toggle('hidden', Boolean(session.initiator_user));
-      const creditLocked = Boolean(session.initiator_points_awarded_at);
-      $('#sessionInitiator').disabled = creditLocked;
-      $('#sessionInitiatorName').disabled = creditLocked;
-      $('#sessionInitiatorFields').classList.toggle('credit-locked', creditLocked);
-      $('#sessionInitiatorLockNote').classList.toggle('hidden', !creditLocked);
+      $('#sessionInitiatorTransferNote').classList.toggle('hidden', !session.initiator_points_awarded_at);
     }
     renderSessionPeopleChips();
   }
@@ -2605,8 +2600,7 @@ async function createSession(event) {
       featured_surfer_name: null, featured_surfer_user: null, participant_names: state.sessionPeople,
       wants_filmer: $('#wantsFilmer').checked, note: $('#sessionNote').value.trim() || null,
     };
-    const initiatorCreditLocked = Boolean(existingSession?.initiator_points_awarded_at);
-    if (state.profile.is_admin && !initiatorCreditLocked) {
+    if (state.profile.is_admin) {
       const selectedInitiator = $('#sessionInitiator').value;
       payload.initiator_user = selectedInitiator === 'pending' ? null : selectedInitiator;
       payload.initiator_name = selectedInitiator === 'pending' ? $('#sessionInitiatorName').value.trim() : (memberById(selectedInitiator)?.name || state.profile.name);

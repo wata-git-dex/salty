@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=65-past-session-edit-fix">
+  <link rel="stylesheet" href="./styles.css?v=66-credit-transfer">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -67,7 +67,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.65</small>
+    <small class="boot-credit">Saltyview Productions · v1.66</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -299,7 +299,7 @@
       <form id="sessionForm">
         <label class="session-role-choice">What are you doing?<div class="segmented"><button type="button" class="active" data-session-role="surf"><svg><use href="#i-wave"/></svg><span>I'm surfing</span></button><button type="button" data-session-role="film"><svg><use href="#i-camera"/></svg><span>I'm filming</span></button></div></label>
         <label id="wantsFilmerRow" class="clip-toggle"><input id="wantsFilmer" type="checkbox" role="switch"><span class="clip-toggle-icon"><svg><use href="#i-camera"/></svg></span><span>Looking for clips<small>Optional · lets filmers know you want someone there</small></span><b aria-hidden="true"></b></label>
-        <fieldset id="sessionInitiatorFields" class="session-initiator hidden"><legend>Who initiated this session?</legend><label><select id="sessionInitiator"></select></label><small id="sessionInitiatorLockNote" class="session-initiator-lock hidden">Organizer credit is already awarded. You can still edit every other session detail.</small><label id="sessionInitiatorNameRow" class="hidden">Their first name<input id="sessionInitiatorName" maxlength="80" placeholder="Pierce"><small>They can claim this session—and its organizer credit—when they join Sodium.</small></label></fieldset>
+        <fieldset id="sessionInitiatorFields" class="session-initiator hidden"><legend>Who initiated this session?</legend><label><select id="sessionInitiator"></select></label><small id="sessionInitiatorTransferNote" class="session-initiator-transfer hidden">Points were already awarded. Changing this safely transfers organizer credit.</small><label id="sessionInitiatorNameRow" class="hidden">Their first name<input id="sessionInitiatorName" maxlength="80" placeholder="Pierce"><small>They can claim this session—and its organizer credit—when they join Sodium.</small></label></fieldset>
         <label>Spot name<input id="sessionSpot" maxlength="120" required placeholder="Old Man's" list="spotsList"><datalist id="spotsList"></datalist></label>
         <label>General location<input id="sessionLocation" maxlength="160" required placeholder="San Onofre" list="locationsList"><datalist id="locationsList"></datalist><small>The broader map area—not a secret pin or exact takeoff spot.</small></label>
         <label>When<div class="session-when-row"><button type="button" class="now-choice active" data-when="now">Now</button><span id="sessionDateChoice" class="date-choice compact" data-when="later"><svg><use href="#i-calendar"/></svg><span><small>Date &amp; time</small><strong id="sessionTimeDisplay">Choose date and time</strong></span><input id="sessionTime" type="datetime-local" aria-label="Session date and time"></span></div></label>
@@ -448,9 +448,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.65</span>
-    <h3>Finished-session editing fixed.</h3>
-    <ul><li>Edit the date, spot, surfers, filmer status, or note after a surf ends.</li><li>Awarded organizer credit stays protected and unchanged.</li><li>Stoke photo carousels still support up to 10 photos.</li></ul>
+    <span>NEW IN V1.66</span>
+    <h3>Correct finished-session credit.</h3>
+    <ul><li>Admins can correct who initiated a finished surf.</li><li>Sodium transfers existing credit instead of duplicating points.</li><li>Every other past-session detail remains editable.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -464,6 +464,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=65-past-session-edit-fix" defer></script>
+  <script src="./app.js?v=66-credit-transfer" defer></script>
 </body>
 </html>
