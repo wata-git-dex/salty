@@ -25,6 +25,7 @@ const CONFIG = Object.freeze({
 const APP_VERSION = '1.72';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
+const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
 const SETUP_PATH = './docs/SODIUM_Setup_One_Pager_V2.png';
 const PLAN_SURF_PATH = './docs/SODIUM_Plan_A_Surf_One_Pager_V1.png';
@@ -676,6 +677,10 @@ function showWhatsNew() {
 function closeWhatsNew() {
   localStorage.setItem(WHATS_NEW_SEEN_KEY, APP_VERSION);
   $('#whatsNewCard')?.classList.add('hidden');
+}
+
+function openMasterGuide() {
+  window.open(new URL(MASTER_GUIDE_PATH, location.href).href, '_blank', 'noopener');
 }
 
 function openNotificationSettings() {
@@ -3574,6 +3579,7 @@ document.addEventListener('click', async event => {
     'native-install': runNativeInstall,
     'close-sheet': closeSheet,
     'open-guide': openGuide,
+    'open-master-guide': openMasterGuide,
     'close-guide': closeGuide,
     'go-surfing': () => setView('surfing'),
     'open-dms': () => setView('dms'),
