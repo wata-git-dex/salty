@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.67';
+const APP_VERSION = '1.68';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
@@ -1556,7 +1556,7 @@ function openClipDeliveryComposer(deliveryId = null, sessionId = '', recipientId
   const chosenRecipient = delivery?.recipient || recipientId || state.activeDmMember?.id || '';
   $('#clipRecipient').innerHTML = '<option value="">Choose a member</option>' + state.people.filter(person => person.id !== state.profile.id).map(person => `<option value="${person.id}" ${person.id === chosenRecipient ? 'selected' : ''}>${esc(person.name)}</option>`).join('') + `<option value="pending" ${delivery && !delivery.recipient ? 'selected' : ''}>Not on Sodium yet…</option>`;
   $('#clipRecipientName').value = delivery?.recipient_name || '';
-  $('#clipRecipientNameRow').classList.toggle('hidden', $('#clipRecipient').value !== 'pending');
+  updateClipRecipientUi();
   $('#clipSession').innerHTML = clipSessionOptions(delivery?.session_id || sessionId);
   $('#clipSubjects').value = delivery ? clipSubjectNames(delivery) : '';
   $('#clipFolderUrl').value = delivery?.folder_url || '';
@@ -1566,6 +1566,12 @@ function openClipDeliveryComposer(deliveryId = null, sessionId = '', recipientId
   updateClipProviderHint();
   updateClipProgressPreview();
   openSheet('clipDeliverySheet');
+}
+
+function updateClipRecipientUi() {
+  const pending = $('#clipRecipient').value === 'pending';
+  $('#clipRecipientNameRow').classList.toggle('hidden', !pending);
+  if (!state.editingClipDeliveryId) $('#clipDeliverySubmit').textContent = pending ? 'Create + share clips' : 'Start delivery';
 }
 
 async function saveClipDelivery(event) {
@@ -1603,13 +1609,19 @@ async function saveClipDelivery(event) {
       ? await db.from('clip_deliveries').update(payload).eq('id', state.editingClipDeliveryId).eq('sender', state.profile.id)
       : await db.from('clip_deliveries').insert(payload).select('id').single();
     if (result.error) throw result.error;
+    const createdDeliveryId = edited ? null : result.data?.id;
     closeSheet();
     state.editingClipDeliveryId = null;
     await loadClipDeliveries();
     state.inboxTab = 'clips';
     setView('dms');
     renderInboxTabs();
-    toast(pendingRecipient && !edited ? 'Delivery created. Choose Invite + instructions or Guest link + instructions on its card.' : (uploadedCount >= expectedCount ? 'Clips ready.' : (edited ? 'Clip delivery updated.' : 'Clip delivery started.')));
+    if (pendingRecipient && createdDeliveryId) {
+      toast('Delivery created. Opening the invite and clip instructions…');
+      await shareClipClaimInvite(createdDeliveryId);
+    } else {
+      toast(uploadedCount >= expectedCount ? 'Clips ready.' : (edited ? 'Clip delivery updated.' : 'Clip delivery started.'));
+    }
   } catch (error) { toast(readableError(error), 6000); }
   finally { submit.disabled = false; }
 }
@@ -3028,12 +3040,18 @@ async function taskGuideFile(path, filename) {
 
 async function shareSodiumContent({ title, text, url, file = null, copiedMessage }) {
   if (navigator.share) {
-    if (file && navigator.canShare?.({ files:[file] })) {
-      await navigator.share({ title, text, url, files:[file] });
-    } else {
-      await navigator.share({ title, text, url });
+    try {
+      if (file && navigator.canShare?.({ files:[file] })) {
+        await navigator.share({ title, text, url, files:[file] });
+      } else {
+        await navigator.share({ title, text, url });
+      }
+      return;
+    } catch (error) {
+      if (error?.name === 'AbortError') throw error;
+      // iOS can expire a share gesture while Sodium finishes creating an
+      // invite. Fall through to copy/prompt so the link is never stranded.
     }
-    return;
   }
   const copy = `${text}\n${url}`;
   try {
@@ -3413,7 +3431,7 @@ document.addEventListener('click', async event => {
     'open-share-invite': openShareInviteHub,
     'open-plan-invite': () => { closeSheet(); $('#planInviteForm').reset(); openSheet('planInviteSheet'); },
     'open-session-claim-list': showSessionClaimList,
-    'open-pending-clip-delivery': () => { closeSheet(); openClipDeliveryComposer(); $('#clipRecipient').value = 'pending'; $('#clipRecipientNameRow').classList.remove('hidden'); },
+    'open-pending-clip-delivery': () => { closeSheet(); openClipDeliveryComposer(); $('#clipRecipient').value = 'pending'; updateClipRecipientUi(); },
     'open-calendar': openCrewCalendar,
     'open-events-calendar': openEventsCalendar,
     'calendar-prev': () => changeCalendarMonth(-1),
@@ -3493,11 +3511,11 @@ document.addEventListener('change', async event => {
   if (event.target.id === 'clipRecipient' && !$('#clipSubjects').value.trim()) {
     const recipient = state.people.find(person => person.id === event.target.value);
     $('#clipSubjects').value = recipient?.name?.trim().split(/\s+/)[0] || '';
-    $('#clipRecipientNameRow').classList.toggle('hidden', event.target.value !== 'pending');
+    updateClipRecipientUi();
     return;
   }
   if (event.target.id === 'clipRecipient') {
-    $('#clipRecipientNameRow').classList.toggle('hidden', event.target.value !== 'pending');
+    updateClipRecipientUi();
     return;
   }
   if (event.target.id === 'sessionInitiator') {
