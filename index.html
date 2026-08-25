@@ -523,7 +523,7 @@
         <input id="clipGoogleFolderId" type="hidden"><input id="clipGoogleFolderName" type="hidden">
         <label>Link to clips<input id="clipFolderUrl" type="url" maxlength="2048" inputmode="url" required placeholder="https://drive.google.com/…"><small id="clipProviderHint">Drive, Dropbox, iCloud, or another HTTPS folder link.</small></label>
         <div class="clip-count-fields"><label>Total clips<input id="clipExpectedCount" type="number" inputmode="numeric" min="1" max="2000" required value="1"></label><label>Uploaded so far<input id="clipUploadedCount" type="number" inputmode="numeric" min="0" max="2000" required value="0"></label></div>
-        <div id="clipProgressPreview" class="clip-progress-preview"><div><b>0 of 1</b><span>Uploading</span></div><i><span style="width:0%"></span></i><small>At 1 of 1, this automatically becomes Clips ready.</small></div>
+        <div id="clipProgressPreview" class="clip-progress-preview"><div><b>0 of 1</b><span>Uploading</span></div><i><span style="width:0%"></span></i><small>At 1 of 1, this automatically becomes Clips ready.</small><small class="clip-count-disclaimer">Clip totals may include waves, B-roll, wipeouts, and other footage from the session.</small></div>
         <label>Note <small>optional</small><textarea id="clipNote" maxlength="500" placeholder="Anything the recipient should know"></textarea></label>
         <button id="clipDeliverySubmit" class="primary" type="submit">Start delivery</button>
         <button id="clipMarkReady" class="secondary-button hidden" type="button" data-action="mark-clips-ready"><svg><use href="#i-check"/></svg>Mark all clips ready</button>
