@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=77-media-shapes">
+  <link rel="stylesheet" href="./styles.css?v=78-clean-actions">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -67,7 +67,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.72</small>
+    <small class="boot-credit">Saltyview Productions · v1.78</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -214,7 +214,6 @@
       <div id="view-feed" class="app-view">
         <div class="section-label"><span>Stoke</span><small>photos &amp; clips · every area</small></div>
         <div id="postsFeed"></div>
-        <button class="add-content stoke-add-button" data-action="open-post"><svg><use href="#i-plus"/></svg>Add photo or clip</button>
       </div>
 
       <div id="view-chat" class="app-view chat-view">
@@ -231,7 +230,6 @@
         <div id="eventRegions" class="event-regions"></div>
         <div class="section-label surf-section-label events-section-label"><span>Events</span><div class="surf-section-actions"><span id="eventsPlanned" class="live event-live">NO EVENTS PLANNED</span><button class="surf-calendar-button" data-action="open-events-calendar"><svg><use href="#i-calendar"/></svg>Calendar</button></div></div>
         <div id="eventsFeed"></div>
-        <button class="add-content events-add-button" data-action="open-event"><svg><use href="#i-plus"/></svg>Add an event</button>
       </div>
 
       <div id="view-you" class="app-view"><div id="profileView" class="profile"></div></div>
@@ -269,7 +267,7 @@
       <div id="view-beta-feedback" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><div><h2>Beta Feedback</h2><small>Admin only · member reports</small></div></div><div id="feedbackSummary" class="feedback-summary"></div><div id="feedbackFilters" class="feedback-filters" role="group" aria-label="Filter issue reports"><button class="active" data-feedback-filter="open">Open</button><button data-feedback-filter="new">New</button><button data-feedback-filter="reviewing">Reviewing</button><button data-feedback-filter="fixed">Fixed</button><button data-feedback-filter="closed">Closed</button><button data-feedback-filter="all">All</button></div><div id="feedbackList" class="feedback-list"><div class="empty"><span>BETA FEEDBACK</span><h2>Loading reports…</h2></div></div></div>
       <div id="view-about" class="app-view sub-view"><div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><h2>About Sodium</h2></div><div class="copy-card about-card"><img data-app-icon src="./icon-ink.svg" alt="Sodium"><h2>sodium</h2><p>Surf with your friends, not your feed.</p><small>Private, invite-only, and built for the crew.</small></div><div class="copy-card guide-card"><span>QUICK START GUIDE</span><h3>New to Sodium?</h3><p>Open the short guide for signing in, adding Sodium to your Home Screen, sharing surfs, Stoke, chat, events, and invites.</p><div class="guide-actions"><button class="primary" data-action="open-guide">Open Quick Start Guide</button><button class="secondary-button" data-action="share-invite-guide">Invite to app + share guide</button><button class="secondary-button" data-action="open-master-guide">Open complete instruction manual</button></div></div><div class="copy-card about-copy"><h3>What Sodium is for</h3><p>Surfline tells you whether the waves are good. Sodium tells you what your friends are doing—who's surfing, who's filming, where, and when.</p><p>Share a surf for now or plan one ahead. Friends can join, volunteer to film, and keep the plan together without an Instagram doomscroll.</p><h3>How the community works</h3><p>There are no followers and no algorithm. Membership grows through invitations from people who actually surf together. Photos and clips stay properly credited, area conversations stay useful, and members choose what they share.</p><h3>Built to stay simple</h3><p>Sodium has no ads and does not sell member information. It is an independent community tool built by Saltyview Productions, with member data protected through Supabase.</p></div></div>
 
-      <button id="surfFab" class="fab" data-action="open-session" aria-label="New session" title="New session"><svg><use href="#i-plus"/></svg><span>New session</span></button>
+      <button id="createFab" class="fab" data-action="open-session" aria-label="New session" title="New session"><svg><use href="#i-plus"/></svg><span>New session</span></button>
       <nav id="mobileNav" class="bottom-nav" aria-label="Primary navigation"></nav>
     </section>
 
@@ -466,9 +464,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.72</span>
-    <h3>Share surfs inside Sodium.</h3>
-    <ul><li>Pick an existing member from any surf’s share menu.</li><li>They receive a direct message and notification with the surf.</li><li>Private clip links now open reliably for guests.</li></ul>
+    <span>NEW IN V1.78</span>
+    <h3>Cleaner sharing and better Stoke photos.</h3>
+    <ul><li>Photos keep their original shape, with optional crop ratios.</li><li>Profile invites now live under one Share with friends menu.</li><li>Use the same compact + button for Sessions, Stoke, and Events.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -482,6 +480,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=77-media-shapes" defer></script>
+  <script src="./app.js?v=78-clean-actions" defer></script>
 </body>
 </html>
