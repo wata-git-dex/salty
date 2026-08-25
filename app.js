@@ -1,4 +1,4 @@
-/* global supabase */
+/* global supabase, QRCode */
 'use strict';
 
 if (location.hostname === 'app.saltyviewfinder.com') {
@@ -24,7 +24,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.83';
+const APP_VERSION = '1.84';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -69,7 +69,7 @@ const state = {
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
   marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent', sharingSessionId: null,
   guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
-  postMemberTags: [], postCustomTags: [],
+  postMemberTags: [], postCustomTags: [], qrInviteUrl: '', qrInviteRegionName: '',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -3509,7 +3509,7 @@ function profileMarkup(profile, stats = {}) {
   const listings = state.listings.filter(item => item.owner_id === profile.id && (item.status === 'approved' || canEditListing(item))).slice(0, 3);
   const listingSection = listings.length ? `<article class="profile-card profile-listings"><div class="profile-listings-header"><h3>Makes / does</h3><button data-view="marketplace">Marketplace →</button></div>${listings.map(item => `<button class="profile-listing" data-listing="${item.id}"><span><b>${esc(item.title)}</b><small>${esc(item.category)}${item.status !== 'approved' ? ` · ${esc(item.status)}` : ''}</small></span><i>›</i></button>`).join('')}</article>` : '';
   const controls = stats.own
-    ? `<div class="profile-actions"><details class="profile-share-menu"><summary><svg><use href="#i-share"/></svg><span><b>Share with friends</b><small>Invites, surf plans, clips, and setup help</small></span><svg class="profile-share-chevron"><use href="#i-chevron"/></svg></summary><div><button data-action="open-share-invite"><svg><use href="#i-surf"/></svg><span><b>Share a surf or clips</b><small>Plan a surf, claim one, send clips, or send a simple invite.</small></span></button><button data-action="share-invite-overview"><svg><use href="#i-wave"/></svg><span><b>Invite + app overview</b><small>Send the invite with the quick visual explanation.</small></span></button><button data-action="share-invite-setup"><svg><use href="#i-settings"/></svg><span><b>Invite + phone setup</b><small>Send the invite with Home Screen setup instructions.</small></span></button></div></details><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
+    ? `<div class="profile-actions"><details class="profile-share-menu"><summary><svg><use href="#i-share"/></svg><span><b>Share with friends</b><small>Invites, surf plans, clips, and setup help</small></span><svg class="profile-share-chevron"><use href="#i-chevron"/></svg></summary><div><button data-action="open-share-invite"><svg><use href="#i-surf"/></svg><span><b>Share a surf or clips</b><small>Plan a surf, claim one, send clips, or send a simple invite.</small></span></button><button data-action="show-invite-qr"><svg><use href="#i-qr"/></svg><span><b>Invite with a QR code</b><small>Let a friend scan a one-person invite from your screen.</small></span></button><button data-action="share-invite-overview"><svg><use href="#i-wave"/></svg><span><b>Invite + app overview</b><small>Send the invite with the quick visual explanation.</small></span></button><button data-action="share-invite-setup"><svg><use href="#i-settings"/></svg><span><b>Invite + phone setup</b><small>Send the invite with Home Screen setup instructions.</small></span></button></div></details><button class="secondary-button" data-view="members">View all members</button><button class="secondary-button" data-action="edit-profile">Edit profile</button></div>`
     : `<div class="profile-actions"><button class="primary" data-dm-member="${profile.id}">Message ${esc(profile.name)}</button></div>`;
   return `<div class="profile-head">${avatarMarkup(profile)}<div><h2>${esc(profile.name)}</h2>${nickname}<p>${esc(region)} · Sodium Crew</p></div></div>${stats.own ? `<section class="profile-stat-group"><div class="profile-stat-heading"><span>Community activity</span><small>Points, streak, and posts</small></div><div class="stats"><article class="profile-card stat"><b>${formatCount(stats.points)}</b><span>points</span></article><article class="profile-card stat"><b>${stats.streak || 0}</b><span>active streak</span></article><article class="profile-card stat"><b>${stats.stoke || 0}</b><span>Stoke shared</span></article></div></section><section class="profile-stat-group surf-stat-group"><div class="profile-stat-heading"><span>Surf stats</span><small>Completed sessions only</small></div><div class="participation-stats"><article class="profile-card stat"><b>${stats.surfed || 0}</b><span>surfed</span></article><article class="profile-card stat"><b>${stats.filmed || 0}</b><span>filmed</span></article><article class="profile-card stat"><b>${stats.organized || 0}</b><span>organized</span></article><article class="profile-card stat"><b>${stats.locations || 0}</b><span>locations</span></article></div></section>` : ''}<article class="profile-card"><h3>Sponsors</h3><div class="chips">${sponsors.length ? sponsors.map(name => `<span class="chip">${esc(name)}</span>`).join('') : '<span class="muted-copy">Independent</span>'}</div>${social}</article>${listingSection}${controls}<footer class="profile-footer"><b>SODIUM</b>surf with your friends, not your feed</footer>`;
 }
@@ -3865,15 +3865,77 @@ async function shareEvent(eventId) {
   }
 }
 
-async function shareInvite({ includeGuide = false, includeOverview = false, includeSetup = false } = {}) {
+async function createCommunityInvite() {
   const inviteRegion = state.currentRegion || state.regions.find(region => region.id === state.profile.home_region);
   let result = await db.rpc('create_invite', { invite_max_uses:1, invite_region:inviteRegion?.id || null });
   if (result.error && /create_invite/i.test(result.error.message || '')) {
     result = await db.rpc('create_invite', { invite_max_uses:1 });
   }
-  if (result.error) { toast(readableError(result.error)); return; }
-  const url = new URL('./', location.href); url.searchParams.set('invite', result.data);
+  if (result.error) throw result.error;
+  const url = new URL('./', location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('invite', result.data);
   if (inviteRegion?.id) url.searchParams.set('region', inviteRegion.id);
+  return { inviteRegion, url };
+}
+
+async function openInviteQr() {
+  closeSheet();
+  state.qrInviteUrl = '';
+  state.qrInviteRegionName = '';
+  const code = $('#inviteQrCode');
+  const regionCopy = $('#inviteQrRegion');
+  const shareButton = $('#shareQrInviteButton');
+  code.innerHTML = '<span class="invite-qr-loading">Making QR code…</span>';
+  regionCopy.textContent = 'Creating a fresh one-person invite…';
+  shareButton.disabled = true;
+  openSheet('inviteQrSheet');
+
+  try {
+    const { inviteRegion, url } = await createCommunityInvite();
+    state.qrInviteUrl = url.href;
+    state.qrInviteRegionName = inviteRegion?.name || '';
+    code.innerHTML = '';
+    if (typeof QRCode !== 'function') throw new Error('The QR code tool did not load.');
+    new QRCode(code, {
+      text: state.qrInviteUrl,
+      width: 260,
+      height: 260,
+      colorDark: '#07121b',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+    regionCopy.textContent = `One-person invite${state.qrInviteRegionName ? ` · ${state.qrInviteRegionName}` : ''}`;
+    shareButton.disabled = false;
+  } catch (error) {
+    code.innerHTML = '<span class="invite-qr-loading">Could not make this QR code.</span>';
+    regionCopy.textContent = readableError(error);
+    toast(readableError(error), 5000);
+  }
+}
+
+async function shareQrInvite() {
+  if (!state.qrInviteUrl) return;
+  const area = state.qrInviteRegionName ? ` in ${state.qrInviteRegionName}` : '';
+  const text = `I'm inviting you to Sodium${area}, a private surf community. Hopefully it helps us surf more together.`;
+  try {
+    await shareSodiumContent({
+      title:"You're invited to Sodium",
+      text,
+      url:state.qrInviteUrl,
+      copiedMessage:'QR invite message and link copied.',
+    });
+  } catch (error) {
+    if (error?.name !== 'AbortError') prompt('Copy this invite:', `${text}\n${state.qrInviteUrl}`);
+  }
+}
+
+async function shareInvite({ includeGuide = false, includeOverview = false, includeSetup = false } = {}) {
+  let invite;
+  try { invite = await createCommunityInvite(); }
+  catch (error) { toast(readableError(error)); return; }
+  const { inviteRegion, url } = invite;
   const guideUrl = quickStartGuideUrl();
   const onePageUrl = overviewUrl();
   const setupUrl = setupGuideUrl();
@@ -4047,7 +4109,7 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || editClipDeliveryNode || sessionClipsNode || ['make-invite', 'share-invite', 'share-invite-overview', 'share-invite-setup', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'open-clip-delivery', 'mark-clips-ready', 'delete-clip-delivery', 'save-post-draft', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || editClipDeliveryNode || sessionClipsNode || ['make-invite', 'share-invite', 'share-invite-overview', 'share-invite-setup', 'share-invite-guide', 'show-invite-qr', 'share-qr-invite', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'open-clip-delivery', 'mark-clips-ready', 'delete-clip-delivery', 'save-post-draft', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -4096,6 +4158,8 @@ document.addEventListener('click', async event => {
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
     'open-session': () => openSessionComposer(),
     'open-share-invite': openShareInviteHub,
+    'show-invite-qr': openInviteQr,
+    'share-qr-invite': shareQrInvite,
     'share-session-external': () => shareSessionExternal(),
     'open-plan-invite': () => { closeSheet(); $('#planInviteForm').reset(); openSheet('planInviteSheet'); },
     'open-session-claim-list': showSessionClaimList,

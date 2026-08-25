@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=83-mobile-scroll">
+  <link rel="stylesheet" href="./styles.css?v=84-qr-invites">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -61,13 +61,14 @@
       <symbol id="i-bug" viewBox="0 0 24 24"><path d="M8 7h8a2 2 0 0 1 2 2v5a6 6 0 0 1-12 0V9a2 2 0 0 1 2-2Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2M3 10h3M18 10h3M3 16h4M17 16h4M12 10v8"/></symbol>
       <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9v11h16V9M3 9l2-6h14l2 6"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M9 20v-6h6v6"/></symbol>
       <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M8 13h8M13 10l3 3-3 3"/></symbol>
+      <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM18 18h3v3h-3zM19 13h2M13 19v2"/></symbol>
     </defs>
   </svg>
 
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.83</small>
+    <small class="boot-credit">Saltyview Productions · v1.84</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -319,8 +320,16 @@
     <section id="shareInviteSheet" class="sheet share-invite-sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2>What are you inviting them to do?</h2><p>Choose the situation that matches. Sodium creates the right invite and includes its one-page instructions.</p>
-      <div class="share-invite-choices"><button data-action="share-invite"><svg><use href="#i-user"/></svg><span><b>Invite them to join Sodium</b><small>A simple community invite when you are not sharing a specific surf or clip delivery.</small></span></button><button data-action="open-plan-invite"><svg><use href="#i-surf"/></svg><span><b>Invite them to plan a surf</b><small>They add their surf plan and receive organizer credit.</small></span></button><button data-action="open-session-claim-list"><svg><use href="#i-check"/></svg><span><b>Invite them to claim a surf</b><small>You already entered their session. They join Sodium and take over the organizer credit.</small></span></button><button data-action="open-pending-clip-delivery"><svg><use href="#i-folder"/></svg><span><b>Send clips + invite to Sodium</b><small>Create their clip delivery, then send the invite with clip instructions.</small></span></button><button class="open-clip-outbox" data-action="open-clip-outbox"><svg><use href="#i-send"/></svg><span><b>Open clip outbox</b><small>See every delivery you already sent, then reopen, edit, or share it again.</small></span></button></div>
+      <div class="share-invite-choices"><button data-action="share-invite"><svg><use href="#i-user"/></svg><span><b>Invite them to join Sodium</b><small>A simple community invite when you are not sharing a specific surf or clip delivery.</small></span></button><button data-action="show-invite-qr"><svg><use href="#i-qr"/></svg><span><b>Invite with a QR code</b><small>Put a one-person invite on your screen for a friend to scan.</small></span></button><button data-action="open-plan-invite"><svg><use href="#i-surf"/></svg><span><b>Invite them to plan a surf</b><small>They add their surf plan and receive organizer credit.</small></span></button><button data-action="open-session-claim-list"><svg><use href="#i-check"/></svg><span><b>Invite them to claim a surf</b><small>You already entered their session. They join Sodium and take over the organizer credit.</small></span></button><button data-action="open-pending-clip-delivery"><svg><use href="#i-folder"/></svg><span><b>Send clips + invite to Sodium</b><small>Create their clip delivery, then send the invite with clip instructions.</small></span></button><button class="open-clip-outbox" data-action="open-clip-outbox"><svg><use href="#i-send"/></svg><span><b>Open clip outbox</b><small>See every delivery you already sent, then reopen, edit, or share it again.</small></span></button></div>
       <div id="sessionClaimList" class="session-claim-list hidden"></div>
+    </section>
+
+    <section id="inviteQrSheet" class="sheet invite-qr-sheet" aria-modal="true" role="dialog" aria-labelledby="inviteQrTitle">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close QR invite"><svg><use href="#i-close"/></svg></button>
+      <span class="sheet-eyebrow">INVITE A FRIEND</span><h2 id="inviteQrTitle">Scan to join Sodium</h2><p id="inviteQrRegion">Creating a fresh one-person invite…</p>
+      <div id="inviteQrCode" class="invite-qr-code" aria-label="Sodium invitation QR code"><span class="invite-qr-loading">Making QR code…</span></div>
+      <p class="invite-qr-note">Have your friend point their phone camera at this code. It opens the Sodium signup page directly.</p>
+      <button id="shareQrInviteButton" class="secondary-button" data-action="share-qr-invite" disabled><svg><use href="#i-share"/></svg>Share this invite link instead</button>
     </section>
 
     <section id="sessionShareSheet" class="sheet session-share-sheet" aria-modal="true" role="dialog">
@@ -484,9 +493,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.83</span>
-    <h3>Cleaner mobile scrolling.</h3>
-    <ul><li>Pages now stop naturally above the floating navigation.</li><li>The extra blank space below Sessions and other screens is gone.</li><li>iPhone safe-area spacing remains protected.</li></ul>
+    <span>NEW IN V1.84</span>
+    <h3>Invite a friend standing next to you.</h3>
+    <ul><li>Open Share with friends and choose Invite with a QR code.</li><li>Your friend scans your screen to open their private Sodium invite.</li><li>You can still text or AirDrop the same link instead.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -500,6 +509,7 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=83-mobile-scroll" defer></script>
+  <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
+  <script src="./app.js?v=84-qr-invites" defer></script>
 </body>
 </html>
