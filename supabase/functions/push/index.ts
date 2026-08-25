@@ -55,7 +55,7 @@ Deno.serve(async request => {
       body: notification.body,
       url: notification.url,
       tag: `${notification.kind}:${notification.source_id || notification.id}`,
-      renotify: notification.kind === 'direct_message',
+      renotify: notification.kind === 'direct_message' || notification.kind === 'clip_delivery',
     });
     const failures: string[] = [];
     let delivered = 0;
@@ -65,7 +65,7 @@ Deno.serve(async request => {
         await webpush.sendNotification({
           endpoint: subscription.endpoint,
           keys: { p256dh: subscription.p256dh, auth: subscription.auth },
-        }, message, { TTL: 60 * 60 * 12, urgency: notification.kind === 'direct_message' ? 'high' : 'normal' });
+        }, message, { TTL: 60 * 60 * 12, urgency: ['direct_message','clip_delivery'].includes(notification.kind) ? 'high' : 'normal' });
         delivered += 1;
       } catch (error) {
         const status = Number((error as { statusCode?: number }).statusCode || 0);

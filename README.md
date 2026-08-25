@@ -40,6 +40,8 @@ Before the travel-locations release, run `supabase/location-memberships-v1-migra
 
 For the Sodium Phase 1 rename, run `supabase/sodium-brand-v1-migration.sql` once. It preserves existing invite codes and all community data, changes the two seeded perk labels to Sodium, and makes newly generated invite codes start with `SODIUM-`.
 
+Before release v1.59, run `supabase/clip-deliveries-v1-migration.sql` once. It adds provider-neutral clip handoffs to the Inbox: sender, recipient, surfers in the footage, optional related session, external folder link, and manual progress. Videos remain in Drive, Dropbox, iCloud, or another provider. When the uploaded count reaches the expected total, the delivery becomes **Clips ready** and notifies the recipient automatically. Future provider OAuth can automate the count without changing this data model.
+
 On iPhone, Web Push requires iOS 16.4 or later and the installed Home Screen app. Each member opens **Settings → Enable notifications on this device**, accepts Apple's prompt, and can then enable or disable new surfs, Stoke, DMs, events, surf updates, and Community Chat individually. Community Chat is off by default.
 
 ## Free-tier media limits

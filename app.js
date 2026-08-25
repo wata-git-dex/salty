@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.58';
+const APP_VERSION = '1.59';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V12.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V8.png';
@@ -38,6 +38,7 @@ const NOTIFICATION_DEFAULTS = Object.freeze({
   events: true,
   session_updates: true,
   community_chat: false,
+  clip_deliveries: true,
 });
 
 // Upgrade runway: after moving Supabase to Pro, raise maxUploadBytes and replace
@@ -49,16 +50,16 @@ const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
 const state = {
   session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [], perks: [], listings: [],
   regionMemberships: [],
-  roomMessages: [], dmMessages: [], dmThreads: [], chatPhotoUrls: {}, activeDmMember: null,
+  roomMessages: [], dmMessages: [], dmThreads: [], clipDeliveries: [], chatPhotoUrls: {}, activeDmMember: null,
   currentRegion: null, eventRegion: null, chatRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
   pendingInviteRegion: '',
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
   consentNext: 'new', sessionPeople: [], editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
-  notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '',
+  notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '', pendingDeliveryId: '',
   calendarMonth: null, calendarDate: '',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
-  marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null,
+  marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -218,6 +219,7 @@ async function init() {
   state.pendingSessionId = params.get('session')?.trim() || '';
   state.pendingSessionRegion = params.get('region')?.trim() || '';
   state.pendingEventId = params.get('event')?.trim() || '';
+  state.pendingDeliveryId = params.get('delivery')?.trim() || '';
   state.pendingEventRegion = params.get('region')?.trim() || '';
   if (state.pendingInvite) localStorage.setItem('salty:invite', state.pendingInvite);
   if (state.pendingInviteRegion) localStorage.setItem('salty:invite-region', state.pendingInviteRegion);
@@ -291,11 +293,15 @@ function runPreview() {
   ];
   state.dmMessages = [{ id:'dm-1', sender:'jonah', recipient:userId, body:'Want to hit Lowers Friday?', created_at:new Date(Date.now() - 35 * 60000).toISOString(), read_at:null }];
   state.dmThreads = [{ memberId:'jonah', message:state.dmMessages[0] }];
+  state.clipDeliveries = [
+    { id:'clips-heston', sender:userId, recipient:'jonah', subject_names:['Heston'], session_id:'past-surf', provider:'google_drive', folder_url:'https://drive.google.com/', expected_count:24, uploaded_count:7, tracking_mode:'manual', status:'uploading', note:'Raw clips from C Street.', created_at:new Date(Date.now() - 55 * 60000).toISOString(), updated_at:new Date(Date.now() - 12 * 60000).toISOString(), sender_profile:state.profile, recipient_profile:state.people[1], session:state.previewSessions[4] },
+    { id:'clips-steve', sender:'mateo', recipient:userId, subject_names:['Cyrus'], session_id:'mateo-surf', provider:'dropbox', folder_url:'https://dropbox.com/', expected_count:11, uploaded_count:11, tracking_mode:'manual', status:'ready', note:null, ready_at:new Date(Date.now() - 20 * 60000).toISOString(), created_at:new Date(Date.now() - 2 * 3600000).toISOString(), updated_at:new Date(Date.now() - 20 * 60000).toISOString(), sender_profile:state.people[2], recipient_profile:state.profile, session:state.previewSessions[2] },
+  ];
   state.issueReports = [
     { id:'issue-1', reporter:'jonah', reporter_profile:{ id:'jonah', name:'Jonah' }, category:'broken', description:'The Join surf button looked pressed, but my name did not appear until I reopened Sodium.', expected_behavior:'My name should show under Surfers immediately.', screen:'Sessions', app_version:APP_VERSION, user_agent:'iPhone · Mobile Safari', status:'new', admin_notes:'', created_at:new Date(Date.now() - 48 * 60000).toISOString() },
     { id:'issue-2', reporter:'mateo', reporter_profile:{ id:'mateo', name:'Mateo' }, category:'suggestion', description:'Could the event card make the address easier to tap?', expected_behavior:null, screen:'Events', app_version:APP_VERSION, user_agent:'iPhone · Home Screen app', status:'reviewing', admin_notes:'Check the map target size.', created_at:new Date(Date.now() - 26 * 3600000).toISOString() },
   ];
-  renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderPerks(); renderMarketplace(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderIssueReports(); showOnly('app');
+  renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderPerks(); renderMarketplace(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderClipDeliveries(); renderIssueReports(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
 
@@ -380,6 +386,7 @@ async function sendMagicLink(event) {
   if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
   if (state.pendingSessionRegion) redirect.searchParams.set('region', state.pendingSessionRegion);
   if (state.pendingEventId) redirect.searchParams.set('event', state.pendingEventId);
+  if (state.pendingDeliveryId) redirect.searchParams.set('delivery', state.pendingDeliveryId);
   if (state.pendingEventRegion) redirect.searchParams.set('region', state.pendingEventRegion);
   if (state.pendingOpen) redirect.searchParams.set('open', state.pendingOpen);
   const { error } = await db.auth.signInWithOtp({
@@ -437,6 +444,7 @@ async function signInWithGoogle() {
   if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
   if (state.pendingSessionRegion) redirect.searchParams.set('region', state.pendingSessionRegion);
   if (state.pendingEventId) redirect.searchParams.set('event', state.pendingEventId);
+  if (state.pendingDeliveryId) redirect.searchParams.set('delivery', state.pendingDeliveryId);
   if (state.pendingEventRegion) redirect.searchParams.set('region', state.pendingEventRegion);
   if (state.pendingOpen) redirect.searchParams.set('open', state.pendingOpen);
   const { error } = await db.auth.signInWithOAuth({
@@ -592,13 +600,18 @@ async function loadApp() {
   state.chatRegion = state.currentRegion;
   await loadAvatarUrls();
   renderChrome();
-  await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadListings(), loadRoomMessages(), loadDmInbox(), loadNotificationPreferences()]);
+  await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadListings(), loadRoomMessages(), loadDmInbox(), loadClipDeliveries(), loadNotificationPreferences()]);
   await renderProfile();
   renderMembers();
   if (state.profile?.is_admin) await loadIssueReports({ silent:true });
   subscribeRealtime();
-  if (['surfing', 'feed', 'chat', 'events', 'dms'].includes(state.pendingOpen)) {
-    setView(state.pendingOpen);
+  if (['surfing', 'feed', 'chat', 'events', 'dms', 'clips'].includes(state.pendingOpen)) {
+    if (state.pendingOpen === 'clips') {
+      state.inboxTab = 'clips';
+      setView('dms');
+      renderInboxTabs();
+      revealSharedDelivery();
+    } else setView(state.pendingOpen);
     state.pendingOpen = '';
   }
 }
@@ -700,6 +713,7 @@ async function saveNotificationPreference(field, enabled) {
     events: next.events,
     session_updates: next.session_updates,
     community_chat: next.community_chat,
+    clip_deliveries: next.clip_deliveries,
     updated_at: new Date().toISOString(),
   }, { onConflict:'user_id' }).select().single();
   if (result.error) throw result.error;
@@ -992,7 +1006,11 @@ function setView(view) {
   closeDrawer();
   scrollTo({ top: 0, behavior: 'smooth' });
   if (!state.preview && view === 'chat') loadRoomMessages();
-  if (!state.preview && view === 'dms') loadDmInbox();
+  if (!state.preview && view === 'dms') {
+    loadDmInbox();
+    loadClipDeliveries();
+  }
+  if (view === 'dms') renderInboxTabs();
   // Stoke stays a normal feed. Re-sign private media whenever it is opened so
   // a long-running home-screen session never depends on an expired raw URL.
   if (!state.preview && view === 'feed') loadPosts();
@@ -1054,7 +1072,12 @@ function revealSharedEvent() {
 }
 
 function revealSharedTarget() {
-  if (state.pendingEventId) revealSharedEvent();
+  if (state.pendingDeliveryId) {
+    state.inboxTab = 'clips';
+    setView('dms');
+    renderInboxTabs();
+    revealSharedDelivery();
+  } else if (state.pendingEventId) revealSharedEvent();
   else revealSharedSession();
 }
 
@@ -1207,6 +1230,7 @@ async function openDm(memberId) {
   if (!person || person.id === state.profile.id) return;
   state.activeDmMember = person;
   $('#dmPerson').innerHTML = `${avatarMarkup(person, 'message-avatar')}<div><b>${esc(person.name)}</b><small>Private · text only</small></div>`;
+  renderDmClipDeliveries();
   setView('dm');
   if (state.preview) { renderDmConversation(); return; }
   await loadDmConversation();
@@ -1260,6 +1284,241 @@ async function sendDmMessage(event) {
     await loadDmConversation();
   } catch (error) { toast(readableError(error), 5000); }
   finally { submit.disabled = false; }
+}
+
+function clipProviderFromUrl(value = '') {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    if (hostname === 'drive.google.com' || hostname.endsWith('.drive.google.com')) return 'google_drive';
+    if (hostname === 'dropbox.com' || hostname.endsWith('.dropbox.com')) return 'dropbox';
+    if (hostname === 'icloud.com' || hostname.endsWith('.icloud.com')) return 'icloud';
+  } catch (_error) { /* The form's URL validation handles invalid input. */ }
+  return 'other';
+}
+
+function clipProviderLabel(provider) {
+  return ({ google_drive:'Google Drive', dropbox:'Dropbox', icloud:'iCloud', other:'Clip link' })[provider] || 'Clip link';
+}
+
+function clipSessionLabel(delivery) {
+  const spot = delivery.session?.spot?.name;
+  if (spot) return spot;
+  return `${formatCount(delivery.expected_count)} clips`;
+}
+
+function clipSubjectNames(delivery) {
+  const names = Array.isArray(delivery?.subject_names) ? delivery.subject_names.filter(Boolean) : [];
+  return names.length ? names.join(', ') : (delivery?.recipient_profile?.name || 'the surfer');
+}
+
+function clipDeliveryPercent(delivery) {
+  if (!delivery?.expected_count) return 0;
+  return Math.max(0, Math.min(100, Math.round((delivery.uploaded_count / delivery.expected_count) * 100)));
+}
+
+function clipDeliveryMarkup(delivery) {
+  const mine = delivery.sender === state.profile.id;
+  const other = mine ? delivery.recipient_profile : delivery.sender_profile;
+  const direction = mine ? `To ${other?.name || 'Sodium member'}` : `From ${other?.name || 'Sodium member'}`;
+  const ready = delivery.status === 'ready';
+  const cancelled = delivery.status === 'cancelled';
+  const percent = ready ? 100 : clipDeliveryPercent(delivery);
+  const progress = `${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}`;
+  const date = messageTime(delivery.ready_at || delivery.updated_at || delivery.created_at);
+  const edit = mine && !cancelled ? `<button class="clip-edit" data-edit-clip-delivery="${delivery.id}" aria-label="Edit clip delivery"><svg><use href="#i-edit"/></svg></button>` : '';
+  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other)}<div><b>${esc(direction)}</b><small>${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${edit}</div></article>`;
+}
+
+function renderInboxTabs() {
+  $$('[data-inbox-tab]').forEach(button => {
+    const active = button.dataset.inboxTab === state.inboxTab;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+  });
+  $('#dmInboxMessages')?.classList.toggle('active', state.inboxTab === 'messages');
+  $('#dmInboxClips')?.classList.toggle('active', state.inboxTab === 'clips');
+}
+
+function renderClipDeliveries() {
+  const target = $('#clipDeliveries');
+  if (!target || !state.profile) return;
+  const deliveries = [...state.clipDeliveries].sort((a, b) => {
+    const statusOrder = { uploading:0, ready:1, cancelled:2 };
+    return (statusOrder[a.status] - statusOrder[b.status]) || new Date(b.updated_at) - new Date(a.updated_at);
+  });
+  target.innerHTML = deliveries.length
+    ? deliveries.map(clipDeliveryMarkup).join('')
+    : '<div class="empty clip-empty"><span>CLIPS</span><h2>No deliveries yet</h2><p>Send a folder once and Sodium keeps the handoff with the session and conversation.</p></div>';
+  const incomingUploading = deliveries.filter(item => item.recipient === state.profile.id && item.status === 'uploading').length;
+  const badge = $('#clipReadyBadge');
+  if (badge) {
+    badge.textContent = incomingUploading > 99 ? '99+' : String(incomingUploading);
+    badge.classList.toggle('hidden', incomingUploading === 0);
+  }
+  renderDmClipDeliveries();
+  renderInboxTabs();
+}
+
+function renderDmClipDeliveries() {
+  const target = $('#dmClipDeliveries');
+  if (!target || !state.activeDmMember) return;
+  const theirs = state.activeDmMember.id;
+  const mine = state.profile.id;
+  const deliveries = state.clipDeliveries
+    .filter(item => (item.sender === mine && item.recipient === theirs) || (item.sender === theirs && item.recipient === mine))
+    .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 2);
+  target.innerHTML = deliveries.map(clipDeliveryMarkup).join('');
+}
+
+async function loadClipDeliveries() {
+  if (!state.profile || state.preview) return;
+  const result = await db.from('clip_deliveries')
+    .select('*,sender_profile:profiles!clip_deliveries_sender_fkey(id,name,nickname,avatar_path),recipient_profile:profiles!clip_deliveries_recipient_fkey(id,name,nickname,avatar_path),session:sessions!clip_deliveries_session_id_fkey(id,surf_time,when_label,status,spot:spots(name,general_location))')
+    .or(`sender.eq.${state.profile.id},recipient.eq.${state.profile.id}`)
+    .order('updated_at', { ascending:false }).limit(250);
+  if (result.error) {
+    console.warn('Clip deliveries are not ready:', result.error.message);
+    return;
+  }
+  state.clipDeliveries = result.data || [];
+  renderClipDeliveries();
+}
+
+function updateClipProgressPreview() {
+  const expected = Math.max(1, Math.min(2000, Number($('#clipExpectedCount').value) || 1));
+  const uploaded = Math.max(0, Math.min(2000, Number($('#clipUploadedCount').value) || 0));
+  const ready = uploaded >= expected;
+  const percent = ready ? 100 : Math.round((uploaded / expected) * 100);
+  const preview = $('#clipProgressPreview');
+  preview.classList.toggle('ready', ready);
+  $('b', preview).textContent = `${formatCount(uploaded)} of ${formatCount(expected)}`;
+  $('div span', preview).textContent = ready ? 'Clips ready' : 'Uploading';
+  $('i span', preview).style.width = `${percent}%`;
+  $('small', preview).textContent = ready
+    ? 'Complete. The recipient gets the ready notification automatically.'
+    : `At ${formatCount(expected)} of ${formatCount(expected)}, this automatically becomes Clips ready.`;
+}
+
+function updateClipProviderHint() {
+  const provider = clipProviderFromUrl($('#clipFolderUrl').value);
+  const hint = $('#clipProviderHint');
+  hint.textContent = provider === 'other'
+    ? 'Any HTTPS folder link works. Automatic provider tracking can be connected later.'
+    : `${clipProviderLabel(provider)} detected · this delivery is ready for provider tracking.`;
+}
+
+function clipSessionOptions(selected = '') {
+  const options = [...state.sessions].sort((a, b) => new Date(b.ended_at || b.surf_time || b.created_at) - new Date(a.ended_at || a.surf_time || a.created_at));
+  return '<option value="">No linked session</option>' + options.map(session => {
+    const date = scheduleParts(session.surf_time || session.ended_at || session.created_at).date;
+    return `<option value="${session.id}" ${session.id === selected ? 'selected' : ''}>${esc(session.spot?.name || 'Surf')} · ${esc(date)}</option>`;
+  }).join('');
+}
+
+function openClipDeliveryComposer(deliveryId = null, sessionId = '', recipientId = '') {
+  const delivery = deliveryId ? state.clipDeliveries.find(item => item.id === deliveryId && item.sender === state.profile.id) : null;
+  state.editingClipDeliveryId = delivery?.id || null;
+  $('#clipDeliveryForm').reset();
+  $('#clipDeliveryTitle').textContent = delivery ? 'Edit clip delivery' : 'Send clips';
+  $('#clipDeliverySubmit').textContent = delivery ? 'Save delivery' : 'Start delivery';
+  $('#clipDeliveryDelete').classList.toggle('hidden', !delivery);
+  $('#clipMarkReady').classList.toggle('hidden', !delivery || delivery.status === 'ready');
+  const chosenRecipient = delivery?.recipient || recipientId || state.activeDmMember?.id || '';
+  $('#clipRecipient').innerHTML = '<option value="">Choose a member</option>' + state.people.filter(person => person.id !== state.profile.id).map(person => `<option value="${person.id}" ${person.id === chosenRecipient ? 'selected' : ''}>${esc(person.name)}</option>`).join('');
+  $('#clipSession').innerHTML = clipSessionOptions(delivery?.session_id || sessionId);
+  $('#clipSubjects').value = delivery ? clipSubjectNames(delivery) : '';
+  $('#clipFolderUrl').value = delivery?.folder_url || '';
+  $('#clipExpectedCount').value = delivery?.expected_count || 1;
+  $('#clipUploadedCount').value = delivery?.uploaded_count || 0;
+  $('#clipNote').value = delivery?.note || '';
+  updateClipProviderHint();
+  updateClipProgressPreview();
+  openSheet('clipDeliverySheet');
+}
+
+async function saveClipDelivery(event) {
+  event.preventDefault();
+  const submit = $('#clipDeliverySubmit');
+  submit.disabled = true;
+  try {
+    const url = new URL($('#clipFolderUrl').value.trim());
+    if (url.protocol !== 'https:') throw new Error('Use a secure HTTPS link to the clip folder.');
+    const expectedCount = Number($('#clipExpectedCount').value);
+    const uploadedCount = Number($('#clipUploadedCount').value);
+    if (!Number.isInteger(expectedCount) || expectedCount < 1 || expectedCount > 2000) throw new Error('Enter the total number of clips from 1 to 2,000.');
+    if (!Number.isInteger(uploadedCount) || uploadedCount < 0 || uploadedCount > 2000) throw new Error('Uploaded clips must be from 0 to 2,000.');
+    const provider = clipProviderFromUrl(url.href);
+    const subjectNames = $('#clipSubjects').value.split(',').map(name => name.trim()).filter(Boolean);
+    if (!subjectNames.length || subjectNames.length > 20) throw new Error('Add the first name of the surfer in the clips.');
+    if (subjectNames.some(name => name.length > 80)) throw new Error('Keep each surfer name under 80 characters.');
+    const payload = {
+      sender:state.profile.id,
+      recipient:$('#clipRecipient').value,
+      subject_names:subjectNames,
+      session_id:$('#clipSession').value || null,
+      provider,
+      folder_url:url.href,
+      expected_count:expectedCount,
+      uploaded_count:uploadedCount,
+      tracking_mode:'manual',
+      note:$('#clipNote').value.trim() || null,
+    };
+    if (!payload.recipient || payload.recipient === state.profile.id) throw new Error('Choose the Sodium member receiving these clips.');
+    const edited = Boolean(state.editingClipDeliveryId);
+    const result = edited
+      ? await db.from('clip_deliveries').update(payload).eq('id', state.editingClipDeliveryId).eq('sender', state.profile.id)
+      : await db.from('clip_deliveries').insert(payload);
+    if (result.error) throw result.error;
+    closeSheet();
+    state.editingClipDeliveryId = null;
+    await loadClipDeliveries();
+    state.inboxTab = 'clips';
+    setView('dms');
+    renderInboxTabs();
+    toast(uploadedCount >= expectedCount ? 'Clips ready. The recipient was notified.' : (edited ? 'Clip delivery updated.' : 'Clip delivery started.'));
+  } catch (error) { toast(readableError(error), 6000); }
+  finally { submit.disabled = false; }
+}
+
+async function markClipDeliveryReady() {
+  const delivery = state.clipDeliveries.find(item => item.id === state.editingClipDeliveryId && item.sender === state.profile.id);
+  if (!delivery) {
+    $('#clipUploadedCount').value = $('#clipExpectedCount').value;
+    updateClipProgressPreview();
+    return;
+  }
+  const expectedCount = Number($('#clipExpectedCount').value) || delivery.expected_count;
+  const result = await db.from('clip_deliveries').update({ expected_count:expectedCount, uploaded_count:expectedCount }).eq('id', delivery.id).eq('sender', state.profile.id);
+  if (result.error) { toast(readableError(result.error), 6000); return; }
+  closeSheet();
+  state.editingClipDeliveryId = null;
+  await loadClipDeliveries();
+  toast('Clips ready. The recipient was notified.');
+}
+
+async function deleteClipDelivery() {
+  const delivery = state.clipDeliveries.find(item => item.id === state.editingClipDeliveryId && item.sender === state.profile.id);
+  if (!delivery || !confirm('Delete this clip delivery? The Drive or Dropbox folder will not be deleted.')) return;
+  const result = await db.from('clip_deliveries').delete().eq('id', delivery.id).eq('sender', state.profile.id);
+  if (result.error) { toast(readableError(result.error), 6000); return; }
+  closeSheet();
+  state.editingClipDeliveryId = null;
+  await loadClipDeliveries();
+  toast('Delivery removed. The external folder was left untouched.');
+}
+
+function revealSharedDelivery() {
+  if (!state.pendingDeliveryId) return;
+  const deliveryId = state.pendingDeliveryId;
+  state.pendingDeliveryId = '';
+  const card = document.querySelector(`[data-clip-delivery-id="${CSS.escape(deliveryId)}"]`);
+  if (!card) {
+    toast('That clip delivery is no longer available.', 5000);
+    return;
+  }
+  card.classList.add('shared-target');
+  requestAnimationFrame(() => card.scrollIntoView({ behavior:'smooth', block:'center' }));
+  setTimeout(() => card.classList.remove('shared-target'), 3600);
 }
 
 async function loadEvents() {
@@ -2018,6 +2277,7 @@ function renderSessions() {
         ? `<button class="session-state-icon stop" data-end-session="${session.id}" aria-label="Stop surf" title="Stop surf"><svg><use href="#i-stop"/></svg></button>`
         : `<button class="session-state-icon start" data-start-session="${session.id}" aria-label="Start surf" title="Start surf"><svg><use href="#i-play"/></svg></button>`)
       : '';
+    const sendClips = pastSession && (mine || myRsvp?.role === 'film') ? `<button class="session-send-clips" data-session-clips="${session.id}" aria-label="Send clips from this session" title="Send clips"><svg><use href="#i-folder"/></svg></button>` : '';
     const tools = pastSession ? '<span class="past-badge">Finished</span>' : `<div class="session-card-tools">${sessionState}${share}${edit}</div>`;
     const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;
     const filmAction = (session.wants_filmer || myRsvp?.role === 'film')
@@ -2036,7 +2296,7 @@ function renderSessions() {
       ? schedulePills(scheduleParts(session.surf_time || session.ended_at || session.created_at), 'session-schedule')
       : sessionSchedulePills(session);
     const timingClass = pastSession ? 'past-card' : (session.when_label === 'Now' ? 'live-session' : 'future-session');
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${actions ? `<div class="card-actions">${actions}</div>` : ''}</article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${actions ? `<div class="card-actions">${actions}</div>` : ''}${sendClips}</article>`;
   };
   const activeMarkup = orderedSessions.length
     ? orderedSessions.map(session => renderSessionCard(session)).join('')
@@ -2483,6 +2743,7 @@ function subscribeRealtime() {
       if (state.activeDmMember && state.view === 'dm') await loadDmConversation();
       else await loadDmInbox();
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clip_deliveries' }, async () => await loadClipDeliveries())
     .subscribe();
 }
 
@@ -2715,6 +2976,13 @@ document.addEventListener('click', async event => {
   const saveFeedbackNode = event.target.closest('[data-save-feedback]');
   const listingNode = event.target.closest('[data-listing]');
   const editListingNode = event.target.closest('[data-edit-listing]');
+  const inboxTabNode = event.target.closest('[data-inbox-tab]');
+  const editClipDeliveryNode = event.target.closest('[data-edit-clip-delivery]');
+  const sessionClipsNode = event.target.closest('[data-session-clips]');
+  if (inboxTabNode) {
+    state.inboxTab = inboxTabNode.dataset.inboxTab;
+    renderInboxTabs();
+  }
   if (iconThemeNode) applyIconTheme(iconThemeNode.dataset.iconTheme, true);
   if (viewNode) setView(viewNode.dataset.view);
   if (memberNode) openMember(memberNode.dataset.member);
@@ -2770,10 +3038,12 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || ['make-invite', 'share-invite', 'share-invite-overview', 'share-invite-setup', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || editClipDeliveryNode || sessionClipsNode || ['make-invite', 'share-invite', 'share-invite-overview', 'share-invite-setup', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'open-clip-delivery', 'mark-clips-ready', 'delete-clip-delivery', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
+  if (editClipDeliveryNode) openClipDeliveryComposer(editClipDeliveryNode.dataset.editClipDelivery);
+  if (sessionClipsNode) openClipDeliveryComposer(null, sessionClipsNode.dataset.sessionClips);
   if (rsvpNode) await setRsvp(rsvpNode.dataset.rsvp, rsvpNode.dataset.role);
   if (startNode) await startSession(startNode.dataset.startSession);
   if (editSessionNode) openSessionComposer(editSessionNode.dataset.editSession);
@@ -2839,6 +3109,9 @@ document.addEventListener('click', async event => {
     'close-guide': closeGuide,
     'go-surfing': () => setView('surfing'),
     'open-dms': () => setView('dms'),
+    'open-clip-delivery': () => openClipDeliveryComposer(),
+    'mark-clips-ready': markClipDeliveryReady,
+    'delete-clip-delivery': deleteClipDelivery,
     'make-invite': () => shareInvite(),
     'share-invite': () => shareInvite(),
     'share-invite-guide': () => shareInvite({ includeGuide:true }),
@@ -2875,12 +3148,18 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'listingForm') await saveListing(event);
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
+  else if (event.target.id === 'clipDeliveryForm') await saveClipDelivery(event);
   else if (event.target.id === 'locationForm') await saveLocation(event);
   else if (event.target.id === 'issueReportForm') await saveIssueReport(event);
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);
 });
 
 document.addEventListener('change', async event => {
+  if (event.target.id === 'clipRecipient' && !$('#clipSubjects').value.trim()) {
+    const recipient = state.people.find(person => person.id === event.target.value);
+    $('#clipSubjects').value = recipient?.name?.trim().split(/\s+/)[0] || '';
+    return;
+  }
   if (event.target.id === 'listingHasPerk') {
     $('#listingPerkFields').classList.toggle('hidden', !event.target.checked);
     return;
@@ -2958,6 +3237,12 @@ $('#roomPhoto').addEventListener('change', event => {
   }
   label.textContent = file.name; label.classList.remove('hidden');
 });
+
+['clipExpectedCount', 'clipUploadedCount'].forEach(id => {
+  $(`#${id}`).addEventListener('input', updateClipProgressPreview);
+  $(`#${id}`).addEventListener('change', updateClipProgressPreview);
+});
+$('#clipFolderUrl').addEventListener('input', updateClipProviderHint);
 
 function fillKnownSpotLocation(spotInput, locationInput) {
   const name = spotInput.value.trim().toLowerCase();
