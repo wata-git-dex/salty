@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.59';
+const APP_VERSION = '1.60';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V12.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V8.png';
@@ -60,6 +60,7 @@ const state = {
   calendarMonth: null, calendarDate: '',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
   marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages',
+  guestClipToken: '', guestClipDelivery: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -207,6 +208,11 @@ async function init() {
     runPreview();
     return;
   }
+  state.guestClipToken = params.get('guest-clips')?.trim() || '';
+  if (state.guestClipToken) {
+    await loadGuestClipDelivery();
+    return;
+  }
   if ('serviceWorker' in navigator && !/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
     try {
       const registration = await navigator.serviceWorker.register('./sw.js');
@@ -265,7 +271,7 @@ function runPreview() {
   state.people = [state.profile, { id: 'jonah', name: 'Jonah Reyes', nickname:'Jo', home_region:regionId, sponsors:['Snake Eyes'], onboarding_complete:true }, { id: 'mateo', name: 'Mateo Karras', nickname:null, home_region:regionId, sponsors:[], onboarding_complete:true }];
   state.spots = [{ id: 'malibu', name: 'Malibu', general_location:'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', general_location:'San Clemente', region_id: regionId }];
   state.previewSessions = [
-    { id:'live-mine', author:userId, region_id:regionId, author_role:'film', participant_names:['Steve'], when_label:'Now', surf_time:new Date().toISOString(), wants_filmer:false, note:'clean little window right now', spot:{name:'C Street',general_location:'Ventura'}, author_profile:{name:'Cyrus'}, session_rsvps:[] },
+    { id:'live-mine', author:userId, initiator_user:null, initiator_name:'Steve', region_id:regionId, author_role:'film', participant_names:['Steve'], when_label:'Now', surf_time:new Date().toISOString(), wants_filmer:false, note:'clean little window right now', spot:{name:'C Street',general_location:'Ventura'}, author_profile:{name:'Cyrus'}, initiator_profile:null, session_rsvps:[] },
     { id:'mine', author:userId, region_id:regionId, author_role:'surf', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 86400000).toISOString(), wants_filmer:false, note:'morning glass before the wind', spot:{name:"Old Man's",general_location:'San Onofre'}, author_profile:{name:'Cyrus'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah'}}]},
     { id:'mateo-surf', author:'mateo', region_id:regionId, author_role:'film', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 2 * 86400000).toISOString(), wants_filmer:false, note:'filming the afternoon window', spot:{name:'First Point',general_location:'Malibu'}, author_profile:{name:'Mateo'}, session_rsvps:[] },
     { id:'crew', author:'jonah', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 3 * 86400000).toISOString(), wants_filmer:true, note:'sunrise window', spot:{name:'Lowers',general_location:'San Clemente'}, author_profile:{name:'Jonah'}, session_rsvps:[] },
@@ -294,6 +300,7 @@ function runPreview() {
   state.dmMessages = [{ id:'dm-1', sender:'jonah', recipient:userId, body:'Want to hit Lowers Friday?', created_at:new Date(Date.now() - 35 * 60000).toISOString(), read_at:null }];
   state.dmThreads = [{ memberId:'jonah', message:state.dmMessages[0] }];
   state.clipDeliveries = [
+    { id:'clips-guest', sender:userId, recipient:null, recipient_name:'Heston', subject_names:['Heston'], session_id:'live-mine', provider:'google_drive', folder_url:'https://drive.google.com/', expected_count:18, uploaded_count:4, tracking_mode:'manual', status:'uploading', note:'Today at C Street.', created_at:new Date(Date.now() - 20 * 60000).toISOString(), updated_at:new Date(Date.now() - 4 * 60000).toISOString(), sender_profile:state.profile, recipient_profile:null, session:state.previewSessions[0], clip_delivery_messages:[{id:'gm1',sender_user:null,guest_name:'Heston',body:'Did the last right make it in?',created_at:new Date().toISOString()}] },
     { id:'clips-heston', sender:userId, recipient:'jonah', subject_names:['Heston'], session_id:'past-surf', provider:'google_drive', folder_url:'https://drive.google.com/', expected_count:24, uploaded_count:7, tracking_mode:'manual', status:'uploading', note:'Raw clips from C Street.', created_at:new Date(Date.now() - 55 * 60000).toISOString(), updated_at:new Date(Date.now() - 12 * 60000).toISOString(), sender_profile:state.profile, recipient_profile:state.people[1], session:state.previewSessions[4] },
     { id:'clips-steve', sender:'mateo', recipient:userId, subject_names:['Cyrus'], session_id:'mateo-surf', provider:'dropbox', folder_url:'https://dropbox.com/', expected_count:11, uploaded_count:11, tracking_mode:'manual', status:'ready', note:null, ready_at:new Date(Date.now() - 20 * 60000).toISOString(), created_at:new Date(Date.now() - 2 * 3600000).toISOString(), updated_at:new Date(Date.now() - 20 * 60000).toISOString(), sender_profile:state.people[2], recipient_profile:state.profile, session:state.previewSessions[2] },
   ];
@@ -320,6 +327,16 @@ function showWelcome() {
   const hasInvite = Boolean(state.pendingInvite);
   $('#enterButton').classList.toggle('hidden', !hasInvite);
   $('#inviteInstruction').classList.toggle('hidden', hasInvite);
+  const intent = state.pendingOpen;
+  const copy = intent === 'plan-surf'
+    ? ['Plan the surf', 'Your friend invited you to set the spot, time, and crew. Join Sodium and the session form opens next.']
+    : intent === 'claim-session'
+      ? ['Claim your surf', 'Join Sodium to attach this session—and its organizer credit—to your real profile.']
+      : intent === 'claim-delivery'
+        ? ['Your clips are waiting', 'Join Sodium to open the clip delivery your friend prepared for you.']
+        : ['Invite-only, on purpose', 'Someone you surf with brought you in. No strangers, no algorithm—just surfers who actually ride together.'];
+  $('.invite-note h2').textContent = copy[0];
+  $('.invite-note p').textContent = copy[1];
 }
 
 function openAuth(mode, keepPending = false) {
@@ -331,7 +348,10 @@ function openAuth(mode, keepPending = false) {
   }
   $('#newMemberFields').classList.toggle('hidden', !isNew);
   $('#authTitle').textContent = isNew ? 'Join your crew' : 'Welcome back';
-  $('#authSubtitle').textContent = isNew ? 'Continue with Google or use one email code. Then finish your profile and stay signed in.' : 'Continue with Google, or use the email connected to your Sodium profile. You only need this on a new device or after signing out.';
+  const intentCopy = state.pendingOpen === 'plan-surf' ? 'Join, then share the surf so the crew can join or film.'
+    : state.pendingOpen === 'claim-session' ? 'Join to claim this surf and its organizer credit.'
+      : state.pendingOpen === 'claim-delivery' ? 'Join to open the clips your friend sent you.' : '';
+  $('#authSubtitle').textContent = isNew ? (intentCopy || 'Continue with Google or use one email code. Then finish your profile and stay signed in.') : 'Continue with Google, or use the email connected to your Sodium profile. You only need this on a new device or after signing out.';
   if (!keepPending) {
     $('#authMessage').classList.add('hidden');
     $('#authCodeBlock').classList.add('hidden');
@@ -521,7 +541,7 @@ async function enterCommunity() {
   let { data: profile, error } = await db.rpc('get_my_profile');
   if (error) { toast(readableError(error)); showWelcome(); return; }
 
-  if (!profile && state.pendingInvite) {
+  if (state.pendingInvite) {
     const redeemed = await db.rpc('redeem_invite', {
       invite_code: state.pendingInvite,
       profile_name: null,
@@ -534,7 +554,7 @@ async function enterCommunity() {
       showWelcome();
       return;
     }
-    profile = redeemed.data;
+    profile = redeemed.data || profile;
     localStorage.removeItem('salty:invite');
   }
 
@@ -1021,7 +1041,7 @@ function setView(view) {
 
 async function loadSessions() {
   const result = await db.from('sessions')
-    .select('*,spot:spots(*),author_profile:profiles!sessions_author_fkey(id,name),session_rsvps(id,user_id,role,profile:profiles!session_rsvps_user_id_fkey(id,name))')
+    .select('*,spot:spots(*),author_profile:profiles!sessions_author_fkey(id,name),initiator_profile:profiles!sessions_initiator_user_fkey(id,name,avatar_path),session_rsvps(id,user_id,role,profile:profiles!session_rsvps_user_id_fkey(id,name))')
     .eq('region_id', state.currentRegion.id).in('status', ['active', 'ended', 'archived']).order('created_at', { ascending: false }).limit(100);
   if (result.error) { toast(readableError(result.error)); return; }
   state.sessions = result.data || [];
@@ -1072,7 +1092,12 @@ function revealSharedEvent() {
 }
 
 function revealSharedTarget() {
-  if (state.pendingDeliveryId) {
+  if (state.pendingOpen === 'plan-surf') {
+    state.pendingOpen = '';
+    setView('surfing');
+    openSessionComposer();
+    toast('Add the surf you’re planning. You’ll receive the organizer credit.');
+  } else if (state.pendingDeliveryId) {
     state.inboxTab = 'clips';
     setView('dms');
     renderInboxTabs();
@@ -1300,6 +1325,46 @@ function clipProviderLabel(provider) {
   return ({ google_drive:'Google Drive', dropbox:'Dropbox', icloud:'iCloud', other:'Clip link' })[provider] || 'Clip link';
 }
 
+async function loadGuestClipDelivery() {
+  showOnly('guestClipScreen');
+  const result = await db.rpc('get_guest_clip_delivery', { access_token:state.guestClipToken });
+  if (result.error || !result.data) {
+    $('#guestClipContent').innerHTML = '<h1>This clip link is not available</h1><p>Ask the filmer for a fresh Sodium guest link.</p>';
+    $('#guestClipMessageForm').classList.add('hidden');
+    return;
+  }
+  state.guestClipDelivery = result.data;
+  const delivery = result.data;
+  const ready = delivery.status === 'ready' || Number(delivery.uploaded_count) >= Number(delivery.expected_count);
+  const percent = delivery.expected_count ? Math.min(100, Math.round(Number(delivery.uploaded_count) / Number(delivery.expected_count) * 100)) : 0;
+  const messages = (delivery.messages || []).map(message => `<div class="guest-clip-message"><b>${esc(message.name || 'Guest')}</b><small>${esc(messageTime(message.created_at))}</small><p>${esc(message.body)}</p></div>`).join('');
+  $('#guestClipContent').innerHTML = `<div class="guest-clip-summary"><span>${esc(delivery.sender_name)} SENT YOU</span><h1>${esc((delivery.subject_names || []).join(', ') || 'Your clips')}</h1><small>${delivery.session_spot ? `${esc(delivery.session_spot)}${delivery.session_location ? ` · ${esc(delivery.session_location)}` : ''}` : 'Sodium clip delivery'}</small><div class="clip-progress-copy"><b>${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}</b><span>${ready ? 'Clips ready' : `${percent}% uploaded`}</span></div><div class="clip-progress-track"><span style="width:${ready ? 100 : percent}%"></span></div>${delivery.note ? `<p>${esc(delivery.note)}</p>` : ''}<a class="guest-clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener">${ready ? 'Open your clips' : 'View uploading folder'}</a></div><div class="guest-clip-thread">${messages || '<div class="guest-clip-message"><b>Delivery chat</b><p>Ask the filmer about a missing wave or anything in this folder.</p></div>'}</div>`;
+  $('#guestClipMessageForm').classList.remove('hidden');
+}
+
+async function sendGuestClipMessage(event) {
+  event.preventDefault();
+  const button = $('#guestClipMessageForm button[type="submit"]'); button.disabled = true;
+  const result = await db.rpc('add_guest_clip_message', { access_token:state.guestClipToken, display_name:$('#guestClipName').value.trim(), message_body:$('#guestClipMessage').value.trim() });
+  button.disabled = false;
+  if (result.error) { toast(readableError(result.error), 6000); return; }
+  $('#guestClipMessage').value = '';
+  await loadGuestClipDelivery();
+  toast('Message sent to the filmer.');
+}
+
+async function sendMemberClipMessage(event) {
+  event.preventDefault();
+  const deliveryId = event.target.dataset.clipMessageForm;
+  const input = $('input', event.target);
+  const body = input.value.trim();
+  if (!body) return;
+  const result = await db.from('clip_delivery_messages').insert({ delivery_id:deliveryId, sender_user:state.profile.id, body });
+  if (result.error) { toast(readableError(result.error), 6000); return; }
+  input.value = '';
+  await loadClipDeliveries();
+}
+
 function clipSessionLabel(delivery) {
   const spot = delivery.session?.spot?.name;
   if (spot) return spot;
@@ -1319,14 +1384,18 @@ function clipDeliveryPercent(delivery) {
 function clipDeliveryMarkup(delivery) {
   const mine = delivery.sender === state.profile.id;
   const other = mine ? delivery.recipient_profile : delivery.sender_profile;
-  const direction = mine ? `To ${other?.name || 'Sodium member'}` : `From ${other?.name || 'Sodium member'}`;
+  const direction = mine ? `To ${other?.name || delivery.recipient_name || 'guest'}` : `From ${other?.name || 'Sodium member'}`;
   const ready = delivery.status === 'ready';
   const cancelled = delivery.status === 'cancelled';
   const percent = ready ? 100 : clipDeliveryPercent(delivery);
   const progress = `${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}`;
   const date = messageTime(delivery.ready_at || delivery.updated_at || delivery.created_at);
   const edit = mine && !cancelled ? `<button class="clip-edit" data-edit-clip-delivery="${delivery.id}" aria-label="Edit clip delivery"><svg><use href="#i-edit"/></svg></button>` : '';
-  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other)}<div><b>${esc(direction)}</b><small>${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${edit}</div></article>`;
+  const pendingActions = mine && !delivery.recipient ? `<button class="clip-open" data-invite-clip-claim="${delivery.id}">Invite to Sodium</button><button class="clip-edit" data-share-guest-clips="${delivery.id}" title="Guest clip link">Guest link</button>` : '';
+  const messages = (delivery.clip_delivery_messages || []).slice(-3).map(message => `<div class="guest-clip-message"><b>${esc(memberById(message.sender_user)?.name || message.guest_name || 'Guest')}</b><p>${esc(message.body)}</p></div>`).join('');
+  const threadCount = (delivery.clip_delivery_messages || []).length;
+  const thread = `<details class="clip-thread"><summary>Delivery chat${threadCount ? ` · ${threadCount}` : ''}</summary>${messages || '<small>No messages yet.</small>'}<form data-clip-message-form="${delivery.id}"><input maxlength="1000" required placeholder="Ask about a missing wave…"><button>Send</button></form></details>`;
+  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}${thread}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${pendingActions}${edit}</div></article>`;
 }
 
 function renderInboxTabs() {
@@ -1373,7 +1442,7 @@ function renderDmClipDeliveries() {
 async function loadClipDeliveries() {
   if (!state.profile || state.preview) return;
   const result = await db.from('clip_deliveries')
-    .select('*,sender_profile:profiles!clip_deliveries_sender_fkey(id,name,nickname,avatar_path),recipient_profile:profiles!clip_deliveries_recipient_fkey(id,name,nickname,avatar_path),session:sessions!clip_deliveries_session_id_fkey(id,surf_time,when_label,status,spot:spots(name,general_location))')
+    .select('*,sender_profile:profiles!clip_deliveries_sender_fkey(id,name,nickname,avatar_path),recipient_profile:profiles!clip_deliveries_recipient_fkey(id,name,nickname,avatar_path),session:sessions!clip_deliveries_session_id_fkey(id,surf_time,when_label,status,spot:spots(name,general_location)),clip_delivery_messages(id,sender_user,guest_name,body,created_at)')
     .or(`sender.eq.${state.profile.id},recipient.eq.${state.profile.id}`)
     .order('updated_at', { ascending:false }).limit(250);
   if (result.error) {
@@ -1424,7 +1493,9 @@ function openClipDeliveryComposer(deliveryId = null, sessionId = '', recipientId
   $('#clipDeliveryDelete').classList.toggle('hidden', !delivery);
   $('#clipMarkReady').classList.toggle('hidden', !delivery || delivery.status === 'ready');
   const chosenRecipient = delivery?.recipient || recipientId || state.activeDmMember?.id || '';
-  $('#clipRecipient').innerHTML = '<option value="">Choose a member</option>' + state.people.filter(person => person.id !== state.profile.id).map(person => `<option value="${person.id}" ${person.id === chosenRecipient ? 'selected' : ''}>${esc(person.name)}</option>`).join('');
+  $('#clipRecipient').innerHTML = '<option value="">Choose a member</option>' + state.people.filter(person => person.id !== state.profile.id).map(person => `<option value="${person.id}" ${person.id === chosenRecipient ? 'selected' : ''}>${esc(person.name)}</option>`).join('') + `<option value="pending" ${delivery && !delivery.recipient ? 'selected' : ''}>Not on Sodium yet…</option>`;
+  $('#clipRecipientName').value = delivery?.recipient_name || '';
+  $('#clipRecipientNameRow').classList.toggle('hidden', $('#clipRecipient').value !== 'pending');
   $('#clipSession').innerHTML = clipSessionOptions(delivery?.session_id || sessionId);
   $('#clipSubjects').value = delivery ? clipSubjectNames(delivery) : '';
   $('#clipFolderUrl').value = delivery?.folder_url || '';
@@ -1451,9 +1522,11 @@ async function saveClipDelivery(event) {
     const subjectNames = $('#clipSubjects').value.split(',').map(name => name.trim()).filter(Boolean);
     if (!subjectNames.length || subjectNames.length > 20) throw new Error('Add the first name of the surfer in the clips.');
     if (subjectNames.some(name => name.length > 80)) throw new Error('Keep each surfer name under 80 characters.');
+    const pendingRecipient = $('#clipRecipient').value === 'pending';
     const payload = {
       sender:state.profile.id,
-      recipient:$('#clipRecipient').value,
+      recipient:pendingRecipient ? null : $('#clipRecipient').value,
+      recipient_name:pendingRecipient ? $('#clipRecipientName').value.trim() : (memberById($('#clipRecipient').value)?.name || null),
       subject_names:subjectNames,
       session_id:$('#clipSession').value || null,
       provider,
@@ -1463,11 +1536,11 @@ async function saveClipDelivery(event) {
       tracking_mode:'manual',
       note:$('#clipNote').value.trim() || null,
     };
-    if (!payload.recipient || payload.recipient === state.profile.id) throw new Error('Choose the Sodium member receiving these clips.');
+    if ((!payload.recipient && !payload.recipient_name) || payload.recipient === state.profile.id) throw new Error('Choose a Sodium member or add the guest’s first name.');
     const edited = Boolean(state.editingClipDeliveryId);
     const result = edited
       ? await db.from('clip_deliveries').update(payload).eq('id', state.editingClipDeliveryId).eq('sender', state.profile.id)
-      : await db.from('clip_deliveries').insert(payload);
+      : await db.from('clip_deliveries').insert(payload).select('id').single();
     if (result.error) throw result.error;
     closeSheet();
     state.editingClipDeliveryId = null;
@@ -1475,7 +1548,7 @@ async function saveClipDelivery(event) {
     state.inboxTab = 'clips';
     setView('dms');
     renderInboxTabs();
-    toast(uploadedCount >= expectedCount ? 'Clips ready. The recipient was notified.' : (edited ? 'Clip delivery updated.' : 'Clip delivery started.'));
+    toast(pendingRecipient && !edited ? 'Delivery created. Choose Invite to Sodium or Guest link on its card.' : (uploadedCount >= expectedCount ? 'Clips ready.' : (edited ? 'Clip delivery updated.' : 'Clip delivery started.')));
   } catch (error) { toast(readableError(error), 6000); }
   finally { submit.disabled = false; }
 }
@@ -2291,12 +2364,16 @@ function renderSessions() {
     const filmerRow = (session.wants_filmer || filmers.length)
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
       : '';
-    const starter = `<div class="session-starter">${avatarMarkup(session.author_profile, 'session-starter-avatar')}<span><b>${esc(session.author_profile?.name || 'Sodium member')}</b> started this session</span></div>`;
+    const initiator = session.initiator_profile || (session.initiator_user === session.author ? session.author_profile : null);
+    const initiatorName = initiator?.name || session.initiator_name || session.author_profile?.name || 'Sodium member';
+    const addedBy = session.author_profile?.name && session.author_profile.name !== initiatorName ? `<small>Added by ${esc(session.author_profile.name)}</small>` : '';
+    const starter = `<div class="session-attribution">${avatarMarkup(initiator || { name:initiatorName }, 'session-starter-avatar')}<span><b>${esc(initiatorName)}</b> initiated this session${addedBy}</span></div>`;
+    const claimInvite = !pastSession && mine && !session.initiator_user && session.initiator_name ? `<button class="claim-invite" data-invite-session-claim="${session.id}">Invite ${esc(session.initiator_name)} to claim this surf</button>` : '';
     const schedule = pastSession
       ? schedulePills(scheduleParts(session.surf_time || session.ended_at || session.created_at), 'session-schedule')
       : sessionSchedulePills(session);
     const timingClass = pastSession ? 'past-card' : (session.when_label === 'Now' ? 'live-session' : 'future-session');
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${actions ? `<div class="card-actions">${actions}</div>` : ''}${sendClips}</article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${actions ? `<div class="card-actions">${actions}</div>` : ''}${claimInvite}${sendClips}</article>`;
   };
   const activeMarkup = orderedSessions.length
     ? orderedSessions.map(session => renderSessionCard(session)).join('')
@@ -2380,6 +2457,15 @@ function resetSessionComposer() {
   updateDateChoiceLabels();
   renderSessionPeopleChips();
   renderSessionMemberSuggestions('');
+  const admin = Boolean(state.profile?.is_admin);
+  $('#sessionInitiatorFields').classList.toggle('hidden', !admin);
+  $('#sessionPlanInvite').classList.toggle('hidden', !admin);
+  if (admin) {
+    $('#sessionInitiator').innerHTML = `<option value="${state.profile.id}">Me · ${esc(state.profile.name)}</option>` + state.people.filter(person => person.id !== state.profile.id).map(person => `<option value="${person.id}">${esc(person.name)} · Sodium member</option>`).join('') + '<option value="pending">Not on Sodium yet…</option>';
+    $('#sessionInitiator').value = state.profile.id;
+    $('#sessionInitiatorName').value = '';
+    $('#sessionInitiatorNameRow').classList.add('hidden');
+  }
 }
 
 function updateSessionRoleUi(role) {
@@ -2414,6 +2500,11 @@ function openSessionComposer(sessionId = null) {
     updateSessionRoleUi(session.author_role);
     $('#wantsFilmer').checked = session.wants_filmer;
     $('#sessionNote').value = session.note || '';
+    if (state.profile.is_admin) {
+      $('#sessionInitiator').value = session.initiator_user || 'pending';
+      $('#sessionInitiatorName').value = session.initiator_user ? '' : (session.initiator_name || '');
+      $('#sessionInitiatorNameRow').classList.toggle('hidden', Boolean(session.initiator_user));
+    }
     renderSessionPeopleChips();
   }
   openSheet('sessionSheet');
@@ -2443,6 +2534,12 @@ async function createSession(event) {
       featured_surfer_name: null, featured_surfer_user: null, participant_names: state.sessionPeople,
       wants_filmer: $('#wantsFilmer').checked, note: $('#sessionNote').value.trim() || null,
     };
+    if (state.profile.is_admin) {
+      const selectedInitiator = $('#sessionInitiator').value;
+      payload.initiator_user = selectedInitiator === 'pending' ? null : selectedInitiator;
+      payload.initiator_name = selectedInitiator === 'pending' ? $('#sessionInitiatorName').value.trim() : (memberById(selectedInitiator)?.name || state.profile.name);
+      if (selectedInitiator === 'pending' && !payload.initiator_name) throw new Error('Add the first name of the person who initiated this surf.');
+    }
     const result = state.editingSessionId
       ? await db.from('sessions').update(payload).eq('id', state.editingSessionId).eq('author', state.profile.id)
       : await db.from('sessions').insert(payload);
@@ -2834,6 +2931,85 @@ async function shareGuide() {
   }
 }
 
+async function createContextInvite({ purpose, sessionId = null, deliveryId = null, name = '' }) {
+  const region = state.currentRegion || state.regions.find(item => item.id === state.profile.home_region);
+  const result = await db.rpc('create_context_invite', {
+    invite_region:region?.id || null,
+    invite_purpose:purpose,
+    claim_session:sessionId,
+    claim_delivery:deliveryId,
+    invite_name:name || null,
+  });
+  if (result.error) throw result.error;
+  return { code:result.data, region };
+}
+
+async function sharePlanSurfInvite(event) {
+  event?.preventDefault();
+  const name = $('#planInviteName').value.trim();
+  if (!name) return;
+  try {
+    const invite = await createContextInvite({ purpose:'plan_session', name });
+    const url = new URL('./', location.href); url.search = ''; url.hash = '';
+    url.searchParams.set('invite', invite.code); url.searchParams.set('open', 'plan-surf');
+    if (invite.region?.id) url.searchParams.set('region', invite.region.id);
+    const text = `Yo ${name} — use this Sodium invite to post the surf you’re planning. Add the spot, time, surfers, and whether you want clips. You’ll get the organizer credit.`;
+    closeSheet();
+    await shareSodiumContent({ title:'Plan a surf on Sodium', text, url:url.href, copiedMessage:`Planning invite for ${name} copied.` });
+  } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
+}
+
+async function shareSessionClaimInvite(sessionId) {
+  const session = state.sessions.find(item => item.id === sessionId && item.author === state.profile.id && !item.initiator_user);
+  if (!session) { toast('That surf is already claimed.'); return; }
+  try {
+    const invite = await createContextInvite({ purpose:'claim_session', sessionId, name:session.initiator_name });
+    const url = new URL('./', location.href); url.search = ''; url.hash = '';
+    url.searchParams.set('invite', invite.code); url.searchParams.set('open', 'claim-session'); url.searchParams.set('session', session.id);
+    if (invite.region?.id) url.searchParams.set('region', invite.region.id);
+    const text = `Yo ${session.initiator_name} — I added the ${session.spot?.name || 'surf'} session you organized to Sodium. Join here to claim it and its organizer credit.`;
+    await shareSodiumContent({ title:'Claim your surf on Sodium', text, url:url.href, copiedMessage:`Claim invite for ${session.initiator_name} copied.` });
+  } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
+}
+
+async function shareClipClaimInvite(deliveryId) {
+  const delivery = state.clipDeliveries.find(item => item.id === deliveryId && item.sender === state.profile.id && !item.recipient);
+  if (!delivery) { toast('That delivery already has a Sodium recipient.'); return; }
+  const name = delivery.recipient_name || 'dude';
+  try {
+    const invite = await createContextInvite({ purpose:'claim_delivery', deliveryId, name });
+    const url = new URL('./', location.href); url.search = ''; url.hash = '';
+    url.searchParams.set('invite', invite.code); url.searchParams.set('open', 'claim-delivery'); url.searchParams.set('delivery', delivery.id);
+    const text = `Yo ${name} — I’m sending you ${delivery.expected_count} clips of ${clipSubjectNames(delivery)} through Sodium. Join here and the delivery opens automatically.`;
+    await shareSodiumContent({ title:'Your clips on Sodium', text, url:url.href, copiedMessage:`Clip invite for ${name} copied.` });
+  } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
+}
+
+async function shareGuestClipLink(deliveryId) {
+  const delivery = state.clipDeliveries.find(item => item.id === deliveryId && item.sender === state.profile.id);
+  if (!delivery) return;
+  const result = await db.rpc('create_guest_clip_link', { target_delivery:delivery.id });
+  if (result.error) { toast(readableError(result.error), 6000); return; }
+  const url = new URL('./', location.href); url.search = ''; url.hash = ''; url.searchParams.set('guest-clips', result.data);
+  const name = delivery.recipient_name || delivery.recipient_profile?.name || 'dude';
+  const text = `Yo ${name} — get your ${delivery.expected_count} clips of ${clipSubjectNames(delivery)} here. No Sodium account needed. This private link only opens your clip delivery.`;
+  try { await shareSodiumContent({ title:'Your clips from Sodium', text, url:url.href, copiedMessage:'Private guest clip link copied.' }); }
+  catch (error) { if (error?.name !== 'AbortError') prompt('Copy this guest clip link:', `${text}\n${url.href}`); }
+}
+
+function openShareInviteHub() {
+  closeDrawer();
+  $('#sessionClaimList').classList.add('hidden');
+  openSheet('shareInviteSheet');
+}
+
+function showSessionClaimList() {
+  const pending = state.sessions.filter(session => session.author === state.profile.id && !session.initiator_user && session.initiator_name && !isPastSession(session));
+  const target = $('#sessionClaimList');
+  target.innerHTML = pending.length ? pending.map(session => `<button data-invite-session-claim="${session.id}"><b>${esc(session.initiator_name)} · ${esc(session.spot?.name || 'Surf')}</b><small>${esc(sessionWhen(session))}</small></button>`).join('') : '<small>No unclaimed sessions. Add one for a nonmember first, then it appears here.</small>';
+  target.classList.remove('hidden');
+}
+
 async function shareSession(sessionId) {
   const session = state.sessions.find(item => item.id === sessionId);
   if (!session) { toast('That surf is no longer available.'); return; }
@@ -2955,6 +3131,9 @@ document.addEventListener('click', async event => {
   const editSessionNode = event.target.closest('[data-edit-session]');
   const shareSessionNode = event.target.closest('[data-share-session]');
   const shareEventNode = event.target.closest('[data-share-event]');
+  const inviteSessionClaimNode = event.target.closest('[data-invite-session-claim]');
+  const inviteClipClaimNode = event.target.closest('[data-invite-clip-claim]');
+  const shareGuestClipsNode = event.target.closest('[data-share-guest-clips]');
   const editPostNode = event.target.closest('[data-edit-post]');
   const removeSessionPersonNode = event.target.closest('[data-remove-session-person]');
   const sessionMemberNode = event.target.closest('[data-session-member]');
@@ -2963,6 +3142,9 @@ document.addEventListener('click', async event => {
   const sessionRoleNode = event.target.closest('[data-session-role]');
   const memberNode = event.target.closest('[data-member]');
   const iconThemeNode = event.target.closest('[data-icon-theme]');
+  if (inviteSessionClaimNode) { await shareSessionClaimInvite(inviteSessionClaimNode.dataset.inviteSessionClaim); return; }
+  if (inviteClipClaimNode) { await shareClipClaimInvite(inviteClipClaimNode.dataset.inviteClipClaim); return; }
+  if (shareGuestClipsNode) { await shareGuestClipLink(shareGuestClipsNode.dataset.shareGuestClips); return; }
   const eventRegionNode = event.target.closest('[data-event-region]');
   const eventRsvpNode = event.target.closest('[data-event-rsvp]');
   const eventCalendarNode = event.target.closest('[data-event-calendar]');
@@ -3085,6 +3267,10 @@ document.addEventListener('click', async event => {
     'close-drawer': closeDrawer,
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
     'open-session': () => openSessionComposer(),
+    'open-share-invite': openShareInviteHub,
+    'open-plan-invite': () => { closeSheet(); $('#planInviteForm').reset(); openSheet('planInviteSheet'); },
+    'open-session-claim-list': showSessionClaimList,
+    'open-pending-clip-delivery': () => { closeSheet(); openClipDeliveryComposer(); $('#clipRecipient').value = 'pending'; $('#clipRecipientNameRow').classList.remove('hidden'); },
     'open-calendar': openCrewCalendar,
     'open-events-calendar': openEventsCalendar,
     'calendar-prev': () => changeCalendarMonth(-1),
@@ -3149,6 +3335,9 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
   else if (event.target.id === 'clipDeliveryForm') await saveClipDelivery(event);
+  else if (event.target.id === 'planInviteForm') await sharePlanSurfInvite(event);
+  else if (event.target.id === 'guestClipMessageForm') await sendGuestClipMessage(event);
+  else if (event.target.matches('[data-clip-message-form]')) await sendMemberClipMessage(event);
   else if (event.target.id === 'locationForm') await saveLocation(event);
   else if (event.target.id === 'issueReportForm') await saveIssueReport(event);
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);
@@ -3158,6 +3347,15 @@ document.addEventListener('change', async event => {
   if (event.target.id === 'clipRecipient' && !$('#clipSubjects').value.trim()) {
     const recipient = state.people.find(person => person.id === event.target.value);
     $('#clipSubjects').value = recipient?.name?.trim().split(/\s+/)[0] || '';
+    $('#clipRecipientNameRow').classList.toggle('hidden', event.target.value !== 'pending');
+    return;
+  }
+  if (event.target.id === 'clipRecipient') {
+    $('#clipRecipientNameRow').classList.toggle('hidden', event.target.value !== 'pending');
+    return;
+  }
+  if (event.target.id === 'sessionInitiator') {
+    $('#sessionInitiatorNameRow').classList.toggle('hidden', event.target.value !== 'pending');
     return;
   }
   if (event.target.id === 'listingHasPerk') {
