@@ -7,7 +7,7 @@ This file consolidates decisions and implementation state from the Sodium Commun
 ## Release state
 
 - Current release: v1.90.
-- This release hardens mobile Cloudflare Stream uploads with smaller chunks, automatic retry/resume, and clearer errors. Stoke posts now use a positive-only **Stoked** wave reaction alongside comments.
+- This release hardens mobile Cloudflare Stream uploads with smaller chunks, automatic retry/resume, and clearer errors. Members can now give posts **Stoke** with a positive-only wave reaction alongside comments.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -87,7 +87,7 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - Drafts remain on the device for 30 days.
 - Linked member tags and custom visual tags are supported.
 - Photos and clips can be edited or deleted by their author.
-- Members can mark posts **Stoked** with the wave reaction and leave comments. There are no negative reactions or downvotes. Legacy `post_likes` identifiers remain internal to avoid an unnecessary data migration.
+- Members can give posts **Stoke** with the wave reaction and leave comments. There are no negative reactions or downvotes. Legacy `post_likes` identifiers remain internal to avoid an unnecessary data migration.
 
 ## Clip deliveries
 
@@ -125,4 +125,4 @@ Version 1.88 repairs profile activity totals, combines surf and film locations, 
 
 Version 1.89 adds the optional Google Drive folder picker and view-time clip counting. It does not add a paid background job, change existing clip-delivery records, or require members to connect Google.
 
-Version 1.90 makes phone clip uploads resilient to brief network interruptions and replaces the generic heart/like presentation with the positive-only Stoked wave reaction. Existing reaction data is preserved.
+Version 1.90 makes phone clip uploads resilient to brief network interruptions and replaces the generic heart/like presentation with the positive-only action of giving a post Stoke. Existing reaction data is preserved.
