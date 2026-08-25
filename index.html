@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=78-clean-actions">
+  <link rel="stylesheet" href="./styles.css?v=79-stoke-media-choice">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -67,7 +67,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.78</small>
+    <small class="boot-credit">Saltyview Productions · v1.79</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -334,24 +334,31 @@
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2 id="postSheetTitle">Share a highlight</h2><p id="postSheetDescription">Photo or clip—the whole community sees this, every area.</p>
       <form id="postForm">
-        <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" multiple required><svg><use href="#i-camera"/></svg><strong id="fileLabel">Add photos or one clip</strong><small>up to 10 photos · or one clip up to 90s and 50 MB</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
+        <fieldset id="postKindPicker" class="post-kind-picker">
+          <legend>What are you sharing?</legend>
+          <div>
+            <label><input type="radio" name="postKind" value="photo" checked><span><svg><use href="#i-photo"/></svg><b>Photos</b><small>up to 10</small></span></label>
+            <label><input type="radio" name="postKind" value="clip"><span><svg><use href="#i-camera"/></svg><b>Clip</b><small>one video · 90s max</small></span></label>
+          </div>
+        </fieldset>
+        <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple required><svg id="postMediaIcon"><use href="#i-photo"/></svg><strong id="fileLabel">Choose up to 10 photos</strong><small id="postMediaHelp">Original shapes are preserved unless you choose a crop below.</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
         <fieldset id="postRatioPicker" class="post-ratio-picker">
-          <legend>Photo shape <small>optional · Original never crops</small></legend>
+          <legend><span id="postRatioLegendLabel">Photo shape</span> <small>optional · Original never crops</small></legend>
           <div class="post-ratio-options">
             <label><input type="radio" name="postRatio" value="original" checked><span><i class="ratio-original"></i><b>Original</b></span></label>
             <label><input type="radio" name="postRatio" value="square"><span><i class="ratio-square"></i><b>Square</b></span></label>
             <label><input type="radio" name="postRatio" value="portrait"><span><i class="ratio-portrait"></i><b>Portrait</b></span></label>
             <label><input type="radio" name="postRatio" value="landscape"><span><i class="ratio-landscape"></i><b>Landscape</b></span></label>
           </div>
-          <div id="postRatioPreview" class="post-ratio-preview hidden"><img alt="Photo crop preview"></div>
-          <p id="postRatioHelp">Original keeps every photo exactly as shot. Fixed shapes crop the edges to fill the frame.</p>
+          <div id="postRatioPreview" class="post-ratio-preview hidden"><img alt="Photo crop preview"><video muted playsinline controls aria-label="Clip shape preview"></video></div>
+          <p id="postRatioHelp">Original keeps the media exactly as shot. Fixed shapes crop the edges to fill the frame.</p>
         </fieldset>
-        <label>Filmer <em>required</em><input id="filmerName" maxlength="100" required placeholder="Any name—the filmer doesn't have to be a member" list="peopleList"></label>
-        <label>Surfer / shaper <small>optional</small><input id="surferName" maxlength="100" placeholder="Tag who's in it" list="peopleList"><datalist id="peopleList"></datalist></label>
-        <label>Board <small>optional · brand + dimensions</small><input id="boardName" maxlength="100" placeholder="Board brand, model, and dimensions"></label>
-        <label>Spot <small>optional</small><input id="postSpot" maxlength="120" placeholder="Surf spot name" list="spotsList"></label>
-        <label>General location <small>optional</small><input id="postLocation" maxlength="160" placeholder="City, beach, or general area" list="locationsList"></label>
-        <label>Caption<textarea id="postCaption" maxlength="1000" placeholder="Write a caption"></textarea></label>
+        <label><span id="postCreatorLabel">Photographer</span> <em>required</em><input id="filmerName" maxlength="100" required placeholder="Photographer's name" list="peopleList"></label>
+        <label id="postSubjectField"><span id="postSubjectLabel">People / subjects</span> <small>optional</small><input id="surferName" maxlength="100" placeholder="Who's in these photos?" list="peopleList"><datalist id="peopleList"></datalist></label>
+        <label id="postBoardField" class="hidden">Board <small>optional · brand + dimensions</small><input id="boardName" maxlength="100" placeholder="Board brand, model, and dimensions"></label>
+        <label>Location <small>optional</small><input id="postSpot" maxlength="120" placeholder="City, beach, or general area" list="locationsList"></label>
+        <input id="postLocation" type="hidden">
+        <label><span id="postNotesLabel">Photo notes</span> <small>optional</small><textarea id="postCaption" maxlength="1000" placeholder="Anything about these photos?"></textarea></label>
         <button id="postSubmit" class="primary" type="submit">Share to Stoke</button>
         <button id="postDelete" class="danger-button hidden" type="button" data-action="delete-post"><svg><use href="#i-close"/></svg>Delete Stoke post</button>
         <p id="postDeleteNote" class="session-cancel-note hidden">Deletes the post and its photo or clip for everyone. Posting points already earned stay.</p>
@@ -464,9 +471,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.78</span>
-    <h3>Cleaner sharing and better Stoke photos.</h3>
-    <ul><li>Photos keep their original shape, with optional crop ratios.</li><li>Profile invites now live under one Share with friends menu.</li><li>Use the same compact + button for Sessions, Stoke, and Events.</li></ul>
+    <span>NEW IN V1.79</span>
+    <h3>Photo and clip posts are clearer.</h3>
+    <ul><li>Choose Photos or Clip before adding media.</li><li>Photo posts credit the photographer; clips credit the filmer.</li><li>Each post type now shows only the options that apply.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -480,6 +487,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=78-clean-actions" defer></script>
+  <script src="./app.js?v=79-stoke-media-choice" defer></script>
 </body>
 </html>
