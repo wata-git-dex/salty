@@ -24,7 +24,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.81';
+const APP_VERSION = '1.82';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -69,6 +69,7 @@ const state = {
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
   marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent', sharingSessionId: null,
   guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
+  postMemberTags: [], postCustomTags: [],
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -2533,7 +2534,7 @@ function renderSessions() {
     const initiatorName = initiator?.name || session.initiator_name || session.author_profile?.name || 'Sodium member';
     const addedBy = session.author_profile?.name && session.author_profile.name !== initiatorName ? `<small>Added by ${esc(session.author_profile.name)}</small>` : '';
     const starter = `<div class="session-attribution">${avatarMarkup(initiator || { name:initiatorName }, 'session-starter-avatar')}<span><b>${esc(initiatorName)}</b> initiated this session${addedBy}</span></div>`;
-    const claimInvite = !pastSession && mine && !session.initiator_user && session.initiator_name ? `<button class="claim-invite" data-invite-session-claim="${session.id}">Invite ${esc(session.initiator_name)} to claim this surf</button>` : '';
+    const claimInvite = !pastSession && mine && !session.initiator_user && session.initiator_name ? `<button class="claim-invite" data-invite-session-claim="${session.id}" title="Invite ${esc(session.initiator_name)} to join Sodium and claim this surf"><svg><use href="#i-send"/></svg>Invite ${esc(session.initiator_name)}</button>` : '';
     const schedule = pastSession
       ? schedulePills(scheduleParts(session.surf_time || session.ended_at || session.created_at), 'session-schedule')
       : sessionSchedulePills(session);
@@ -2758,7 +2759,7 @@ async function cancelSession() {
 
 async function loadPosts() {
   const result = await db.from('posts')
-    .select('*,spot:spots(*),author_profile:profiles!posts_author_fkey(id,name),stream_media:post_stream_media(*),post_likes(user_id),post_comments(id,body,created_at,author_profile:profiles!post_comments_author_fkey(id,name))')
+    .select('*,spot:spots(*),author_profile:profiles!posts_author_fkey(id,name),stream_media:post_stream_media(*),post_tags(user_id,role,profile:profiles!post_tags_user_id_fkey(id,name)),post_likes(user_id),post_comments(id,body,created_at,author_profile:profiles!post_comments_author_fkey(id,name))')
     .order('created_at', { ascending: false }).limit(50);
   if (result.error) { toast(readableError(result.error)); return; }
   const posts = result.data || [];
@@ -2934,8 +2935,8 @@ function renderPosts() {
       ? (post.media_type === 'clip'
         ? `<video src="${esc(post.media_url)}" controls preload="metadata" playsinline></video>`
         : photoUrls.length > 1
-          ? `<div class="post-carousel" data-post-carousel data-carousel-index="0" data-carousel-total="${photoUrls.length}"><div class="post-carousel-track">${photoUrls.map((url, index) => `<img src="${esc(url)}" alt="${esc(post.caption || `Surf photo ${index + 1}`)}" loading="${index ? 'lazy' : 'eager'}">`).join('')}</div><button class="post-carousel-arrow previous" type="button" data-carousel-direction="-1" aria-label="Previous photo"><svg><use href="#i-back"/></svg></button><button class="post-carousel-arrow next" type="button" data-carousel-direction="1" aria-label="Next photo"><svg><use href="#i-chevron"/></svg></button><span class="post-carousel-counter"><b>1</b>/${photoUrls.length}</span></div>`
-          : `<img src="${esc(post.media_url)}" alt="${esc(post.caption || 'Surf photo')}">`)
+          ? `<div class="post-carousel" data-post-carousel data-carousel-index="0" data-carousel-total="${photoUrls.length}"><div class="post-carousel-track">${photoUrls.map((url, index) => `<img src="${esc(url)}" alt="${esc(post.caption || `Surf photo ${index + 1}`)}" loading="${index ? 'lazy' : 'eager'}" data-toggle-post-tags="${post.id}">`).join('')}</div><button class="post-carousel-arrow previous" type="button" data-carousel-direction="-1" aria-label="Previous photo"><svg><use href="#i-back"/></svg></button><button class="post-carousel-arrow next" type="button" data-carousel-direction="1" aria-label="Next photo"><svg><use href="#i-chevron"/></svg></button><span class="post-carousel-counter"><b>1</b>/${photoUrls.length}</span></div>`
+          : `<img src="${esc(post.media_url)}" alt="${esc(post.caption || 'Surf photo')}" data-toggle-post-tags="${post.id}">`)
       : '<div class="post-media-unavailable">Media unavailable</div>';
     const comments = post.post_comments.slice(-3).map(comment => `<p class="comment"><b>${esc(comment.author_profile?.name || 'Crew')}</b> ${esc(comment.body)}</p>`).join('');
     const edit = post.author === state.profile.id ? `<button class="post-edit-icon" type="button" data-edit-post="${post.id}" aria-label="Edit your Stoke post"><svg><use href="#i-edit"/></svg></button>` : '';
@@ -2948,7 +2949,12 @@ function renderPosts() {
     const creatorRole = post.media_type === 'photo' ? 'Photographer' : 'Filmer';
     const subjectRole = post.media_type === 'photo' ? 'People' : 'Surfer';
     const boardCredit = post.media_type === 'clip' && post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : '';
-    return `<article class="post-card"><div class="post-media ratio-${ratio}"${mediaStyle}>${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>${subjectRole}</b>${esc(post.surfer_name)}</span>` : ''}${boardCredit}<span class="credit filmer"><b>${creatorRole}</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
+    const memberTags = (post.post_tags || []).filter(tag => tag.role === 'surfer' && tag.profile?.name).map(tag => tag.profile.name);
+    const legacySubject = post.surfer_name && !memberTags.some(name => name.toLowerCase() === post.surfer_name.toLowerCase()) ? [post.surfer_name] : [];
+    const visualTags = [...memberTags, ...legacySubject, ...(Array.isArray(post.custom_tags) ? post.custom_tags : [])];
+    const tagMarkup = visualTags.map(label => `<span>${esc(label)}</span>`).join('');
+    const tagUi = visualTags.length ? `<button class="post-tag-trigger" type="button" data-toggle-post-tags="${post.id}" aria-label="Show tags"><svg><use href="#i-user"/></svg><b>${visualTags.length}</b></button><div class="post-visual-tags" data-post-tags="${post.id}">${tagMarkup}</div>` : '';
+    return `<article class="post-card"><div class="post-media ratio-${ratio}"${mediaStyle}>${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}${tagUi}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>${subjectRole}</b>${esc(post.surfer_name)}</span>` : ''}${boardCredit}<span class="credit filmer"><b>${creatorRole}</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
   }).join('');
   bindPostCarousels();
 }
@@ -3063,6 +3069,40 @@ function currentPostFiles() {
   return state.postDraftFiles.length ? [...state.postDraftFiles] : [...$('#mediaFile').files];
 }
 
+function renderPostTagEditors() {
+  const members = $('#postMemberTags');
+  const custom = $('#postCustomTags');
+  if (!members || !custom) return;
+  members.innerHTML = state.postMemberTags.map(person => `<button type="button" data-remove-post-member-tag="${esc(person.id)}"><svg><use href="#i-user"/></svg>${esc(person.name)}<i>×</i></button>`).join('');
+  custom.innerHTML = state.postCustomTags.map((label, index) => `<button type="button" data-remove-post-custom-tag="${index}">${esc(label)}<i>×</i></button>`).join('');
+  members.classList.toggle('empty', !state.postMemberTags.length);
+  custom.classList.toggle('empty', !state.postCustomTags.length);
+}
+
+function addPostMemberTag() {
+  const input = $('#postMemberTagInput');
+  const value = input.value.trim().toLowerCase();
+  if (!value) return;
+  const person = state.people.find(item => item.name?.trim().toLowerCase() === value);
+  if (!person) { toast('Choose a Sodium member from the name list. Use Custom tags for anyone or anything else.'); return; }
+  if (state.postMemberTags.some(item => item.id === person.id)) { input.value = ''; return; }
+  if (state.postMemberTags.length >= 10) { toast('You can tag up to 10 Sodium members on one post.'); return; }
+  state.postMemberTags.push({ id:person.id, name:person.name });
+  input.value = '';
+  renderPostTagEditors();
+}
+
+function addPostCustomTag() {
+  const input = $('#postCustomTagInput');
+  const value = input.value.trim().replace(/\s+/g, ' ');
+  if (!value) return;
+  if (state.postCustomTags.some(label => label.toLowerCase() === value.toLowerCase())) { input.value = ''; return; }
+  if (state.postCustomTags.length >= 12) { toast('You can add up to 12 custom tags on one post.'); return; }
+  state.postCustomTags.push(value);
+  input.value = '';
+  renderPostTagEditors();
+}
+
 function postDraftTitle(draft) {
   return draft.caption || draft.location || draft.files?.[0]?.name || `Untitled ${draft.kind === 'clip' ? 'clips' : 'photos'}`;
 }
@@ -3105,7 +3145,8 @@ async function loadPostDrafts() {
 function postDraftFields() {
   return {
     creator:$('#filmerName').value.trim(),
-    subject:$('#surferName').value.trim(),
+    memberTags:state.postMemberTags.map(person => ({ id:person.id, name:person.name })),
+    customTags:[...state.postCustomTags],
     board:$('#boardName').value.trim(),
     location:$('#postSpot').value.trim(),
     caption:$('#postCaption').value.trim(),
@@ -3121,7 +3162,8 @@ async function savePostDraft() {
     const files = currentPostFiles();
     if (files.length) await validatePostSelection(files);
     const fields = postDraftFields();
-    if (!files.length && !Object.values(fields).some(value => value && value !== 'original')) {
+    const hasDetails = Object.values(fields).some(value => Array.isArray(value) ? value.length : (value && value !== 'original'));
+    if (!files.length && !hasDetails) {
       throw new Error('Add media or some post details before saving a draft.');
     }
     const now = Date.now();
@@ -3166,9 +3208,10 @@ async function openPostDraft(id) {
   resetPostComposer();
   state.editingPostDraftId = draft.id;
   state.postDraftFiles = [...(draft.files || [])];
+  state.postMemberTags = (draft.memberTags || []).filter(person => person?.id && person?.name);
+  state.postCustomTags = (draft.customTags || (draft.subject ? [draft.subject] : [])).filter(Boolean);
   setPostKind(draft.kind);
   $('#filmerName').value = draft.creator || '';
-  $('#surferName').value = draft.subject || '';
   $('#boardName').value = draft.board || '';
   $('#postSpot').value = draft.location || '';
   $('#postCaption').value = draft.caption || '';
@@ -3179,6 +3222,7 @@ async function openPostDraft(id) {
   $('#postSheetTitle').textContent = draft.kind === 'clip' ? 'Finish clip draft' : 'Finish photo draft';
   $('#postSheetDescription').textContent = 'This draft stays on this device until you publish or delete it.';
   $('#postDraftSave').textContent = 'Update draft';
+  renderPostTagEditors();
   openSheet('postSheet');
 }
 
@@ -3211,8 +3255,7 @@ function setPostKind(kind = 'photo', options = {}) {
   $('#postMediaIcon use').setAttribute('href', postKind === 'photo' ? '#i-photo' : '#i-camera');
   $('#postCreatorLabel').textContent = postKind === 'photo' ? 'Photographer' : 'Filmer';
   $('#filmerName').placeholder = postKind === 'photo' ? "Photographer's name" : "Filmer's name";
-  $('#postSubjectLabel').textContent = postKind === 'photo' ? 'People / subjects' : 'Surfer / shaper';
-  $('#surferName').placeholder = postKind === 'photo' ? "Who's in these photos?" : "Who's in this clip?";
+  $('#postSubjectLabel').textContent = postKind === 'photo' ? 'Tag people / surfers' : 'Tag surfers / people';
   $('#postBoardField').classList.toggle('hidden', postKind === 'photo');
   $('#postNotesLabel').textContent = postKind === 'photo' ? 'Photo notes' : 'Clip notes';
   $('#postCaption').placeholder = postKind === 'photo' ? 'Anything about these photos?' : 'Anything about this clip?';
@@ -3246,6 +3289,8 @@ function resetPostComposer() {
   state.editingPostId = null;
   state.editingPostDraftId = null;
   state.postDraftFiles = [];
+  state.postMemberTags = [];
+  state.postCustomTags = [];
   if (state.postPreviewUrl) URL.revokeObjectURL(state.postPreviewUrl);
   state.postPreviewUrl = '';
   $('#postForm').reset();
@@ -3268,6 +3313,7 @@ function resetPostComposer() {
   $('.post-drafts-toggle').setAttribute('aria-expanded', 'false');
   $('#postDelete').classList.add('hidden');
   $('#postDeleteNote').classList.add('hidden');
+  renderPostTagEditors();
 }
 
 function openPostComposer(postId = null) {
@@ -3282,7 +3328,10 @@ function openPostComposer(postId = null) {
     $('#mediaFile').required = false;
     setPostKind(post.media_type, { editing:true });
     $('#filmerName').value = post.filmer_name || '';
-    $('#surferName').value = post.surfer_name || '';
+    state.postMemberTags = (post.post_tags || []).filter(tag => tag.role === 'surfer' && tag.profile).map(tag => ({ id:tag.user_id, name:tag.profile.name }));
+    state.postCustomTags = Array.isArray(post.custom_tags) ? [...post.custom_tags] : [];
+    if (!state.postMemberTags.length && !state.postCustomTags.length && post.surfer_name) state.postCustomTags = [post.surfer_name];
+    renderPostTagEditors();
     $('#boardName').value = post.board || '';
     $('#postSpot').value = post.spot?.general_location || post.spot?.name || '';
     $('#postLocation').value = '';
@@ -3318,11 +3367,10 @@ async function savePost(event) {
     const spotName = $('#postSpot').value.trim();
     const spot = spotName ? await ensureSpot(spotName, $('#postLocation').value, state.currentRegion.id) : null;
     const filmerName = $('#filmerName').value.trim();
-    const surferName = $('#surferName').value.trim();
     const filmer = matchingPerson(filmerName);
-    const surfer = surferName ? matchingPerson(surferName) : null;
     const details = {
-      filmer_name: filmerName, filmer_user: filmer?.id || null, surfer_name: surferName || null,
+      filmer_name: filmerName, filmer_user: filmer?.id || null, surfer_name: null,
+      custom_tags:[...state.postCustomTags],
       board: selectedPostKind() === 'clip' ? ($('#boardName').value.trim() || null) : null, spot_id: spot?.id || null,
       caption: $('#postCaption').value.trim() || null,
       media_ratio: selectedPostRatio(),
@@ -3378,7 +3426,7 @@ async function savePost(event) {
     }
     const tags = [];
     if (filmer && filmer.id !== state.profile.id) tags.push({ post_id: postId, user_id: filmer.id, role: 'filmer' });
-    if (surfer && surfer.id !== state.profile.id) tags.push({ post_id: postId, user_id: surfer.id, role: 'surfer' });
+    state.postMemberTags.forEach(person => tags.push({ post_id:postId, user_id:person.id, role:'surfer' }));
     if (tags.length) {
       const tagsResult = await db.from('post_tags').insert(tags);
       if (tagsResult.error) throw tagsResult.error;
@@ -3880,6 +3928,9 @@ document.addEventListener('click', async event => {
   const editPostNode = event.target.closest('[data-edit-post]');
   const openPostDraftNode = event.target.closest('[data-open-post-draft]');
   const deletePostDraftNode = event.target.closest('[data-delete-post-draft]');
+  const removePostMemberTagNode = event.target.closest('[data-remove-post-member-tag]');
+  const removePostCustomTagNode = event.target.closest('[data-remove-post-custom-tag]');
+  const togglePostTagsNode = event.target.closest('[data-toggle-post-tags]');
   const removeSessionPersonNode = event.target.closest('[data-remove-session-person]');
   const sessionMemberNode = event.target.closest('[data-session-member]');
   const likeNode = event.target.closest('[data-like]');
@@ -3893,6 +3944,21 @@ document.addEventListener('click', async event => {
   if (shareGuestClipsNode) { await shareGuestClipLink(shareGuestClipsNode.dataset.shareGuestClips); return; }
   if (openPostDraftNode) { await openPostDraft(openPostDraftNode.dataset.openPostDraft); return; }
   if (deletePostDraftNode) { await deletePostDraft(deletePostDraftNode.dataset.deletePostDraft); return; }
+  if (removePostMemberTagNode) {
+    state.postMemberTags = state.postMemberTags.filter(person => person.id !== removePostMemberTagNode.dataset.removePostMemberTag);
+    renderPostTagEditors(); return;
+  }
+  if (removePostCustomTagNode) {
+    state.postCustomTags.splice(Number(removePostCustomTagNode.dataset.removePostCustomTag), 1);
+    renderPostTagEditors(); return;
+  }
+  if (togglePostTagsNode) {
+    const tags = document.querySelector(`[data-post-tags="${CSS.escape(togglePostTagsNode.dataset.togglePostTags)}"]`);
+    const trigger = document.querySelector(`.post-tag-trigger[data-toggle-post-tags="${CSS.escape(togglePostTagsNode.dataset.togglePostTags)}"]`);
+    if (tags) tags.classList.toggle('visible');
+    trigger?.classList.toggle('active', tags?.classList.contains('visible'));
+    return;
+  }
   if (shareSessionMemberNode) { await shareSessionToMember(shareSessionMemberNode.dataset.shareSessionMember); return; }
   const eventRegionNode = event.target.closest('[data-event-region]');
   const eventRsvpNode = event.target.closest('[data-event-rsvp]');
@@ -4042,6 +4108,8 @@ document.addEventListener('click', async event => {
     'add-session-person': addSessionPerson,
     'cancel-session': cancelSession,
     'open-post': () => openPostComposer(),
+    'add-post-member-tag': addPostMemberTag,
+    'add-post-custom-tag': addPostCustomTag,
     'toggle-post-drafts': () => {
       const list = $('#postDraftList');
       const expanded = list.classList.toggle('hidden') === false;
@@ -4090,6 +4158,8 @@ document.addEventListener('click', async event => {
 });
 
 document.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && event.target.id === 'postMemberTagInput') { event.preventDefault(); addPostMemberTag(); return; }
+  if (event.key === 'Enter' && event.target.id === 'postCustomTagInput') { event.preventDefault(); addPostCustomTag(); return; }
   if (event.key === 'Escape' && !$('#guideViewer').classList.contains('hidden')) closeGuide();
 });
 

@@ -83,6 +83,7 @@ create table public.posts (
   filmer_name text not null check (char_length(trim(filmer_name)) > 0),
   filmer_user uuid references public.profiles(id),
   surfer_name text,
+  custom_tags text[] not null default '{}'::text[] check (cardinality(custom_tags) between 0 and 12),
   board text,
   spot_id uuid references public.spots(id),
   caption text,

@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=81-stoke-drafts">
+  <link rel="stylesheet" href="./styles.css?v=82-stoke-tags">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -67,7 +67,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.81</small>
+    <small class="boot-credit">Saltyview Productions · v1.82</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -358,13 +358,21 @@
           <p id="postRatioHelp">Original keeps the media exactly as shot. Fixed shapes crop the edges to fill the frame.</p>
         </fieldset>
         <label><span id="postCreatorLabel">Photographer</span> <em>required</em><input id="filmerName" maxlength="100" required placeholder="Photographer's name" list="peopleList"></label>
-        <label id="postSubjectField"><span id="postSubjectLabel">People / subjects</span> <small>optional</small><input id="surferName" maxlength="100" placeholder="Who's in these photos?" list="peopleList"><datalist id="peopleList"></datalist></label>
+        <section id="postSubjectField" class="post-tag-editor">
+          <div class="post-tag-heading"><span id="postSubjectLabel">Tag Sodium members</span><small>optional · appears on the photo or clip</small></div>
+          <div id="postMemberTags" class="post-tag-chips"></div>
+          <div class="post-tag-add"><input id="postMemberTagInput" maxlength="100" placeholder="Search member name" list="peopleList"><button type="button" data-action="add-post-member-tag">Tag</button></div>
+          <datalist id="peopleList"></datalist>
+          <div class="post-tag-heading custom"><span>Custom tags</span><small>optional · board, brand, crew, or anything else</small></div>
+          <div id="postCustomTags" class="post-tag-chips custom"></div>
+          <div class="post-tag-add"><input id="postCustomTagInput" maxlength="40" placeholder="Add a custom label"><button type="button" data-action="add-post-custom-tag">Add</button></div>
+          <input id="surferName" type="hidden">
+        </section>
         <label id="postBoardField" class="hidden">Board <small>optional · brand + dimensions</small><input id="boardName" maxlength="100" placeholder="Board brand, model, and dimensions"></label>
         <label>Location <small>optional</small><input id="postSpot" maxlength="120" placeholder="City, beach, or general area" list="locationsList"></label>
         <input id="postLocation" type="hidden">
         <label><span id="postNotesLabel">Photo notes</span> <small>optional</small><textarea id="postCaption" maxlength="1000" placeholder="Anything about these photos?"></textarea></label>
-        <button id="postDraftSave" class="secondary-button post-draft-save" type="button" data-action="save-post-draft"><svg><use href="#i-folder"/></svg>Save draft</button>
-        <button id="postSubmit" class="primary" type="submit">Share to Stoke</button>
+        <div class="post-publish-actions"><button id="postDraftSave" class="secondary-button post-draft-save" type="button" data-action="save-post-draft"><svg><use href="#i-folder"/></svg>Save draft</button><button id="postSubmit" class="primary" type="submit">Share to Stoke</button></div>
         <button id="postDelete" class="danger-button hidden" type="button" data-action="delete-post"><svg><use href="#i-close"/></svg>Delete Stoke post</button>
         <p id="postDeleteNote" class="session-cancel-note hidden">Deletes the post and its photo or clip for everyone. Posting points already earned stay.</p>
         <p class="upgrade-note">Clips upload securely through Cloudflare Stream. Large uploads resume in chunks, then process automatically for smooth playback.</p>
@@ -476,9 +484,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.81</span>
-    <h3>Save Stoke posts as drafts.</h3>
-    <ul><li>Photo and clip drafts keep their media and details for 30 days.</li><li>Open or delete drafts directly inside the Stoke composer.</li><li>Photo mode is blue; clip mode is amber, so you always know where you are.</li></ul>
+    <span>NEW IN V1.82</span>
+    <h3>Tag the crew—and anything else.</h3>
+    <ul><li>Tag multiple Sodium members on a Stoke post.</li><li>Add custom labels for boards, brands, crews, or nonmembers.</li><li>Tap a photo or its tag icon to reveal the labels.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -492,6 +500,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=81-stoke-drafts" defer></script>
+  <script src="./app.js?v=82-stoke-tags" defer></script>
 </body>
 </html>

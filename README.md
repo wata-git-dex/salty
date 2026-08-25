@@ -44,6 +44,8 @@ Before release v1.59, run `supabase/clip-deliveries-v1-migration.sql` once. It a
 
 Before release v1.60, run `supabase/session-attribution-invites-v1-migration.sql` once. It separates the member who entered a session from the person who initiated it, preserves all existing sessions, adds claimable task-specific invitations, allows pending clip recipients, and adds isolated guest clip links with a delivery-only message thread. Guest links never expose sessions, community chat, profiles, or other member data.
 
+Release v1.82 adds multiple linked member tags to Stoke through the existing `post_tags` relationship and author-written visual labels through `supabase/stoke-visual-tags-v1-migration.sql`. The migration is additive, preserves every existing post, and is safe to run more than once.
+
 Before release v1.61, run `supabase/push-test-notification-v1-migration.sql` once. It adds a signed-in, self-only, rate-limited notification test so each member can verify their own installed device from Settings. Sodium continues to suppress self-notifications for content a member created.
 
 On iPhone, Web Push requires iOS 16.4 or later and the installed Home Screen app. Each member opens **Settings → Enable notifications on this device**, accepts Apple's prompt, and can then enable or disable new surfs, Stoke, DMs, events, surf updates, and Community Chat individually. Community Chat is off by default.
