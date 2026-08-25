@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=76-guest-choice">
+  <link rel="stylesheet" href="./styles.css?v=77-media-shapes">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -337,6 +337,17 @@
       <h2 id="postSheetTitle">Share a highlight</h2><p id="postSheetDescription">Photo or clip—the whole community sees this, every area.</p>
       <form id="postForm">
         <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" multiple required><svg><use href="#i-camera"/></svg><strong id="fileLabel">Add photos or one clip</strong><small>up to 10 photos · or one clip up to 90s and 50 MB</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
+        <fieldset id="postRatioPicker" class="post-ratio-picker">
+          <legend>Photo shape <small>optional · Original never crops</small></legend>
+          <div class="post-ratio-options">
+            <label><input type="radio" name="postRatio" value="original" checked><span><i class="ratio-original"></i><b>Original</b></span></label>
+            <label><input type="radio" name="postRatio" value="square"><span><i class="ratio-square"></i><b>Square</b></span></label>
+            <label><input type="radio" name="postRatio" value="portrait"><span><i class="ratio-portrait"></i><b>Portrait</b></span></label>
+            <label><input type="radio" name="postRatio" value="landscape"><span><i class="ratio-landscape"></i><b>Landscape</b></span></label>
+          </div>
+          <div id="postRatioPreview" class="post-ratio-preview hidden"><img alt="Photo crop preview"></div>
+          <p id="postRatioHelp">Original keeps every photo exactly as shot. Fixed shapes crop the edges to fill the frame.</p>
+        </fieldset>
         <label>Filmer <em>required</em><input id="filmerName" maxlength="100" required placeholder="Any name—the filmer doesn't have to be a member" list="peopleList"></label>
         <label>Surfer / shaper <small>optional</small><input id="surferName" maxlength="100" placeholder="Tag who's in it" list="peopleList"><datalist id="peopleList"></datalist></label>
         <label>Board <small>optional · brand + dimensions</small><input id="boardName" maxlength="100" placeholder="Board brand, model, and dimensions"></label>
@@ -471,6 +482,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=76-guest-choice" defer></script>
+  <script src="./app.js?v=77-media-shapes" defer></script>
 </body>
 </html>

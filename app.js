@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.76';
+const APP_VERSION = '1.77';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -65,7 +65,7 @@ const state = {
   calendarMonth: null, calendarDate: '',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
   marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent', sharingSessionId: null,
-  guestClipToken: '', guestClipDelivery: null,
+  guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -2763,18 +2763,57 @@ async function loadPosts() {
   renderPosts();
 }
 
+function normalizedPostRatio(value) {
+  return ['original', 'square', 'portrait', 'landscape'].includes(value) ? value : 'original';
+}
+
+function selectedPostRatio() {
+  return normalizedPostRatio($('input[name="postRatio"]:checked')?.value);
+}
+
+function applyPostRatioPreview() {
+  const preview = $('#postRatioPreview');
+  if (!preview) return;
+  preview.dataset.ratio = selectedPostRatio();
+  $('#postRatioHelp').textContent = selectedPostRatio() === 'original'
+    ? 'Original keeps every photo exactly as shot—even portrait, landscape, square, or panoramic.'
+    : 'This shape deliberately crops the edges to fill the selected frame.';
+}
+
+function setPostRatio(value) {
+  const ratio = normalizedPostRatio(value);
+  const option = $(`input[name="postRatio"][value="${ratio}"]`);
+  if (option) option.checked = true;
+  applyPostRatioPreview();
+}
+
+function syncPostCarouselFrame(carousel, index) {
+  const media = carousel.closest('.post-media');
+  if (!media?.classList.contains('ratio-original')) return;
+  const image = $$('.post-carousel-track img', carousel)[index];
+  if (!image) return;
+  const apply = () => {
+    if (!image.naturalWidth || !image.naturalHeight) return;
+    media.style.aspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`;
+  };
+  if (image.complete) apply();
+  else image.addEventListener('load', apply, { once:true });
+}
+
 function updatePostCarousel(carousel, requestedIndex) {
   const track = $('.post-carousel-track', carousel);
   const total = Number(carousel.dataset.carouselTotal || 1);
   const index = Math.max(0, Math.min(total - 1, requestedIndex));
   carousel.dataset.carouselIndex = String(index);
   $('.post-carousel-counter b', carousel).textContent = String(index + 1);
+  syncPostCarouselFrame(carousel, index);
   track.scrollTo({ left:index * track.clientWidth, behavior:'smooth' });
 }
 
 function bindPostCarousels() {
   $$('[data-post-carousel]').forEach(carousel => {
     const track = $('.post-carousel-track', carousel);
+    syncPostCarouselFrame(carousel, Number(carousel.dataset.carouselIndex || 0));
     let frame = null;
     track.addEventListener('scroll', () => {
       cancelAnimationFrame(frame);
@@ -2782,6 +2821,7 @@ function bindPostCarousels() {
         const index = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
         carousel.dataset.carouselIndex = String(index);
         $('.post-carousel-counter b', carousel).textContent = String(index + 1);
+        syncPostCarouselFrame(carousel, index);
       });
     }, { passive:true });
   });
@@ -2805,7 +2845,8 @@ function renderPosts() {
       : '<div class="post-media-unavailable">Media unavailable</div>';
     const comments = post.post_comments.slice(-3).map(comment => `<p class="comment"><b>${esc(comment.author_profile?.name || 'Crew')}</b> ${esc(comment.body)}</p>`).join('');
     const edit = post.author === state.profile.id ? `<button class="post-edit-icon" type="button" data-edit-post="${post.id}" aria-label="Edit your Stoke post"><svg><use href="#i-edit"/></svg></button>` : '';
-    return `<article class="post-card"><div class="post-media">${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>Surfer</b>${esc(post.surfer_name)}</span>` : ''}${post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : ''}<span class="credit filmer"><b>Filmer</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
+    const ratio = normalizedPostRatio(post.media_ratio);
+    return `<article class="post-card"><div class="post-media ratio-${ratio}">${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>Surfer</b>${esc(post.surfer_name)}</span>` : ''}${post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : ''}<span class="credit filmer"><b>Filmer</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
   }).join('');
   bindPostCarousels();
 }
@@ -2852,12 +2893,18 @@ function matchingPerson(name) {
 
 function resetPostComposer() {
   state.editingPostId = null;
+  if (state.postPreviewUrl) URL.revokeObjectURL(state.postPreviewUrl);
+  state.postPreviewUrl = '';
   $('#postForm').reset();
   $('#postSheetTitle').textContent = 'Share a highlight';
   $('#postSheetDescription').textContent = 'Photo or clip—the whole community sees this, every area.';
   $('#postMediaPicker').classList.remove('hidden');
   $('#mediaFile').required = true;
   $('#fileLabel').textContent = 'Add photos or one clip';
+  $('#postRatioPicker').classList.remove('hidden');
+  $('#postRatioPreview').classList.add('hidden');
+  $('#postRatioPreview').querySelector('img').removeAttribute('src');
+  setPostRatio('original');
   $('#postSubmit').textContent = 'Share to Stoke';
   $('#postDelete').classList.add('hidden');
   $('#postDeleteNote').classList.add('hidden');
@@ -2878,6 +2925,15 @@ function openPostComposer(postId = null) {
     $('#postSpot').value = post.spot?.name || '';
     $('#postLocation').value = post.spot?.general_location || '';
     $('#postCaption').value = post.caption || '';
+    if (post.media_type === 'photo') {
+      $('#postRatioPicker').classList.remove('hidden');
+      const previewImage = $('#postRatioPreview img');
+      previewImage.src = post.media_url || '';
+      $('#postRatioPreview').classList.toggle('hidden', !post.media_url);
+      setPostRatio(post.media_ratio);
+    } else {
+      $('#postRatioPicker').classList.add('hidden');
+    }
     $('#postSubmit').textContent = 'Save changes';
     $('#postDelete').classList.remove('hidden');
     $('#postDeleteNote').classList.remove('hidden');
@@ -2901,6 +2957,7 @@ async function savePost(event) {
       filmer_name: filmerName, filmer_user: filmer?.id || null, surfer_name: surferName || null,
       board: $('#boardName').value.trim() || null, spot_id: spot?.id || null,
       caption: $('#postCaption').value.trim() || null,
+      media_ratio: selectedPostRatio(),
     };
     let postId = editing;
     if (editing) {
@@ -3707,13 +3764,29 @@ $('#profileAvatar').addEventListener('change', event => {
 $('#mediaFile').addEventListener('change', async event => {
   const files = [...event.target.files];
   if (!files.length) return;
+  if (state.postPreviewUrl) URL.revokeObjectURL(state.postPreviewUrl);
+  state.postPreviewUrl = '';
   const totalMb = files.reduce((sum, file) => sum + file.size, 0) / 1048576;
   $('#fileLabel').textContent = files.length === 1
     ? `${files[0].name} · ${totalMb.toFixed(1)} MB`
     : `${files.length} photos selected · ${totalMb.toFixed(1)} MB total`;
-  try { await validatePostSelection(files); }
+  try {
+    await validatePostSelection(files);
+    const photos = files.every(file => file.type.startsWith('image/'));
+    $('#postRatioPicker').classList.toggle('hidden', !photos);
+    if (photos) {
+      state.postPreviewUrl = URL.createObjectURL(files[0]);
+      $('#postRatioPreview img').src = state.postPreviewUrl;
+      $('#postRatioPreview').classList.remove('hidden');
+      applyPostRatioPreview();
+    } else {
+      $('#postRatioPreview').classList.add('hidden');
+      setPostRatio('original');
+    }
+  }
   catch (error) { toast(readableError(error), 5000); event.target.value = ''; $('#fileLabel').textContent = 'Add photos or one clip'; }
 });
+$$('input[name="postRatio"]').forEach(input => input.addEventListener('change', applyPostRatioPreview));
 $('#issueScreenshot').addEventListener('change', event => {
   const file = event.target.files[0];
   if (!file) { $('#issueScreenshotLabel').textContent = 'Choose screenshot'; return; }
