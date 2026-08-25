@@ -1,7 +1,7 @@
 import { json, requireSodiumMember, streamApi } from './_shared.js';
 
 const MAX_CLIP_BYTES = 1024 * 1024 * 1024;
-const MAX_CLIP_SECONDS = 90;
+const MAX_CLIP_SECONDS = 5 * 60;
 
 export async function onRequestPost({ request, env }) {
   try {

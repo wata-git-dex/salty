@@ -58,7 +58,7 @@ On iPhone, Web Push requires iOS 16.4 or later and the installed Home Screen app
 
 ## Stoke media limits
 
-- 90 seconds maximum clip duration.
+- Five minutes maximum clip duration.
 - Five Cloudflare Stream clips per video post, up to 1 GB each.
 - Device-local Stoke drafts preserve selected photos or clips and post details for 30 days without consuming Stream storage until publishing.
 - Ten Supabase-hosted photos per photo post, up to 50 MB each.

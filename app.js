@@ -22,11 +22,11 @@ const CONFIG = Object.freeze({
   maxFeedbackScreenshotBytes: 10 * 1024 * 1024,
   maxNonprofitLogoBytes: 5 * 1024 * 1024,
   maxMarketplaceImageBytes: 8 * 1024 * 1024,
-  maxClipSeconds: 90,
+  maxClipSeconds: 5 * 60,
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.90';
+const APP_VERSION = '1.91';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -3546,7 +3546,7 @@ async function validateMedia(file) {
   if (file.type.startsWith('video/')) {
     if (file.size > CONFIG.maxStreamClipBytes) throw new Error(`This clip is ${(file.size / 1073741824).toFixed(1)} GB. Each Cloudflare Stream clip must be 1 GB or smaller.`);
     const duration = await videoDuration(file);
-    if (duration > CONFIG.maxClipSeconds + 0.5) throw new Error(`This clip is ${Math.ceil(duration)} seconds. Clips are capped at 90 seconds.`);
+    if (duration > CONFIG.maxClipSeconds + 0.5) throw new Error(`This clip is ${Math.ceil(duration)} seconds. Clips are capped at 5 minutes.`);
   } else if (file.size > CONFIG.maxUploadBytes) {
     throw new Error(`This photo is ${(file.size / 1048576).toFixed(0)} MB. Photos must be 50 MB or smaller.`);
   }
@@ -3622,7 +3622,8 @@ async function uploadStreamClip(file, progressCallback = () => {}) {
     body:JSON.stringify({ filename:file.name, size:file.size }),
   });
   let offset = 0;
-  const chunkSize = 4 * 1024 * 1024;
+  // Cloudflare TUS requires non-final chunks to be at least 5 MiB and divisible by 256 KiB.
+  const chunkSize = 5 * 1024 * 1024;
   try {
     while (offset < file.size) {
       const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
@@ -3887,7 +3888,7 @@ function setPostKind(kind = 'photo', options = {}) {
     $('#fileLabel').textContent = postKind === 'photo' ? 'Choose up to 10 photos' : 'Choose up to 5 clips';
     $('#postMediaHelp').textContent = postKind === 'photo'
       ? 'Original shapes are preserved unless you choose a crop below.'
-      : 'MP4, MOV, or WebM · 90 seconds and 1 GB max per clip.';
+      : 'MP4, MOV, or WebM · 5 minutes and 1 GB max per clip.';
   }
   if (options.clearFile) {
     mediaInput.value = '';

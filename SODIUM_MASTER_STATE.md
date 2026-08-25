@@ -6,8 +6,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.90.
-- This release hardens mobile Cloudflare Stream uploads with smaller chunks, automatic retry/resume, and clearer errors. Members can now give posts **Stoke** with a positive-only wave reaction alongside comments.
+- Current release: v1.91.
+- This release allows finished edits up to five minutes and corrects mobile TUS chunking to Cloudflare’s current resumable-upload requirements. Members can give posts **Stoke** with a positive-only wave reaction alongside comments.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -83,7 +83,7 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 ## Stoke and media
 
 - Photo posts support up to 10 images in their original orientation or an optional fixed crop.
-- Clip posts support up to five Cloudflare Stream videos, 90 seconds and 1 GB maximum per clip.
+- Clip posts support up to five Cloudflare Stream videos, five minutes and 1 GB maximum per clip.
 - Drafts remain on the device for 30 days.
 - Linked member tags and custom visual tags are supported.
 - Photos and clips can be edited or deleted by their author.
@@ -126,3 +126,5 @@ Version 1.88 repairs profile activity totals, combines surf and film locations, 
 Version 1.89 adds the optional Google Drive folder picker and view-time clip counting. It does not add a paid background job, change existing clip-delivery records, or require members to connect Google.
 
 Version 1.90 makes phone clip uploads resilient to brief network interruptions and replaces the generic heart/like presentation with the positive-only action of giving a post Stoke. Existing reaction data is preserved.
+
+Version 1.91 raises the per-clip duration cap to five minutes while retaining the 1 GB file cap and five-clip carousel limit. It also uses Cloudflare’s required 5 MiB minimum TUS chunk size for large resumable uploads.
