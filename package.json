@@ -1,0 +1,13 @@
+{
+  "name": "sodium-community-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check app.js && node --test functions/test/*.test.mjs",
+    "cf-types": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "wrangler": "^4.125.0"
+  }
+}

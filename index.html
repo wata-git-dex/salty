@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=79-stoke-media-choice">
+  <link rel="stylesheet" href="./styles.css?v=80-stream-carousels">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -67,7 +67,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.79</small>
+    <small class="boot-credit">Saltyview Productions · v1.80</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -338,7 +338,7 @@
           <legend>What are you sharing?</legend>
           <div>
             <label><input type="radio" name="postKind" value="photo" checked><span><svg><use href="#i-photo"/></svg><b>Photos</b><small>up to 10</small></span></label>
-            <label><input type="radio" name="postKind" value="clip"><span><svg><use href="#i-camera"/></svg><b>Clip</b><small>one video · 90s max</small></span></label>
+            <label><input type="radio" name="postKind" value="clip"><span><svg><use href="#i-camera"/></svg><b>Clips</b><small>up to 5 · 90s each</small></span></label>
           </div>
         </fieldset>
         <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple required><svg id="postMediaIcon"><use href="#i-photo"/></svg><strong id="fileLabel">Choose up to 10 photos</strong><small id="postMediaHelp">Original shapes are preserved unless you choose a crop below.</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
@@ -362,7 +362,7 @@
         <button id="postSubmit" class="primary" type="submit">Share to Stoke</button>
         <button id="postDelete" class="danger-button hidden" type="button" data-action="delete-post"><svg><use href="#i-close"/></svg>Delete Stoke post</button>
         <p id="postDeleteNote" class="session-cancel-note hidden">Deletes the post and its photo or clip for everyone. Posting points already earned stay.</p>
-        <p class="upgrade-note">Large-upload runway: this uploader is isolated for a future Supabase Pro + resumable TUS upgrade. <!-- TODO(video): switch uploadMedia() to TUS and raise MAX_UPLOAD_BYTES after upgrading Supabase. --></p>
+        <p class="upgrade-note">Clips upload securely through Cloudflare Stream. Large uploads resume in chunks, then process automatically for smooth playback.</p>
       </form>
     </section>
 
@@ -471,9 +471,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.79</span>
-    <h3>Photo and clip posts are clearer.</h3>
-    <ul><li>Choose Photos or Clip before adding media.</li><li>Photo posts credit the photographer; clips credit the filmer.</li><li>Each post type now shows only the options that apply.</li></ul>
+    <span>NEW IN V1.80</span>
+    <h3>Up to five clips in one Stoke post.</h3>
+    <ul><li>Large clips upload securely through Cloudflare Stream.</li><li>Interrupted uploads resume in small chunks.</li><li>Cloudflare prepares smooth playback for every phone and connection.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -487,6 +487,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=79-stoke-media-choice" defer></script>
+  <script src="./app.js?v=80-stream-carousels" defer></script>
 </body>
 </html>

@@ -14,6 +14,8 @@ const CONFIG = Object.freeze({
   feedbackBucket: 'salty-feedback',
   marketplaceBucket: 'sodium-marketplace',
   maxUploadBytes: 50 * 1024 * 1024,
+  maxStreamClipBytes: 1024 * 1024 * 1024,
+  maxStreamClips: 5,
   maxAvatarBytes: 8 * 1024 * 1024,
   maxChatPhotoBytes: 10 * 1024 * 1024,
   maxFeedbackScreenshotBytes: 10 * 1024 * 1024,
@@ -22,7 +24,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.79';
+const APP_VERSION = '1.80';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -46,8 +48,6 @@ const NOTIFICATION_DEFAULTS = Object.freeze({
   new_members: true,
 });
 
-// Upgrade runway: after moving Supabase to Pro, raise maxUploadBytes and replace
-// uploadMedia() with a TUS resumable implementation. Callers do not need to change.
 const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
 });
@@ -2755,11 +2755,15 @@ async function cancelSession() {
 
 async function loadPosts() {
   const result = await db.from('posts')
-    .select('*,spot:spots(*),author_profile:profiles!posts_author_fkey(id,name),post_likes(user_id),post_comments(id,body,created_at,author_profile:profiles!post_comments_author_fkey(id,name))')
+    .select('*,spot:spots(*),author_profile:profiles!posts_author_fkey(id,name),stream_media:post_stream_media(*),post_likes(user_id),post_comments(id,body,created_at,author_profile:profiles!post_comments_author_fkey(id,name))')
     .order('created_at', { ascending: false }).limit(50);
   if (result.error) { toast(readableError(result.error)); return; }
   const posts = result.data || [];
   state.posts = await Promise.all(posts.map(async post => {
+    if (post.media_type === 'clip' && post.stream_media?.length) {
+      const streamMedia = await Promise.all(post.stream_media.sort((a, b) => a.position - b.position).map(resolveStreamMedia));
+      return { ...post, stream_media:streamMedia, media_url:null, media_urls:[] };
+    }
     const paths = post.media_type === 'photo' && Array.isArray(post.media_paths) && post.media_paths.length
       ? post.media_paths
       : (post.media_path ? [post.media_path] : []);
@@ -2775,6 +2779,60 @@ async function loadPosts() {
     return { ...post, media_url:mediaUrls[0] || null, media_urls:mediaUrls };
   }));
   renderPosts();
+}
+
+async function streamRequest(path, options = {}) {
+  const session = state.session || (await db.auth.getSession()).data.session;
+  if (!session?.access_token) throw new Error('Sign in again before uploading clips.');
+  const response = await fetch(`/api/stream${path}`, {
+    ...options,
+    headers: {
+      Authorization:`Bearer ${session.access_token}`,
+      ...(options.headers || {}),
+    },
+  });
+  const payload = response.headers.get('content-type')?.includes('application/json') ? await response.json() : {};
+  if (!response.ok) throw new Error(payload.error || 'Cloudflare Stream is unavailable.');
+  return payload;
+}
+
+async function resolveStreamMedia(item) {
+  if (item.status === 'ready' && item.preview_url) {
+    return { ...item, iframe_url:item.preview_url.replace(/\/watch(?:\?.*)?$/, '/iframe') };
+  }
+  try {
+    const status = await streamRequest(`/status/${encodeURIComponent(item.stream_uid)}`);
+    const next = {
+      ...item,
+      status:status.ready ? 'ready' : (status.state === 'error' ? 'error' : 'processing'),
+      duration_seconds:status.duration,
+      input_width:status.width,
+      input_height:status.height,
+      preview_url:status.previewUrl || null,
+      thumbnail_url:status.thumbnailUrl || null,
+      error_message:status.error || null,
+      iframe_url:status.iframeUrl || null,
+      progress:status.progress || 0,
+    };
+    if (item.creator === state.profile?.id && (
+      next.status !== item.status || next.preview_url !== item.preview_url || next.thumbnail_url !== item.thumbnail_url
+    )) {
+      const updated = await db.from('post_stream_media').update({
+        status:next.status,
+        duration_seconds:next.duration_seconds,
+        input_width:next.input_width,
+        input_height:next.input_height,
+        preview_url:next.preview_url,
+        thumbnail_url:next.thumbnail_url,
+        error_message:next.error_message,
+        updated_at:new Date().toISOString(),
+      }).eq('id', item.id).eq('creator', state.profile.id);
+      if (updated.error) console.warn('Stream status cache failed:', updated.error.message);
+    }
+    return next;
+  } catch (error) {
+    return { ...item, status:item.status || 'processing', stream_error:readableError(error) };
+  }
 }
 
 function normalizedPostRatio(value) {
@@ -2842,6 +2900,22 @@ function bindPostCarousels() {
   });
 }
 
+function streamSlideMarkup(item, index) {
+  if (item.status === 'ready' && item.iframe_url) {
+    return `<div class="post-stream-slide"><iframe src="${esc(item.iframe_url)}" title="Sodium clip ${index + 1}" loading="${index ? 'lazy' : 'eager'}" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`;
+  }
+  if (item.status === 'error') {
+    return `<div class="post-stream-slide stream-state error"><svg><use href="#i-close"/></svg><b>Clip could not process</b><small>${esc(item.error_message || 'Try uploading this clip again.')}</small></div>`;
+  }
+  return `<div class="post-stream-slide stream-state"><span class="stream-spinner"></span><b>Clip processing</b><small>${item.progress ? `${Math.round(item.progress)}% encoded` : 'Cloudflare is preparing smooth playback.'}</small></div>`;
+}
+
+function streamCarouselMarkup(items) {
+  const slides = items.map(streamSlideMarkup).join('');
+  if (items.length === 1) return slides;
+  return `<div class="post-carousel post-stream-carousel" data-post-carousel data-carousel-index="0" data-carousel-total="${items.length}"><div class="post-carousel-track">${slides}</div><button class="post-carousel-arrow previous" type="button" data-carousel-direction="-1" aria-label="Previous clip"><svg><use href="#i-back"/></svg></button><button class="post-carousel-arrow next" type="button" data-carousel-direction="1" aria-label="Next clip"><svg><use href="#i-chevron"/></svg></button><span class="post-carousel-counter"><b>1</b>/${items.length}</span></div>`;
+}
+
 function renderPosts() {
   const feed = $('#postsFeed');
   if (!state.posts.length) {
@@ -2851,7 +2925,9 @@ function renderPosts() {
   feed.innerHTML = state.posts.map(post => {
     const liked = post.post_likes.some(like => like.user_id === state.profile.id);
     const photoUrls = post.media_urls?.length ? post.media_urls : (post.media_url ? [post.media_url] : []);
-    const media = post.media_url
+    const media = post.media_type === 'clip' && post.stream_media?.length
+      ? streamCarouselMarkup(post.stream_media)
+      : post.media_url
       ? (post.media_type === 'clip'
         ? `<video src="${esc(post.media_url)}" controls preload="metadata" playsinline></video>`
         : photoUrls.length > 1
@@ -2861,10 +2937,15 @@ function renderPosts() {
     const comments = post.post_comments.slice(-3).map(comment => `<p class="comment"><b>${esc(comment.author_profile?.name || 'Crew')}</b> ${esc(comment.body)}</p>`).join('');
     const edit = post.author === state.profile.id ? `<button class="post-edit-icon" type="button" data-edit-post="${post.id}" aria-label="Edit your Stoke post"><svg><use href="#i-edit"/></svg></button>` : '';
     const ratio = normalizedPostRatio(post.media_ratio);
+    const firstStream = post.stream_media?.[0];
+    const streamRatio = ratio === 'original' && firstStream
+      ? (firstStream.input_width && firstStream.input_height ? `${firstStream.input_width}/${firstStream.input_height}` : '16/9')
+      : '';
+    const mediaStyle = streamRatio ? ` style="aspect-ratio:${esc(streamRatio)}"` : '';
     const creatorRole = post.media_type === 'photo' ? 'Photographer' : 'Filmer';
     const subjectRole = post.media_type === 'photo' ? 'People' : 'Surfer';
     const boardCredit = post.media_type === 'clip' && post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : '';
-    return `<article class="post-card"><div class="post-media ratio-${ratio}">${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>${subjectRole}</b>${esc(post.surfer_name)}</span>` : ''}${boardCredit}<span class="credit filmer"><b>${creatorRole}</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
+    return `<article class="post-card"><div class="post-media ratio-${ratio}"${mediaStyle}>${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>${subjectRole}</b>${esc(post.surfer_name)}</span>` : ''}${boardCredit}<span class="credit filmer"><b>${creatorRole}</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
   }).join('');
   bindPostCarousels();
 }
@@ -2882,30 +2963,61 @@ async function videoDuration(file) {
 
 async function validateMedia(file) {
   if (!file) throw new Error('Choose a photo or clip.');
-  if (file.size > CONFIG.maxUploadBytes) throw new Error(`This file is ${(file.size / 1048576).toFixed(0)} MB. Free-tier clips must be 50 MB or smaller.`);
   if (file.type.startsWith('video/')) {
+    if (file.size > CONFIG.maxStreamClipBytes) throw new Error(`This clip is ${(file.size / 1073741824).toFixed(1)} GB. Each Cloudflare Stream clip must be 1 GB or smaller.`);
     const duration = await videoDuration(file);
     if (duration > CONFIG.maxClipSeconds + 0.5) throw new Error(`This clip is ${Math.ceil(duration)} seconds. Clips are capped at 90 seconds.`);
+  } else if (file.size > CONFIG.maxUploadBytes) {
+    throw new Error(`This photo is ${(file.size / 1048576).toFixed(0)} MB. Photos must be 50 MB or smaller.`);
   }
 }
 
 async function validatePostSelection(files) {
-  if (!files.length) throw new Error('Choose photos or one clip.');
+  if (!files.length) throw new Error('Choose photos or clips.');
   const kind = selectedPostKind();
   if (kind === 'photo' && files.some(file => !file.type.startsWith('image/'))) throw new Error('Photos is selected. Choose image files, or switch to Clip.');
-  if (kind === 'clip' && (files.length !== 1 || !files[0].type.startsWith('video/'))) throw new Error('Clip is selected. Choose one video file.');
-  if (files.length > 10) throw new Error('A Stoke carousel can have up to 10 photos.');
-  const videos = files.filter(file => file.type.startsWith('video/'));
-  if (videos.length && files.length > 1) throw new Error('Choose up to 10 photos or one clip—not both together.');
+  if (kind === 'clip' && files.some(file => !file.type.startsWith('video/'))) throw new Error('Clips is selected. Choose video files only.');
+  if (kind === 'clip' && files.length > CONFIG.maxStreamClips) throw new Error(`A Stoke video carousel can have up to ${CONFIG.maxStreamClips} clips.`);
+  if (kind === 'photo' && files.length > 10) throw new Error('A Stoke carousel can have up to 10 photos.');
   await Promise.all(files.map(validateMedia));
 }
 
 async function uploadMedia(file, path) {
-  // Free-tier adapter. TODO(video): replace only this function with tus-js-client
-  // against the direct storage hostname when Supabase Pro is enabled.
   const result = await db.storage.from(CONFIG.mediaBucket).upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
   if (result.error) throw result.error;
   return path;
+}
+
+async function uploadStreamClip(file, progressCallback = () => {}) {
+  const created = await streamRequest('/upload', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body:JSON.stringify({ filename:file.name, size:file.size }),
+  });
+  let offset = 0;
+  const chunkSize = 8 * 1024 * 1024;
+  try {
+    while (offset < file.size) {
+      const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+      const response = await fetch(created.uploadUrl, {
+        method:'PATCH',
+        headers:{
+          'Tus-Resumable':'1.0.0',
+          'Upload-Offset':String(offset),
+          'Content-Type':'application/offset+octet-stream',
+        },
+        body:chunk,
+      });
+      if (!response.ok) throw new Error(`Clip upload paused with status ${response.status}.`);
+      offset = Number(response.headers.get('Upload-Offset')) || offset + chunk.size;
+      progressCallback(offset / file.size);
+    }
+    return { uid:created.uid, duration:await videoDuration(file) };
+  } catch (error) {
+    try { await streamRequest(`/video/${encodeURIComponent(created.uid)}`, { method:'DELETE' }); }
+    catch (_cleanupError) { /* Cloudflare will retain an incomplete upload until expiry. */ }
+    throw error;
+  }
 }
 
 function matchingPerson(name) {
@@ -2928,7 +3040,7 @@ function setPostKind(kind = 'photo', options = {}) {
   mediaInput.accept = postKind === 'photo'
     ? 'image/jpeg,image/png,image/webp,image/gif'
     : 'video/mp4,video/quicktime,video/webm';
-  mediaInput.multiple = postKind === 'photo';
+  mediaInput.multiple = true;
   $('#postMediaIcon use').setAttribute('href', postKind === 'photo' ? '#i-photo' : '#i-camera');
   $('#postCreatorLabel').textContent = postKind === 'photo' ? 'Photographer' : 'Filmer';
   $('#filmerName').placeholder = postKind === 'photo' ? "Photographer's name" : "Filmer's name";
@@ -2940,14 +3052,14 @@ function setPostKind(kind = 'photo', options = {}) {
   $('#postRatioPicker').classList.remove('hidden');
   $('#postRatioLegendLabel').textContent = postKind === 'photo' ? 'Photo shape' : 'Clip shape';
   if (!editing) {
-    $('#postSheetTitle').textContent = postKind === 'photo' ? 'Share photos' : 'Share a clip';
+    $('#postSheetTitle').textContent = postKind === 'photo' ? 'Share photos' : 'Share clips';
     $('#postSheetDescription').textContent = postKind === 'photo'
       ? 'Share up to 10 photos with the whole Sodium community.'
-      : 'Share one clip with the whole Sodium community.';
-    $('#fileLabel').textContent = postKind === 'photo' ? 'Choose up to 10 photos' : 'Choose one clip';
+      : 'Share up to 5 clips with the whole Sodium community.';
+    $('#fileLabel').textContent = postKind === 'photo' ? 'Choose up to 10 photos' : 'Choose up to 5 clips';
     $('#postMediaHelp').textContent = postKind === 'photo'
       ? 'Original shapes are preserved unless you choose a crop below.'
-      : 'MP4, MOV, or WebM · up to 90 seconds and 50 MB.';
+      : 'MP4, MOV, or WebM · 90 seconds and 1 GB max per clip.';
   }
   if (options.clearFile) {
     mediaInput.value = '';
@@ -3020,6 +3132,9 @@ async function savePost(event) {
   event.preventDefault();
   const submit = $('#postSubmit'); submit.disabled = true;
   const progress = $('#uploadProgress');
+  let streamUploads = [];
+  let streamMediaLinked = false;
+  let postId = state.editingPostId;
   try {
     const editing = state.editingPostId;
     const spotName = $('#postSpot').value.trim();
@@ -3034,7 +3149,7 @@ async function savePost(event) {
       caption: $('#postCaption').value.trim() || null,
       media_ratio: selectedPostRatio(),
     };
-    let postId = editing;
+    postId = editing;
     if (editing) {
       const updated = await db.from('posts').update(details).eq('id', editing).eq('author', state.profile.id).select('id').single();
       if (updated.error) throw updated.error;
@@ -3043,23 +3158,45 @@ async function savePost(event) {
     } else {
       const files = [...$('#mediaFile').files];
       await validatePostSelection(files);
-      const file = files[0];
       const mediaType = selectedPostKind();
       const paths = [];
       progress.value = 8; progress.classList.remove('hidden');
-      for (let index = 0; index < files.length; index += 1) {
-        const selected = files[index];
-        const extension = selected.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '').toLowerCase() || (mediaType === 'clip' ? 'mp4' : 'jpg');
-        const path = `${state.profile.id}/${crypto.randomUUID()}.${extension}`;
-        await uploadMedia(selected, path);
-        paths.push(path);
-        progress.value = 8 + Math.round(((index + 1) / files.length) * 72);
+      if (mediaType === 'clip') {
+        for (let index = 0; index < files.length; index += 1) {
+          const uploaded = await uploadStreamClip(files[index], fraction => {
+            progress.value = 8 + Math.round(((index + fraction) / files.length) * 72);
+          });
+          streamUploads.push(uploaded);
+        }
+      } else {
+        for (let index = 0; index < files.length; index += 1) {
+          const selected = files[index];
+          const extension = selected.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg';
+          const path = `${state.profile.id}/${crypto.randomUUID()}.${extension}`;
+          await uploadMedia(selected, path);
+          paths.push(path);
+          progress.value = 8 + Math.round(((index + 1) / files.length) * 72);
+        }
       }
-      const mediaUrl = paths[0];
+      const mediaUrl = mediaType === 'clip' ? `cloudflare-stream:${streamUploads[0].uid}` : paths[0];
+      const mediaPath = mediaType === 'clip' ? `${state.profile.id}/stream/${streamUploads[0].uid}` : paths[0];
       progress.value = 82;
-      const created = await db.from('posts').insert({ author: state.profile.id, media_url: mediaUrl, media_path:mediaUrl, media_paths:paths, media_type:mediaType, ...details }).select('id').single();
+      const created = await db.from('posts').insert({ author: state.profile.id, media_url:mediaUrl, media_path:mediaPath, media_paths:paths, media_type:mediaType, ...details }).select('id').single();
       if (created.error) throw created.error;
       postId = created.data.id;
+      if (mediaType === 'clip') {
+        const rows = streamUploads.map((item, position) => ({
+          post_id:postId,
+          creator:state.profile.id,
+          position,
+          stream_uid:item.uid,
+          status:'processing',
+          duration_seconds:item.duration,
+        }));
+        const mediaResult = await db.from('post_stream_media').insert(rows);
+        if (mediaResult.error) throw mediaResult.error;
+        streamMediaLinked = true;
+      }
     }
     const tags = [];
     if (filmer && filmer.id !== state.profile.id) tags.push({ post_id: postId, user_id: filmer.id, role: 'filmer' });
@@ -3070,7 +3207,13 @@ async function savePost(event) {
     }
     progress.value = 100; resetPostComposer(); closeSheet();
     await loadPosts(); await renderProfile(); toast(editing ? 'Stoke post updated.' : 'Shared with the whole community.');
-  } catch (error) { toast(readableError(error), 5000); }
+  } catch (error) {
+    if (streamUploads.length && !streamMediaLinked) {
+      await Promise.allSettled(streamUploads.map(item => streamRequest(`/video/${encodeURIComponent(item.uid)}`, { method:'DELETE' })));
+      if (postId && !state.editingPostId) await db.from('posts').delete().eq('id', postId).eq('author', state.profile.id);
+    }
+    toast(readableError(error), 7000);
+  }
   finally { submit.disabled = false; progress.classList.add('hidden'); progress.value = 0; }
 }
 
@@ -3081,9 +3224,15 @@ async function deletePost() {
   try {
     const removed = await db.from('posts').delete().eq('id', post.id).eq('author', state.profile.id);
     if (removed.error) throw removed.error;
-    const paths = Array.isArray(post.media_paths) && post.media_paths.length ? post.media_paths : [post.media_path];
-    const media = await db.storage.from(CONFIG.mediaBucket).remove([...new Set(paths.filter(Boolean))]);
-    if (media.error) console.warn('Stoke media cleanup failed:', media.error.message);
+    if (post.stream_media?.length) {
+      const cleanup = await Promise.allSettled(post.stream_media.map(item => streamRequest(`/video/${encodeURIComponent(item.stream_uid)}`, { method:'DELETE' })));
+      cleanup.filter(result => result.status === 'rejected').forEach(result => console.warn('Stream cleanup failed:', result.reason));
+    }
+    if (!post.stream_media?.length) {
+      const paths = Array.isArray(post.media_paths) && post.media_paths.length ? post.media_paths : [post.media_path];
+      const media = await db.storage.from(CONFIG.mediaBucket).remove([...new Set(paths.filter(Boolean))]);
+      if (media.error) console.warn('Stoke media cleanup failed:', media.error.message);
+    }
     resetPostComposer(); closeSheet(); await loadPosts(); await renderProfile(); toast('Stoke post deleted.');
   } catch (error) { toast(readableError(error), 5000); }
   finally { button.disabled = false; }
@@ -3848,7 +3997,7 @@ $('#mediaFile').addEventListener('change', async event => {
   const totalMb = files.reduce((sum, file) => sum + file.size, 0) / 1048576;
   $('#fileLabel').textContent = files.length === 1
     ? `${files[0].name} · ${totalMb.toFixed(1)} MB`
-    : `${files.length} photos selected · ${totalMb.toFixed(1)} MB total`;
+    : `${files.length} ${selectedPostKind() === 'clip' ? 'clips' : 'photos'} selected · ${totalMb.toFixed(1)} MB total`;
   try {
     await validatePostSelection(files);
     const photos = files.every(file => file.type.startsWith('image/'));
@@ -3868,7 +4017,7 @@ $('#mediaFile').addEventListener('change', async event => {
   catch (error) {
     toast(readableError(error), 5000);
     event.target.value = '';
-    $('#fileLabel').textContent = selectedPostKind() === 'photo' ? 'Choose up to 10 photos' : 'Choose one clip';
+    $('#fileLabel').textContent = selectedPostKind() === 'photo' ? 'Choose up to 10 photos' : 'Choose up to 5 clips';
   }
 });
 $$('input[name="postRatio"]').forEach(input => input.addEventListener('change', applyPostRatioPreview));

@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "salty-community-app",
+  "compatibility_date": "2026-08-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "pages_build_output_dir": ".",
+  "vars": {
+    "CF_ACCOUNT_ID": "bd47c21b1d04bbd68d667e2f1760d95f"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

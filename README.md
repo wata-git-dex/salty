@@ -48,12 +48,13 @@ Before release v1.61, run `supabase/push-test-notification-v1-migration.sql` onc
 
 On iPhone, Web Push requires iOS 16.4 or later and the installed Home Screen app. Each member opens **Settings → Enable notifications on this device**, accepts Apple's prompt, and can then enable or disable new surfs, Stoke, DMs, events, surf updates, and Community Chat individually. Community Chat is off by default.
 
-## Free-tier media limits
+## Stoke media limits
 
 - 90 seconds maximum clip duration.
-- 50 MB maximum file size.
-- `CONFIG.maxUploadBytes` in `app.js` and the `salty-media` bucket limit in `supabase/schema.sql` are the two application limits.
-- Upgrade runway: move `uploadMedia()` to TUS resumable uploads and raise both limits after enabling Supabase Pro.
+- Five Cloudflare Stream clips per video post, up to 1 GB each.
+- Ten Supabase-hosted photos per photo post, up to 50 MB each.
+- Video uploads use direct, resumable TUS chunks; the Cloudflare API token remains a Pages secret and is never sent to the browser.
+- Before enabling Stream posts, run `supabase/stoke-cloudflare-stream-v1-migration.sql`, enable Cloudflare Stream billing, and set the Pages secret `CF_STREAM_API_TOKEN`.
 
 ## Phases
 
