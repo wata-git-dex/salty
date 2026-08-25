@@ -77,6 +77,7 @@ create table public.posts (
   author uuid references public.profiles(id) on delete cascade not null,
   media_url text not null,
   media_path text not null,
+  media_paths text[] not null default '{}'::text[] check (cardinality(media_paths) between 0 and 10),
   media_type text not null check (media_type in ('clip','photo')),
   filmer_name text not null check (char_length(trim(filmer_name)) > 0),
   filmer_user uuid references public.profiles(id),

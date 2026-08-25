@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.63';
+const APP_VERSION = '1.64';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
@@ -2654,14 +2654,46 @@ async function loadPosts() {
     .order('created_at', { ascending: false }).limit(50);
   if (result.error) { toast(readableError(result.error)); return; }
   const posts = result.data || [];
-  const signedEntries = await Promise.all(posts.map(async post => {
-    if (!post.media_path) return [post.id, safeExternalUrl(post.media_url)];
-    const signed = await db.storage.from(CONFIG.mediaBucket).createSignedUrl(post.media_path, 3600);
-    return [post.id, signed.error ? null : signed.data.signedUrl];
+  state.posts = await Promise.all(posts.map(async post => {
+    const paths = post.media_type === 'photo' && Array.isArray(post.media_paths) && post.media_paths.length
+      ? post.media_paths
+      : (post.media_path ? [post.media_path] : []);
+    if (!paths.length) {
+      const externalUrl = safeExternalUrl(post.media_url);
+      return { ...post, media_url:externalUrl, media_urls:externalUrl ? [externalUrl] : [] };
+    }
+    const signed = await Promise.all(paths.map(async path => {
+      const result = await db.storage.from(CONFIG.mediaBucket).createSignedUrl(path, 3600);
+      return result.error ? null : result.data.signedUrl;
+    }));
+    const mediaUrls = signed.filter(Boolean);
+    return { ...post, media_url:mediaUrls[0] || null, media_urls:mediaUrls };
   }));
-  const signedUrls = Object.fromEntries(signedEntries);
-  state.posts = posts.map(post => ({ ...post, media_url:signedUrls[post.id] }));
   renderPosts();
+}
+
+function updatePostCarousel(carousel, requestedIndex) {
+  const track = $('.post-carousel-track', carousel);
+  const total = Number(carousel.dataset.carouselTotal || 1);
+  const index = Math.max(0, Math.min(total - 1, requestedIndex));
+  carousel.dataset.carouselIndex = String(index);
+  $('.post-carousel-counter b', carousel).textContent = String(index + 1);
+  track.scrollTo({ left:index * track.clientWidth, behavior:'smooth' });
+}
+
+function bindPostCarousels() {
+  $$('[data-post-carousel]').forEach(carousel => {
+    const track = $('.post-carousel-track', carousel);
+    let frame = null;
+    track.addEventListener('scroll', () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const index = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+        carousel.dataset.carouselIndex = String(index);
+        $('.post-carousel-counter b', carousel).textContent = String(index + 1);
+      });
+    }, { passive:true });
+  });
 }
 
 function renderPosts() {
@@ -2672,13 +2704,19 @@ function renderPosts() {
   }
   feed.innerHTML = state.posts.map(post => {
     const liked = post.post_likes.some(like => like.user_id === state.profile.id);
+    const photoUrls = post.media_urls?.length ? post.media_urls : (post.media_url ? [post.media_url] : []);
     const media = post.media_url
-      ? (post.media_type === 'clip' ? `<video src="${esc(post.media_url)}" controls preload="metadata" playsinline></video>` : `<img src="${esc(post.media_url)}" alt="${esc(post.caption || 'Surf photo')}">`)
+      ? (post.media_type === 'clip'
+        ? `<video src="${esc(post.media_url)}" controls preload="metadata" playsinline></video>`
+        : photoUrls.length > 1
+          ? `<div class="post-carousel" data-post-carousel data-carousel-index="0" data-carousel-total="${photoUrls.length}"><div class="post-carousel-track">${photoUrls.map((url, index) => `<img src="${esc(url)}" alt="${esc(post.caption || `Surf photo ${index + 1}`)}" loading="${index ? 'lazy' : 'eager'}">`).join('')}</div><button class="post-carousel-arrow previous" type="button" data-carousel-direction="-1" aria-label="Previous photo"><svg><use href="#i-back"/></svg></button><button class="post-carousel-arrow next" type="button" data-carousel-direction="1" aria-label="Next photo"><svg><use href="#i-chevron"/></svg></button><span class="post-carousel-counter"><b>1</b>/${photoUrls.length}</span></div>`
+          : `<img src="${esc(post.media_url)}" alt="${esc(post.caption || 'Surf photo')}">`)
       : '<div class="post-media-unavailable">Media unavailable</div>';
     const comments = post.post_comments.slice(-3).map(comment => `<p class="comment"><b>${esc(comment.author_profile?.name || 'Crew')}</b> ${esc(comment.body)}</p>`).join('');
     const edit = post.author === state.profile.id ? `<button class="post-edit-icon" type="button" data-edit-post="${post.id}" aria-label="Edit your Stoke post"><svg><use href="#i-edit"/></svg></button>` : '';
     return `<article class="post-card"><div class="post-media">${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>Surfer</b>${esc(post.surfer_name)}</span>` : ''}${post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : ''}<span class="credit filmer"><b>Filmer</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
   }).join('');
+  bindPostCarousels();
 }
 
 async function videoDuration(file) {
@@ -2701,6 +2739,14 @@ async function validateMedia(file) {
   }
 }
 
+async function validatePostSelection(files) {
+  if (!files.length) throw new Error('Choose photos or one clip.');
+  if (files.length > 10) throw new Error('A Stoke carousel can have up to 10 photos.');
+  const videos = files.filter(file => file.type.startsWith('video/'));
+  if (videos.length && files.length > 1) throw new Error('Choose up to 10 photos or one clip—not both together.');
+  await Promise.all(files.map(validateMedia));
+}
+
 async function uploadMedia(file, path) {
   // Free-tier adapter. TODO(video): replace only this function with tus-js-client
   // against the direct storage hostname when Supabase Pro is enabled.
@@ -2720,7 +2766,7 @@ function resetPostComposer() {
   $('#postSheetDescription').textContent = 'Photo or clip—the whole community sees this, every area.';
   $('#postMediaPicker').classList.remove('hidden');
   $('#mediaFile').required = true;
-  $('#fileLabel').textContent = 'Add photo or clip';
+  $('#fileLabel').textContent = 'Add photos or one clip';
   $('#postSubmit').textContent = 'Share to Stoke';
   $('#postDelete').classList.add('hidden');
   $('#postDeleteNote').classList.add('hidden');
@@ -2772,15 +2818,23 @@ async function savePost(event) {
       const removedTags = await db.from('post_tags').delete().eq('post_id', editing);
       if (removedTags.error) throw removedTags.error;
     } else {
-      const file = $('#mediaFile').files[0];
-      await validateMedia(file);
+      const files = [...$('#mediaFile').files];
+      await validatePostSelection(files);
+      const file = files[0];
       const mediaType = file.type.startsWith('video/') ? 'clip' : 'photo';
-      const extension = file.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '').toLowerCase() || (mediaType === 'clip' ? 'mp4' : 'jpg');
-      const path = `${state.profile.id}/${crypto.randomUUID()}.${extension}`;
-      progress.value = 18; progress.classList.remove('hidden');
-      const mediaUrl = await uploadMedia(file, path);
+      const paths = [];
+      progress.value = 8; progress.classList.remove('hidden');
+      for (let index = 0; index < files.length; index += 1) {
+        const selected = files[index];
+        const extension = selected.name.split('.').pop()?.replace(/[^a-z0-9]/gi, '').toLowerCase() || (mediaType === 'clip' ? 'mp4' : 'jpg');
+        const path = `${state.profile.id}/${crypto.randomUUID()}.${extension}`;
+        await uploadMedia(selected, path);
+        paths.push(path);
+        progress.value = 8 + Math.round(((index + 1) / files.length) * 72);
+      }
+      const mediaUrl = paths[0];
       progress.value = 82;
-      const created = await db.from('posts').insert({ author: state.profile.id, media_url: mediaUrl, media_path: path, media_type: mediaType, ...details }).select('id').single();
+      const created = await db.from('posts').insert({ author: state.profile.id, media_url: mediaUrl, media_path:mediaUrl, media_paths:paths, media_type:mediaType, ...details }).select('id').single();
       if (created.error) throw created.error;
       postId = created.data.id;
     }
@@ -2804,7 +2858,8 @@ async function deletePost() {
   try {
     const removed = await db.from('posts').delete().eq('id', post.id).eq('author', state.profile.id);
     if (removed.error) throw removed.error;
-    const media = await db.storage.from(CONFIG.mediaBucket).remove([post.media_path]);
+    const paths = Array.isArray(post.media_paths) && post.media_paths.length ? post.media_paths : [post.media_path];
+    const media = await db.storage.from(CONFIG.mediaBucket).remove([...new Set(paths.filter(Boolean))]);
     if (media.error) console.warn('Stoke media cleanup failed:', media.error.message);
     resetPostComposer(); closeSheet(); await loadPosts(); await renderProfile(); toast('Stoke post deleted.');
   } catch (error) { toast(readableError(error), 5000); }
@@ -3199,6 +3254,7 @@ async function shareInvite({ includeGuide = false, includeOverview = false, incl
 
 document.addEventListener('click', async event => {
   const actionNode = event.target.closest('[data-action]');
+  const carouselDirectionNode = event.target.closest('[data-carousel-direction]');
   const viewNode = event.target.closest('[data-view]');
   const regionNode = event.target.closest('[data-region]');
   const rsvpNode = event.target.closest('[data-rsvp]');
@@ -3237,6 +3293,13 @@ document.addEventListener('click', async event => {
   const inboxTabNode = event.target.closest('[data-inbox-tab]');
   const editClipDeliveryNode = event.target.closest('[data-edit-clip-delivery]');
   const sessionClipsNode = event.target.closest('[data-session-clips]');
+  if (carouselDirectionNode) {
+    const carousel = carouselDirectionNode.closest('[data-post-carousel]');
+    const direction = Number(carouselDirectionNode.dataset.carouselDirection || 0);
+    const current = Number(carousel?.dataset.carouselIndex || 0);
+    if (carousel) updatePostCarousel(carousel, current + direction);
+    return;
+  }
   if (inboxTabNode) {
     state.inboxTab = inboxTabNode.dataset.inboxTab;
     renderInboxTabs();
@@ -3481,11 +3544,14 @@ $('#profileAvatar').addEventListener('change', event => {
   $('#avatarPreview').innerHTML = `<img src="${esc(previewUrl)}" alt="Selected profile photo">`;
 });
 $('#mediaFile').addEventListener('change', async event => {
-  const file = event.target.files[0];
-  if (!file) return;
-  $('#fileLabel').textContent = `${file.name} · ${(file.size / 1048576).toFixed(1)} MB`;
-  try { await validateMedia(file); }
-  catch (error) { toast(readableError(error), 5000); event.target.value = ''; $('#fileLabel').textContent = 'Add photo or clip'; }
+  const files = [...event.target.files];
+  if (!files.length) return;
+  const totalMb = files.reduce((sum, file) => sum + file.size, 0) / 1048576;
+  $('#fileLabel').textContent = files.length === 1
+    ? `${files[0].name} · ${totalMb.toFixed(1)} MB`
+    : `${files.length} photos selected · ${totalMb.toFixed(1)} MB total`;
+  try { await validatePostSelection(files); }
+  catch (error) { toast(readableError(error), 5000); event.target.value = ''; $('#fileLabel').textContent = 'Add photos or one clip'; }
 });
 $('#issueScreenshot').addEventListener('change', event => {
   const file = event.target.files[0];

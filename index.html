@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=63b-clear-invite-actions">
+  <link rel="stylesheet" href="./styles.css?v=64-stoke-carousels">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -67,7 +67,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.63</small>
+    <small class="boot-credit">Saltyview Productions · v1.64</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -329,7 +329,7 @@
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2 id="postSheetTitle">Share a highlight</h2><p id="postSheetDescription">Photo or clip—the whole community sees this, every area.</p>
       <form id="postForm">
-        <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" required><svg><use href="#i-camera"/></svg><strong id="fileLabel">Add photo or clip</strong><small>clips up to 90s and 50 MB</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
+        <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" multiple required><svg><use href="#i-camera"/></svg><strong id="fileLabel">Add photos or one clip</strong><small>up to 10 photos · or one clip up to 90s and 50 MB</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
         <label>Filmer <em>required</em><input id="filmerName" maxlength="100" required placeholder="Any name—the filmer doesn't have to be a member" list="peopleList"></label>
         <label>Surfer / shaper <small>optional</small><input id="surferName" maxlength="100" placeholder="Tag who's in it" list="peopleList"><datalist id="peopleList"></datalist></label>
         <label>Board <small>optional · brand + dimensions</small><input id="boardName" maxlength="100" placeholder="9'7 Takayama Annihilator"></label>
@@ -448,9 +448,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.63</span>
-    <h3>Clearer invites. Editable history.</h3>
-    <ul><li>Invite someone to plan, claim, or receive clips.</li><li>Clip invites clearly include their instructions.</li><li>Creators can correct finished sessions.</li></ul>
+    <span>NEW IN V1.64</span>
+    <h3>Photo carousels in Stoke.</h3>
+    <ul><li>Share up to 10 photos in one Stoke post.</li><li>Swipe through every photo and follow the counter.</li><li>Clips stay simple: one video per post.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -464,6 +464,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=63b-clear-invite-actions" defer></script>
+  <script src="./app.js?v=64-stoke-carousels" defer></script>
 </body>
 </html>
