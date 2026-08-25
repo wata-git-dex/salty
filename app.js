@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.72';
+const APP_VERSION = '1.73';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -2609,7 +2609,7 @@ function updateSessionRoleUi(role) {
   $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === role));
   $('#wantsFilmerRow').classList.toggle('hidden', isFilming);
   $('#sessionPeopleLabel').textContent = isFilming ? 'Surfers coming' : 'Surfing with';
-  $('#sessionPersonInput').placeholder = isFilming ? 'Add a surfer' : 'Add a name';
+  $('#sessionPersonInput').placeholder = isFilming ? "Surfer's name" : "Crew member's name";
   if (isFilming) $('#wantsFilmer').checked = false;
   if (!state.editingSessionId) $('#sessionSubmit').textContent = isFilming ? 'Share filming session' : 'Share surf';
 }

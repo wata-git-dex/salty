@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=72-member-share">
+  <link rel="stylesheet" href="./styles.css?v=73-clear-prompts">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -151,7 +151,7 @@
   </main>
 
   <main id="guestClipScreen" class="auth-screen guest-clip-screen hidden">
-    <div class="auth-card guest-clip-card"><div class="guest-clip-brand"><img data-app-icon src="./icon-ink.svg" alt=""><span>SODIUM CLIPS</span></div><div id="guestClipContent"><h1>Opening your clips…</h1></div><form id="guestClipMessageForm" class="hidden"><label>Your first name<input id="guestClipName" maxlength="80" required placeholder="Heston"></label><label>Message<textarea id="guestClipMessage" maxlength="1000" required placeholder="Yo, I think one wave is missing…"></textarea></label><button class="primary" type="submit">Send message</button></form><small class="guest-boundary">This private link only opens this clip delivery. It does not provide access to the Sodium community.</small></div>
+    <div class="auth-card guest-clip-card"><div class="guest-clip-brand"><img data-app-icon src="./icon-ink.svg" alt=""><span>SODIUM CLIPS</span></div><div id="guestClipContent"><h1>Opening your clips…</h1></div><form id="guestClipMessageForm" class="hidden"><label>Your first name<input id="guestClipName" maxlength="80" required placeholder="Your first name"></label><label>Message<textarea id="guestClipMessage" maxlength="1000" required placeholder="Write a message about these clips"></textarea></label><button class="primary" type="submit">Send message</button></form><small class="guest-boundary">This private link only opens this clip delivery. It does not provide access to the Sodium community.</small></div>
   </main>
 
   <main id="profileSetup" class="auth-screen hidden">
@@ -165,7 +165,7 @@
         <label>Nickname <small>optional</small><input id="setupNickname" maxlength="50" placeholder="What else does the crew call you?"></label>
         <label>Phone<input id="setupPhone" autocomplete="tel" inputmode="tel" required placeholder="(949) 555-0142"></label>
         <label>Home location<select id="setupRegion" required></select><small>United States members use their state. Everywhere else uses the country.</small></label>
-        <label>Sponsors <small>optional · separate with commas</small><input id="setupSponsors" maxlength="300" placeholder="Sodium, Snake Eyes"></label>
+        <label>Sponsors <small>optional · separate with commas</small><input id="setupSponsors" maxlength="300" placeholder="Sponsor or brand names"></label>
         <label>Instagram or social link <small>optional</small><input id="setupSocial" maxlength="300" inputmode="url" placeholder="https://instagram.com/yourname"></label>
         <button id="profileSubmit" class="primary" type="submit">Save profile and enter Sodium</button>
       </form>
@@ -299,12 +299,12 @@
       <form id="sessionForm">
         <label class="session-role-choice">What are you doing?<div class="segmented"><button type="button" class="active" data-session-role="surf"><svg><use href="#i-wave"/></svg><span>I'm surfing</span></button><button type="button" data-session-role="film"><svg><use href="#i-camera"/></svg><span>I'm filming</span></button></div></label>
         <label id="wantsFilmerRow" class="clip-toggle"><input id="wantsFilmer" type="checkbox" role="switch"><span class="clip-toggle-icon"><svg><use href="#i-camera"/></svg></span><span>Looking for clips<small>Optional · lets filmers know you want someone there</small></span><b aria-hidden="true"></b></label>
-        <fieldset id="sessionInitiatorFields" class="session-initiator hidden"><legend>Who initiated this session?</legend><label><select id="sessionInitiator"></select></label><small id="sessionInitiatorTransferNote" class="session-initiator-transfer hidden">Points were already awarded. Changing this safely transfers organizer credit.</small><label id="sessionInitiatorNameRow" class="hidden">Their first name<input id="sessionInitiatorName" maxlength="80" placeholder="Pierce"><small>They can claim this session—and its organizer credit—when they join Sodium.</small></label></fieldset>
-        <label>Spot name<input id="sessionSpot" maxlength="120" required placeholder="Old Man's" list="spotsList"><datalist id="spotsList"></datalist></label>
-        <label>General location<input id="sessionLocation" maxlength="160" required placeholder="San Onofre" list="locationsList"><datalist id="locationsList"></datalist><small>The broader map area—not a secret pin or exact takeoff spot.</small></label>
+        <fieldset id="sessionInitiatorFields" class="session-initiator hidden"><legend>Who initiated this session?</legend><label><select id="sessionInitiator"></select></label><small id="sessionInitiatorTransferNote" class="session-initiator-transfer hidden">Points were already awarded. Changing this safely transfers organizer credit.</small><label id="sessionInitiatorNameRow" class="hidden">Their first name<input id="sessionInitiatorName" maxlength="80" placeholder="Initiator's first name"><small>They can claim this session—and its organizer credit—when they join Sodium.</small></label></fieldset>
+        <label>Spot name<input id="sessionSpot" maxlength="120" required placeholder="Surf spot name" list="spotsList"><datalist id="spotsList"></datalist></label>
+        <label>General location<input id="sessionLocation" maxlength="160" required placeholder="City, beach, or general area" list="locationsList"><datalist id="locationsList"></datalist><small>The broader map area—not a secret pin or exact takeoff spot.</small></label>
         <label>When<div class="session-when-row"><button type="button" class="now-choice active" data-when="now">Now</button><span id="sessionDateChoice" class="date-choice compact" data-when="later"><svg><use href="#i-calendar"/></svg><span><small>Date &amp; time</small><strong id="sessionTimeDisplay">Choose date and time</strong></span><input id="sessionTime" type="datetime-local" aria-label="Session date and time"></span></div></label>
         <label><span id="sessionPeopleLabel">Surfing with</span> <small>optional · choose a Sodium member or type any name</small><div id="sessionPeopleChips" class="person-chips"></div><div class="add-person-row"><input id="sessionPersonInput" maxlength="100" placeholder="Search members or add a name" autocomplete="off"><button type="button" data-action="add-session-person">Add</button></div><div id="sessionMemberSuggestions" class="member-suggestions" aria-label="Matching Sodium members"></div></label>
-        <label>Note <small>optional</small><textarea id="sessionNote" maxlength="500" placeholder="Anything? “first one in”, “bringing the longboard”…"></textarea></label>
+        <label>Note <small>optional</small><textarea id="sessionNote" maxlength="500" placeholder="Anything the crew should know?"></textarea></label>
         <button id="sessionSubmit" class="primary" type="submit">Share session</button>
         <button id="sessionPlanInvite" class="secondary-button" type="button" data-action="open-plan-invite">Invite someone to plan this surf</button>
         <button id="sessionCancel" class="danger-button hidden" type="button" data-action="cancel-session"><svg><use href="#i-close"/></svg>Cancel session</button>
@@ -315,13 +315,13 @@
     <section id="planInviteSheet" class="sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2>Invite someone to plan a surf</h2><p>Send them straight into Sodium’s session form. They initiate it, choose the crew, and receive the organizer credit.</p>
-      <form id="planInviteForm"><label>First name<input id="planInviteName" maxlength="80" required placeholder="Pierce"></label><button class="primary" type="submit">Share planning invite</button></form>
+      <form id="planInviteForm"><label>First name<input id="planInviteName" maxlength="80" required placeholder="Their first name"></label><button class="primary" type="submit">Share planning invite</button></form>
     </section>
 
     <section id="shareInviteSheet" class="sheet share-invite-sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2>What are you inviting them to do?</h2><p>Choose the situation that matches. Sodium creates the right invite and includes its one-page instructions.</p>
-      <div class="share-invite-choices"><button data-action="share-invite"><svg><use href="#i-user"/></svg><span><b>Invite them to join Sodium</b><small>A simple community invite when you are not sharing a specific surf or clip delivery.</small></span></button><button data-action="open-plan-invite"><svg><use href="#i-surf"/></svg><span><b>Invite them to plan a surf</b><small>Like Pierce: they told you they want to surf. They add tomorrow's plan and receive organizer credit.</small></span></button><button data-action="open-session-claim-list"><svg><use href="#i-check"/></svg><span><b>Invite them to claim a surf</b><small>You already entered their session. They join Sodium and take over the organizer credit.</small></span></button><button data-action="open-pending-clip-delivery"><svg><use href="#i-folder"/></svg><span><b>Send clips + invite to Sodium</b><small>Like Steve: create his clip delivery, then send the invite with clip instructions.</small></span></button><button class="open-clip-outbox" data-action="open-clip-outbox"><svg><use href="#i-send"/></svg><span><b>Open clip outbox</b><small>See every delivery you already sent, then reopen, edit, or share it again.</small></span></button></div>
+      <div class="share-invite-choices"><button data-action="share-invite"><svg><use href="#i-user"/></svg><span><b>Invite them to join Sodium</b><small>A simple community invite when you are not sharing a specific surf or clip delivery.</small></span></button><button data-action="open-plan-invite"><svg><use href="#i-surf"/></svg><span><b>Invite them to plan a surf</b><small>They add their surf plan and receive organizer credit.</small></span></button><button data-action="open-session-claim-list"><svg><use href="#i-check"/></svg><span><b>Invite them to claim a surf</b><small>You already entered their session. They join Sodium and take over the organizer credit.</small></span></button><button data-action="open-pending-clip-delivery"><svg><use href="#i-folder"/></svg><span><b>Send clips + invite to Sodium</b><small>Create their clip delivery, then send the invite with clip instructions.</small></span></button><button class="open-clip-outbox" data-action="open-clip-outbox"><svg><use href="#i-send"/></svg><span><b>Open clip outbox</b><small>See every delivery you already sent, then reopen, edit, or share it again.</small></span></button></div>
       <div id="sessionClaimList" class="session-claim-list hidden"></div>
     </section>
 
@@ -339,10 +339,10 @@
         <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm" multiple required><svg><use href="#i-camera"/></svg><strong id="fileLabel">Add photos or one clip</strong><small>up to 10 photos · or one clip up to 90s and 50 MB</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
         <label>Filmer <em>required</em><input id="filmerName" maxlength="100" required placeholder="Any name—the filmer doesn't have to be a member" list="peopleList"></label>
         <label>Surfer / shaper <small>optional</small><input id="surferName" maxlength="100" placeholder="Tag who's in it" list="peopleList"><datalist id="peopleList"></datalist></label>
-        <label>Board <small>optional · brand + dimensions</small><input id="boardName" maxlength="100" placeholder="9'7 Takayama Annihilator"></label>
-        <label>Spot <small>optional</small><input id="postSpot" maxlength="120" placeholder="Old Man's" list="spotsList"></label>
-        <label>General location <small>optional</small><input id="postLocation" maxlength="160" placeholder="San Onofre" list="locationsList"></label>
-        <label>Caption<textarea id="postCaption" maxlength="1000" placeholder="Clean left, third wave of the set…"></textarea></label>
+        <label>Board <small>optional · brand + dimensions</small><input id="boardName" maxlength="100" placeholder="Board brand, model, and dimensions"></label>
+        <label>Spot <small>optional</small><input id="postSpot" maxlength="120" placeholder="Surf spot name" list="spotsList"></label>
+        <label>General location <small>optional</small><input id="postLocation" maxlength="160" placeholder="City, beach, or general area" list="locationsList"></label>
+        <label>Caption<textarea id="postCaption" maxlength="1000" placeholder="Write a caption"></textarea></label>
         <button id="postSubmit" class="primary" type="submit">Share to Stoke</button>
         <button id="postDelete" class="danger-button hidden" type="button" data-action="delete-post"><svg><use href="#i-close"/></svg>Delete Stoke post</button>
         <p id="postDeleteNote" class="session-cancel-note hidden">Deletes the post and its photo or clip for everyone. Posting points already earned stay.</p>
@@ -354,10 +354,10 @@
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2 id="eventSheetTitle">Add an event</h2><p>Comps, movie nights, and meetups for <b id="eventRegionName">your area</b>.</p>
       <form id="eventForm">
-        <label>Event name<input id="eventTitle" maxlength="160" required placeholder="Friday night surf movie"></label>
+        <label>Event name<input id="eventTitle" maxlength="160" required placeholder="Event name"></label>
         <fieldset class="event-when"><legend>When</legend><label class="date-choice"><svg><use href="#i-calendar"/></svg><span><small>Date</small><strong id="eventDateDisplay">Choose a date</strong></span><input id="eventDate" type="date" required aria-label="Event date"></label><div class="event-clock-choices"><label class="date-choice compact"><svg><use href="#i-clock"/></svg><span><small>Starts</small><strong id="eventStartDisplay">Choose start time</strong></span><input id="eventStartClock" type="time" required aria-label="Event start time"></label><label class="date-choice compact"><svg><use href="#i-clock"/></svg><span><small>Ends</small><strong id="eventEndDisplay">Choose end time</strong></span><input id="eventEndClock" type="time" required aria-label="Event end time"></label></div></fieldset>
-        <label>Venue <small>optional</small><input id="eventVenue" maxlength="160" placeholder="Hobie Surf Shop"></label>
-        <label>Address or map location<input id="eventLocation" maxlength="300" required placeholder="34174 Pacific Coast Hwy, Dana Point, CA"><small>Use a shop name, street address, beach, or general meeting area.</small></label>
+        <label>Venue <small>optional</small><input id="eventVenue" maxlength="160" placeholder="Venue name"></label>
+        <label>Address or map location<input id="eventLocation" maxlength="300" required placeholder="Address or meeting area"><small>Use a shop name, street address, beach, or general meeting area.</small></label>
         <label>Description<textarea id="eventDescription" maxlength="1200" placeholder="What should the crew know?"></textarea></label>
         <button id="eventSubmit" class="primary" type="submit">Share event</button>
       </form>
@@ -367,12 +367,12 @@
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2 id="perkSheetTitle">Add a discount</h2><p>This is only visible to Sodium admins.</p>
       <form id="perkForm">
-        <label>Perk name<input id="perkName" maxlength="120" required placeholder="Saltyviewfinder Store Discount"></label>
-        <label>Brand<input id="perkBrand" maxlength="80" required placeholder="Saltyviewfinder"></label>
-        <label>Offer<input id="perkOffer" maxlength="120" required placeholder="Sodium member discount"></label>
-        <label>Description<textarea id="perkDescription" maxlength="600" placeholder="Sodium merch, prints, and more."></textarea></label>
-        <label>Discount code <small>optional</small><input id="perkCode" maxlength="80" placeholder="SODIUMCREW"></label>
-        <label>Store link <small>optional</small><input id="perkUrl" type="url" maxlength="500" placeholder="https://saltyviewfinder.com"></label>
+        <label>Perk name<input id="perkName" maxlength="120" required placeholder="Perk name"></label>
+        <label>Brand<input id="perkBrand" maxlength="80" required placeholder="Brand name"></label>
+        <label>Offer<input id="perkOffer" maxlength="120" required placeholder="Offer or discount"></label>
+        <label>Description<textarea id="perkDescription" maxlength="600" placeholder="Describe the perk"></textarea></label>
+        <label>Discount code <small>optional</small><input id="perkCode" maxlength="80" placeholder="Discount code"></label>
+        <label>Store link <small>optional</small><input id="perkUrl" type="url" maxlength="500" placeholder="Store or offer URL"></label>
         <label class="toggle-row"><span>Live now<small>Members can see this perk</small></span><input id="perkActive" type="checkbox" role="switch" checked></label>
         <button id="perkSubmit" class="primary" type="submit">Publish discount</button>
         <button id="perkDelete" class="danger-button hidden" type="button" data-action="delete-perk"><svg><use href="#i-close"/></svg>Delete discount</button>
@@ -384,15 +384,15 @@
       <h2 id="listingSheetTitle">Add a listing</h2><p>Show the crew what you make or do. Sodium does not process purchases or payments.</p>
       <form id="listingForm">
         <label class="listing-image-upload"><input id="listingImage" type="file" accept="image/jpeg,image/png,image/webp"><span id="listingImagePreview"><svg><use href="#i-photo"/></svg><b>Add an image or logo</b><small>Optional · JPG, PNG or WebP · 8 MB max</small></span></label>
-        <label>Listing title<input id="listingTitle" maxlength="120" required placeholder="Ding Repair"></label>
+        <label>Listing title<input id="listingTitle" maxlength="120" required placeholder="What do you make or do?"></label>
         <label>Brand or business <small>optional</small><input id="listingBrand" maxlength="120" placeholder="Your shop or project name"></label>
         <label>Category<select id="listingCategory" required><option value="Boards & Shaping">Boards &amp; Shaping</option><option value="Repair & Glass">Repair &amp; Glass</option><option value="Photography & Film">Photography &amp; Film</option><option value="Art & Prints">Art &amp; Prints</option><option value="Clothing & Gear">Clothing &amp; Gear</option><option value="Services">Services</option><option value="Coaching">Coaching</option><option value="Other">Other</option></select></label>
         <label>Description<textarea id="listingDescription" maxlength="1200" required placeholder="What do you make or do?"></textarea></label>
         <label>External link<input id="listingUrl" type="url" maxlength="500" required placeholder="https://your-site.com"></label>
         <label>Instagram or social link <small>optional</small><input id="listingSocial" maxlength="500" placeholder="https://instagram.com/yourname"></label>
-        <label>Location <small>optional</small><input id="listingLocation" maxlength="160" placeholder="Costa Mesa, CA"></label>
+        <label>Location <small>optional</small><input id="listingLocation" maxlength="160" placeholder="City or general area"></label>
         <label class="toggle-row"><span>Sodium member perk<small>Optional benefit attached to this listing</small></span><input id="listingHasPerk" type="checkbox" role="switch"></label>
-        <div id="listingPerkFields" class="listing-perk-fields hidden"><label>Perk description<input id="listingPerkDescription" maxlength="300" placeholder="Free assessment for Sodium members"></label><label>Discount code <small>optional</small><input id="listingDiscountCode" maxlength="80" placeholder="SODIUMCREW"></label></div>
+        <div id="listingPerkFields" class="listing-perk-fields hidden"><label>Perk description<input id="listingPerkDescription" maxlength="300" placeholder="Describe the member perk"></label><label>Discount code <small>optional</small><input id="listingDiscountCode" maxlength="80" placeholder="Discount code"></label></div>
         <div id="listingAdminFields" class="listing-admin-fields hidden"><label>Status<select id="listingStatus"><option value="pending">Pending review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="inactive">Inactive</option></select></label><label class="toggle-row"><span>Featured<small>Show near the top of Marketplace</small></span><input id="listingFeatured" type="checkbox" role="switch"></label></div>
         <button id="listingSubmit" class="primary" type="submit">Submit listing</button>
         <button id="listingDelete" class="danger-button hidden" type="button" data-action="delete-listing"><svg><use href="#i-close"/></svg>Delete listing</button>
@@ -405,7 +405,7 @@
       <h2>Add a Sodium location</h2><p>Create a real geographic community when the crew reaches somewhere new.</p>
       <form id="locationForm">
         <label>Location type<select id="locationScope" required><option value="country">Country</option><option value="state">United States state</option></select></label>
-        <label>Location name<input id="newLocationName" maxlength="80" required placeholder="Mexico"><small>Use the US state inside the United States. Everywhere else, use the country.</small></label>
+        <label>Location name<input id="newLocationName" maxlength="80" required placeholder="State or country name"><small>Use the US state inside the United States. Everywhere else, use the country.</small></label>
         <div class="location-examples"><b>Examples</b><span>California · New York · Mexico · France · Germany</span></div>
         <button class="primary" type="submit">Create and join location</button>
       </form>
@@ -429,13 +429,13 @@
       <div class="clip-sheet-heading"><span class="clip-sheet-icon"><svg><use href="#i-folder"/></svg></span><div><span>CLIP DELIVERY</span><h2 id="clipDeliveryTitle">Send clips</h2><p>Share the folder now. Sodium keeps the handoff organized while it fills up.</p></div></div>
       <form id="clipDeliveryForm">
         <label>Send to<select id="clipRecipient" required></select></label>
-        <label id="clipRecipientNameRow" class="hidden">Their first name<input id="clipRecipientName" maxlength="80" placeholder="Steve"><small>They will receive an invite that opens this delivery after signup.</small></label>
-        <label>Clips of<input id="clipSubjects" type="text" maxlength="240" required placeholder="Heston"><small>The surfer in the footage. Separate multiple first names with commas.</small></label>
+        <label id="clipRecipientNameRow" class="hidden">Their first name<input id="clipRecipientName" maxlength="80" placeholder="Recipient's first name"><small>They will receive an invite that opens this delivery after signup.</small></label>
+        <label>Clips of<input id="clipSubjects" type="text" maxlength="240" required placeholder="Surfer's first name"><small>The surfer in the footage. Separate multiple first names with commas.</small></label>
         <label>Related session <small>optional</small><select id="clipSession"><option value="">No linked session</option></select></label>
         <label>Link to clips<input id="clipFolderUrl" type="url" maxlength="2048" inputmode="url" required placeholder="https://drive.google.com/…"><small id="clipProviderHint">Drive, Dropbox, iCloud, or another HTTPS folder link.</small></label>
         <div class="clip-count-fields"><label>Total clips<input id="clipExpectedCount" type="number" inputmode="numeric" min="1" max="2000" required value="1"></label><label>Uploaded so far<input id="clipUploadedCount" type="number" inputmode="numeric" min="0" max="2000" required value="0"></label></div>
         <div id="clipProgressPreview" class="clip-progress-preview"><div><b>0 of 1</b><span>Uploading</span></div><i><span style="width:0%"></span></i><small>At 1 of 1, this automatically becomes Clips ready.</small></div>
-        <label>Note <small>optional</small><textarea id="clipNote" maxlength="500" placeholder="Raw clips, selects, anything Steve should know…"></textarea></label>
+        <label>Note <small>optional</small><textarea id="clipNote" maxlength="500" placeholder="Anything the recipient should know"></textarea></label>
         <button id="clipDeliverySubmit" class="primary" type="submit">Start delivery</button>
         <button id="clipMarkReady" class="secondary-button hidden" type="button" data-action="mark-clips-ready"><svg><use href="#i-check"/></svg>Mark all clips ready</button>
         <button id="clipDeliveryDelete" class="danger-button hidden" type="button" data-action="delete-clip-delivery"><svg><use href="#i-close"/></svg>Delete delivery</button>
@@ -471,6 +471,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=72-member-share" defer></script>
+  <script src="./app.js?v=73-clear-prompts" defer></script>
 </body>
 </html>
