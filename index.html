@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=71-clip-handoff">
+  <link rel="stylesheet" href="./styles.css?v=72-member-share">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -67,7 +67,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.71</small>
+    <small class="boot-credit">Saltyview Productions · v1.72</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -325,6 +325,13 @@
       <div id="sessionClaimList" class="session-claim-list hidden"></div>
     </section>
 
+    <section id="sessionShareSheet" class="sheet session-share-sheet" aria-modal="true" role="dialog">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <span class="sheet-eyebrow">SHARE THIS SURF</span><h2 id="sessionShareTitle">Share this surf</h2><p>Send it directly to someone already in Sodium, or invite someone outside the community.</p>
+      <div id="sessionShareMembers" class="session-share-members"></div>
+      <button class="secondary-button session-share-external" data-action="share-session-external"><svg><use href="#i-share"/></svg><span><b>Share outside Sodium</b><small>Text, AirDrop, or another app. Includes an invite link.</small></span></button>
+    </section>
+
     <section id="postSheet" class="sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2 id="postSheetTitle">Share a highlight</h2><p id="postSheetDescription">Photo or clip—the whole community sees this, every area.</p>
@@ -448,9 +455,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.71</span>
-    <h3>Cleaner clip handoffs.</h3>
-    <ul><li>The outbox is now a compact list—tap a delivery to open it.</li><li>Clip messages use the surf date and location without repeating names.</li><li>Community invites clearly explain Google or email sign-in.</li></ul>
+    <span>NEW IN V1.72</span>
+    <h3>Share surfs inside Sodium.</h3>
+    <ul><li>Pick an existing member from any surf’s share menu.</li><li>They receive a direct message and notification with the surf.</li><li>Private clip links now open reliably for guests.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -464,6 +471,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=71-clip-handoff" defer></script>
+  <script src="./app.js?v=72-member-share" defer></script>
 </body>
 </html>

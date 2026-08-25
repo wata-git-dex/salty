@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.71';
+const APP_VERSION = '1.72';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
@@ -63,13 +63,16 @@ const state = {
   notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '', pendingDeliveryId: '',
   calendarMonth: null, calendarDate: '',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
-  marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent',
+  marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent', sharingSessionId: null,
   guestClipToken: '', guestClipDelivery: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = (value = '') => String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+const messageBodyMarkup = (value = '') => esc(value)
+  .replace(/https:\/\/community\.saltyviewfinder\.com\/[^\s<]+/g, url => `<a class="dm-shared-link" href="${url}" target="_self">Open shared surf</a>`)
+  .replace(/\n/g, '<br>');
 const initials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 const formatCount = number => new Intl.NumberFormat().format(number || 0);
 const inviteFromUrl = () => new URLSearchParams(location.search).get('invite')?.trim() || '';
@@ -1354,7 +1357,7 @@ function renderDmConversation() {
   }
   list.innerHTML = messages.map(message => {
     const own = message.sender === mine;
-    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.sender)}">${own ? '' : avatarMarkup(state.activeDmMember, 'message-avatar')}<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(state.activeDmMember.name)}</b><time>${esc(messageTime(message.created_at))}</time></div><div class="message-bubble"><p>${esc(message.body)}</p></div></div></article>`;
+    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.sender)}">${own ? '' : avatarMarkup(state.activeDmMember, 'message-avatar')}<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(state.activeDmMember.name)}</b><time>${esc(messageTime(message.created_at))}</time></div><div class="message-bubble"><p>${messageBodyMarkup(message.body)}</p></div></div></article>`;
   }).join('');
   requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
 }
@@ -3232,7 +3235,46 @@ function showSessionClaimList() {
   target.classList.remove('hidden');
 }
 
-async function shareSession(sessionId) {
+function sessionShareUrl(session, includeInvite = false, inviteCode = '') {
+  const region = state.regions.find(item => item.id === session.region_id) || state.currentRegion;
+  const url = new URL('./', location.href);
+  url.search = '';
+  url.hash = '';
+  if (includeInvite && inviteCode) url.searchParams.set('invite', inviteCode);
+  if (region?.id) url.searchParams.set('region', region.id);
+  url.searchParams.set('open', 'surfing');
+  url.searchParams.set('session', session.id);
+  return url;
+}
+
+function openSessionShare(sessionId) {
+  const session = state.sessions.find(item => item.id === sessionId);
+  if (!session) { toast('That surf is no longer available.'); return; }
+  state.sharingSessionId = sessionId;
+  $('#sessionShareTitle').textContent = session.spot?.name || 'Share this surf';
+  const members = state.people.filter(person => person.id !== state.profile.id);
+  $('#sessionShareMembers').innerHTML = members.length
+    ? members.map(person => `<button data-share-session-member="${person.id}">${avatarMarkup(person)}<span><b>${esc(person.name)}</b><small>Send inside Sodium</small></span><svg><use href="#i-send"/></svg></button>`).join('')
+    : '<small>No other members have joined yet. Use the external invite for now.</small>';
+  openSheet('sessionShareSheet');
+}
+
+async function shareSessionToMember(memberId) {
+  const session = state.sessions.find(item => item.id === state.sharingSessionId);
+  const member = state.people.find(item => item.id === memberId);
+  if (!session || !member) { toast('That surf or member is no longer available.'); return; }
+  const spot = session.spot?.name || 'Surf';
+  const area = session.spot?.general_location ? ` · ${session.spot.general_location}` : '';
+  const url = sessionShareUrl(session);
+  const body = `${state.profile.name} shared a surf with you.\n${spot}${area}\n${sessionWhen(session)}\n${url.href}`;
+  const result = await db.from('dm_messages').insert({ sender:state.profile.id, recipient:member.id, body });
+  if (result.error) { toast(readableError(result.error), 6000); return; }
+  closeSheet();
+  state.sharingSessionId = null;
+  toast(`Surf sent to ${member.name} inside Sodium.`);
+}
+
+async function shareSessionExternal(sessionId = state.sharingSessionId) {
   const session = state.sessions.find(item => item.id === sessionId);
   if (!session) { toast('That surf is no longer available.'); return; }
   const region = state.regions.find(item => item.id === session.region_id) || state.currentRegion;
@@ -3242,13 +3284,7 @@ async function shareSession(sessionId) {
   }
   if (invite.error) { toast(readableError(invite.error)); return; }
 
-  const url = new URL('./', location.href);
-  url.search = '';
-  url.hash = '';
-  url.searchParams.set('invite', invite.data);
-  if (region?.id) url.searchParams.set('region', region.id);
-  url.searchParams.set('open', 'surfing');
-  url.searchParams.set('session', session.id);
+  const url = sessionShareUrl(session, true, invite.data);
 
   const spot = session.spot?.name || 'a surf';
   const area = session.spot?.general_location ? ` · ${session.spot.general_location}` : '';
@@ -3261,6 +3297,8 @@ async function shareSession(sessionId) {
       url:url.href,
       copiedMessage:'Surf details and link copied.',
     });
+    closeSheet();
+    state.sharingSessionId = null;
   } catch (error) {
     if (error?.name !== 'AbortError') prompt('Copy this surf:', `${text}\n${url.href}`);
   }
@@ -3353,6 +3391,7 @@ document.addEventListener('click', async event => {
   const startNode = event.target.closest('[data-start-session]');
   const editSessionNode = event.target.closest('[data-edit-session]');
   const shareSessionNode = event.target.closest('[data-share-session]');
+  const shareSessionMemberNode = event.target.closest('[data-share-session-member]');
   const shareEventNode = event.target.closest('[data-share-event]');
   const inviteSessionClaimNode = event.target.closest('[data-invite-session-claim]');
   const inviteClipClaimNode = event.target.closest('[data-invite-clip-claim]');
@@ -3370,6 +3409,7 @@ document.addEventListener('click', async event => {
   if (inviteClipClaimNode) { await shareClipClaimInvite(inviteClipClaimNode.dataset.inviteClipClaim); return; }
   if (shareClipDeliveryNode) { await shareExistingClipDelivery(shareClipDeliveryNode.dataset.shareClipDelivery); return; }
   if (shareGuestClipsNode) { await shareGuestClipLink(shareGuestClipsNode.dataset.shareGuestClips); return; }
+  if (shareSessionMemberNode) { await shareSessionToMember(shareSessionMemberNode.dataset.shareSessionMember); return; }
   const eventRegionNode = event.target.closest('[data-event-region]');
   const eventRsvpNode = event.target.closest('[data-event-rsvp]');
   const eventCalendarNode = event.target.closest('[data-event-calendar]');
@@ -3466,7 +3506,7 @@ document.addEventListener('click', async event => {
   if (rsvpNode) await setRsvp(rsvpNode.dataset.rsvp, rsvpNode.dataset.role);
   if (startNode) await startSession(startNode.dataset.startSession);
   if (editSessionNode) openSessionComposer(editSessionNode.dataset.editSession);
-  if (shareSessionNode) await shareSession(shareSessionNode.dataset.shareSession);
+  if (shareSessionNode) openSessionShare(shareSessionNode.dataset.shareSession);
   if (shareEventNode) await shareEvent(shareEventNode.dataset.shareEvent);
   if (editPostNode) openPostComposer(editPostNode.dataset.editPost);
   if (endNode) await endSession(endNode.dataset.endSession);
@@ -3505,6 +3545,7 @@ document.addEventListener('click', async event => {
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
     'open-session': () => openSessionComposer(),
     'open-share-invite': openShareInviteHub,
+    'share-session-external': () => shareSessionExternal(),
     'open-plan-invite': () => { closeSheet(); $('#planInviteForm').reset(); openSheet('planInviteSheet'); },
     'open-session-claim-list': showSessionClaimList,
     'open-pending-clip-delivery': () => { closeSheet(); openClipDeliveryComposer(); $('#clipRecipient').value = 'pending'; updateClipRecipientUi(); },
