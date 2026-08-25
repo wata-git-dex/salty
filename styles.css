@@ -230,6 +230,7 @@ html[data-theme="foam"] .feedback-description p,html[data-theme="foam"] .feedbac
 .post-carousel-arrow svg{width:17px;height:17px}
 .post-carousel-counter{position:absolute;z-index:5;top:12px;left:50%;transform:translateX(-50%);padding:5px 9px;border:1px solid #ffffff2b;border-radius:99px;background:#07121bc7;color:#fff;font-size:11px;font-weight:800;box-shadow:0 4px 14px #0006;backdrop-filter:blur(8px)}
 .post-carousel~.post-overlay{pointer-events:none}
+.session-initiator.credit-locked{border-color:#4fd08a55;background:#4fd08a0b}.session-initiator.credit-locked select{opacity:.72}.session-initiator-lock{display:block;margin:-5px 0 12px;color:var(--go);font-size:10.5px;line-height:1.4}
 .clip-delivery-title small{display:block;color:var(--mut);font-size:9.5px;margin-top:3px}
 .clip-subject-label{display:block;color:var(--hail);font:900 8px Archivo;letter-spacing:1.2px;margin-bottom:2px}
 
