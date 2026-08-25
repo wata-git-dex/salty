@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.89';
+const APP_VERSION = '1.90';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -3524,7 +3524,8 @@ function renderPosts() {
     const visualTags = [...memberTags, ...legacySubject, ...(Array.isArray(post.custom_tags) ? post.custom_tags : [])];
     const tagMarkup = visualTags.map(label => `<span>${esc(label)}</span>`).join('');
     const tagUi = visualTags.length ? `<button class="post-tag-trigger" type="button" data-toggle-post-tags="${post.id}" aria-label="Show tags"><svg><use href="#i-user"/></svg><b>${visualTags.length}</b></button><div class="post-visual-tags" data-post-tags="${post.id}">${tagMarkup}</div>` : '';
-    return `<article class="post-card"><div class="post-media ratio-${ratio}"${mediaStyle}>${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}${tagUi}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>${subjectRole}</b>${esc(post.surfer_name)}</span>` : ''}${boardCredit}<span class="credit filmer"><b>${creatorRole}</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="${liked ? 'liked' : ''}"><svg><use href="#i-heart"/></svg>${post.post_likes.length}</button><button data-comment-toggle="${post.id}"><svg><use href="#i-chat"/></svg>${post.post_comments.length}</button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
+    const stokedLabel = liked ? 'Remove your Stoked reaction' : 'Mark this Stoke as Stoked';
+    return `<article class="post-card"><div class="post-media ratio-${ratio}"${mediaStyle}>${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}${tagUi}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>${subjectRole}</b>${esc(post.surfer_name)}</span>` : ''}${boardCredit}<span class="credit filmer"><b>${creatorRole}</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="stoked-button ${liked ? 'liked' : ''}" aria-label="${stokedLabel}"><svg><use href="#i-wave"/></svg><span>Stoked</span><b>${post.post_likes.length}</b></button><button data-comment-toggle="${post.id}" aria-label="Show comments"><svg><use href="#i-chat"/></svg><span>Comment</span><b>${post.post_comments.length}</b></button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
   }).join('');
   bindPostCarousels();
 }
@@ -3567,18 +3568,31 @@ async function uploadMedia(file, path) {
   return path;
 }
 
-async function uploadStreamClip(file, progressCallback = () => {}) {
-  const created = await streamRequest('/upload', {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json' },
-    body:JSON.stringify({ filename:file.name, size:file.size }),
-  });
-  let offset = 0;
-  const chunkSize = 8 * 1024 * 1024;
+function pause(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function streamUploadOffset(uploadUrl, fallbackOffset) {
   try {
-    while (offset < file.size) {
-      const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
-      const response = await fetch(created.uploadUrl, {
+    const response = await fetch(uploadUrl, {
+      method:'HEAD',
+      headers:{ 'Tus-Resumable':'1.0.0' },
+      cache:'no-store',
+    });
+    if (!response.ok) return fallbackOffset;
+    const offsetHeader = response.headers.get('Upload-Offset');
+    const serverOffset = offsetHeader === null ? NaN : Number(offsetHeader);
+    return Number.isFinite(serverOffset) ? serverOffset : fallbackOffset;
+  } catch (_error) {
+    return fallbackOffset;
+  }
+}
+
+async function uploadStreamChunk(uploadUrl, chunk, offset) {
+  let lastError;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const response = await fetch(uploadUrl, {
         method:'PATCH',
         headers:{
           'Tus-Resumable':'1.0.0',
@@ -3587,8 +3601,42 @@ async function uploadStreamClip(file, progressCallback = () => {}) {
         },
         body:chunk,
       });
-      if (!response.ok) throw new Error(`Clip upload paused with status ${response.status}.`);
-      offset = Number(response.headers.get('Upload-Offset')) || offset + chunk.size;
+      if (response.ok) return response;
+      if (response.status === 409) return null;
+      if (response.status < 500 && response.status !== 408 && response.status !== 429) {
+        throw new Error(`Cloudflare rejected this clip with status ${response.status}.`);
+      }
+      lastError = new Error(`Upload service returned ${response.status}.`);
+    } catch (error) {
+      lastError = error;
+    }
+    await pause(700 * (attempt + 1));
+  }
+  throw lastError || new Error('The clip upload lost its connection.');
+}
+
+async function uploadStreamClip(file, progressCallback = () => {}) {
+  const created = await streamRequest('/upload', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body:JSON.stringify({ filename:file.name, size:file.size }),
+  });
+  let offset = 0;
+  const chunkSize = 4 * 1024 * 1024;
+  try {
+    while (offset < file.size) {
+      const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+      const response = await uploadStreamChunk(created.uploadUrl, chunk, offset);
+      if (!response) {
+        const correctedOffset = await streamUploadOffset(created.uploadUrl, offset);
+        if (correctedOffset === offset) throw new Error('The clip upload could not resume after a connection interruption.');
+        offset = correctedOffset;
+        progressCallback(offset / file.size);
+        continue;
+      }
+      const offsetHeader = response.headers.get('Upload-Offset');
+      const responseOffset = offsetHeader === null ? NaN : Number(offsetHeader);
+      offset = Number.isFinite(responseOffset) ? responseOffset : offset + chunk.size;
       progressCallback(offset / file.size);
     }
     return { uid:created.uid, duration:await videoDuration(file) };
@@ -4009,7 +4057,11 @@ async function savePost(event) {
       await Promise.allSettled(streamUploads.map(item => streamRequest(`/video/${encodeURIComponent(item.uid)}`, { method:'DELETE' })));
       if (postId && !state.editingPostId) await db.from('posts').delete().eq('id', postId).eq('author', state.profile.id);
     }
-    toast(readableError(error), 7000);
+    const message = readableError(error);
+    const uploadHelp = streamUploads.length || selectedPostKind() === 'clip'
+      ? `${message} Keep Sodium open and try again on a steady Wi-Fi or 5G connection.`
+      : message;
+    toast(uploadHelp, 9000);
   }
   finally { submit.disabled = false; progress.classList.add('hidden'); progress.value = 0; }
 }
