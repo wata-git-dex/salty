@@ -22,7 +22,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.61';
+const APP_VERSION = '1.62';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
@@ -73,12 +73,13 @@ const initials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map
 const formatCount = number => new Intl.NumberFormat().format(number || 0);
 const inviteFromUrl = () => new URLSearchParams(location.search).get('invite')?.trim() || '';
 const inviteRegionFromUrl = () => new URLSearchParams(location.search).get('region')?.trim() || '';
-const ICON_THEMES = new Set(['ink', 'amber', 'foam', 'ocean']);
+const ICON_THEMES = new Set(['ink', 'amber', 'foam', 'ocean', 'pink']);
 const THEME_COLORS = Object.freeze({
   ink: '#0A141C',
   amber: '#1B1208',
   foam: '#EAF2F5',
   ocean: '#071925',
+  pink: '#F3A0C3',
 });
 
 function isStandalone() {
@@ -104,7 +105,19 @@ function clearPendingAuth() {
   localStorage.removeItem('salty:auth-email');
 }
 
+function ensureThemeOptions() {
+  const options = $('.icon-options');
+  if (!options || $('[data-icon-theme="pink"]', options)) return;
+  const button = document.createElement('button');
+  button.dataset.iconTheme = 'pink';
+  button.setAttribute('role', 'radio');
+  button.setAttribute('aria-label', 'Use Pink theme');
+  button.innerHTML = '<img src="./icon-pink.svg" alt=""><span>Pink</span>';
+  options.append(button);
+}
+
 function applyIconTheme(theme = 'ink', announce = false) {
+  ensureThemeOptions();
   const chosen = ICON_THEMES.has(theme) ? theme : 'ink';
   localStorage.setItem('salty:theme', chosen);
   localStorage.removeItem('salty:icon-theme');

@@ -45,6 +45,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 html[data-theme="amber"]{color-scheme:light;--ink:#efa21d;--ink2:#ffedbe;--surf:#fff9ea;--surf2:#ffe0a0;--line:#d58a27;--foam:#241400;--mut:#5e421d;--mut2:#7a5422;--sodium:#ad4900;--go:#116f46;--hail:#0d73b6;--coral:#b9363c;--theme-glow:#ffd268;--bar-top:#fff9ebfa;--bar-bottom:#ffe8b4f2;--nav-top:#fff8e9f2;--nav-bottom:#ffe3a6fa;--theme-flash:#ffb52eaa}
 html[data-theme="ocean"]{--ink:#071925;--ink2:#0a2435;--surf:#10334a;--surf2:#15415d;--line:#245d82;--foam:#eef9ff;--mut:#8cb5ca;--mut2:#638ba2;--sodium:#ffb04a;--go:#58d6a0;--hail:#68c8ff;--coral:#ff7a77;--theme-glow:#0e5f91;--bar-top:#071925fa;--bar-bottom:#071925e8;--nav-top:#071925d9;--nav-bottom:#041019fc;--theme-flash:#54abec59}
 html[data-theme="foam"]{color-scheme:light;--ink:#f3f7f8;--ink2:#ffffff;--surf:#ffffff;--surf2:#edf4f6;--line:#cbdbe1;--foam:#09151d;--mut:#526c79;--mut2:#778d98;--sodium:#dc8217;--go:#177b53;--hail:#2477ae;--coral:#c84d50;--theme-glow:#d9f1fb;--bar-top:#fffffff5;--bar-bottom:#f3f7f8ec;--nav-top:#fffffff0;--nav-bottom:#edf4f6fa;--theme-flash:#d9f1fbb8}
+html[data-theme="pink"]{color-scheme:light;--ink:#f3a0c3;--ink2:#ffe4ef;--surf:#fff6fa;--surf2:#ffd1e3;--line:#c95e8a;--foam:#1b0911;--mut:#654252;--mut2:#845a6e;--sodium:#ad174f;--go:#157650;--hail:#176ca7;--coral:#b92f5d;--theme-glow:#ffcae0;--bar-top:#fff1f7f7;--bar-bottom:#ffd9e9f0;--nav-top:#fff2f8f2;--nav-bottom:#ffc9defa;--theme-flash:#f05e9e88}
 body{background:radial-gradient(1100px 520px at 50% -10%,var(--theme-glow) 0,var(--ink) 58%);transition:background-color .28s,color .28s}
 .topbar{background:linear-gradient(180deg,var(--bar-top),var(--bar-bottom));border-bottom-color:var(--line)}
 .bottom-nav{background:color-mix(in srgb,var(--ink2) 76%,transparent);border-color:color-mix(in srgb,var(--line) 70%,white 15%)}
@@ -103,6 +104,22 @@ html[data-theme="amber"] .surf-section-label>span{color:#fff9ea;text-shadow:0 1p
 html[data-theme="amber"] .surf-section-label .live{color:#0b5d3b}
 html[data-theme="amber"] .surf-calendar-button{border-color:#075b91;background:#0d73b6;color:#fff}
 html[data-theme="amber"] .fab{background:linear-gradient(180deg,#2d9cdc,#0d73b6);color:#fff;box-shadow:0 12px 28px #075b9166}
+html[data-theme="pink"] .consent-copy p,html[data-theme="pink"] .session-note,html[data-theme="pink"] .comment,html[data-theme="pink"] .about-copy p,html[data-theme="pink"] .install-steps,html[data-theme="pink"] .copy-card ol,html[data-theme="pink"] .event-description,html[data-theme="pink"] .perk-card>p,html[data-theme="pink"] .points-guide span,html[data-theme="pink"] .streak-guide p,html[data-theme="pink"] .points-unlocks p{color:#5d3548}
+html[data-theme="pink"] .post-overlay,html[data-theme="pink"] .post-author,html[data-theme="pink"] .credit{color:#fff8fb}
+html[data-theme="pink"] .post-overlay{background:linear-gradient(transparent,#260c18ee)}
+html[data-theme="pink"] .post-author{background:#260c18b8}
+html[data-theme="pink"] .toast{background:#fff5f9f5;color:#1b0911;box-shadow:0 12px 30px #9b376244}
+html[data-theme="pink"] .drawer-scrim,html[data-theme="pink"] .sheet-scrim{background:#6e365255}
+html[data-theme="pink"] .session-crew-row,html[data-theme="pink"] .calendar-day,html[data-theme="pink"] .feedback-device{background:color-mix(in srgb,var(--surf2) 72%,white)}
+html[data-theme="pink"] .bottom-nav{box-shadow:0 14px 34px #8d31584d,inset 0 1px #fff}
+html[data-theme="pink"] .side-rail{background:linear-gradient(180deg,#fff4f9,#ffd0e3);border-color:#ad174f;box-shadow:0 24px 60px #8d315842}
+html[data-theme="pink"] .phone-shell{background:#f3a0c3}
+html[data-theme="pink"] .primary-nav button{color:#654252}
+html[data-theme="pink"] .primary-nav button.active{background:linear-gradient(180deg,#d9427d,#ad174f);color:#fff;box-shadow:0 8px 20px #8d315845}
+html[data-theme="pink"] .top-actions [data-action="open-drawer"]{border-color:#7c1740;background:#ad174f;color:#fff;box-shadow:0 6px 16px #8d31584d}
+html[data-theme="pink"] .surf-section-label>span{color:#1b0911}
+.icon-options{grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.icon-options button{min-width:0;padding:7px 4px 8px;font-size:9.5px}
 
 /* Core-loop refinement: fixed avatars, clearer session places, and multi-person editing. */
 .avatar{overflow:hidden;aspect-ratio:1}
