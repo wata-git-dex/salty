@@ -24,7 +24,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.80';
+const APP_VERSION = '1.81';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
@@ -36,6 +36,9 @@ const GUIDE_PAGE_COUNT = 4;
 const PENDING_AUTH_KEY = 'salty:pending-auth';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
 const WHATS_NEW_SEEN_KEY = 'salty:whats-new-seen';
+const POST_DRAFT_DB_NAME = 'sodium-post-drafts';
+const POST_DRAFT_STORE = 'drafts';
+const POST_DRAFT_TTL = 30 * 24 * 60 * 60 * 1000;
 const NOTIFICATION_DEFAULTS = Object.freeze({
   master_enabled: true,
   new_sessions: true,
@@ -65,7 +68,7 @@ const state = {
   calendarMonth: null, calendarDate: '',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
   marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent', sharingSessionId: null,
-  guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '',
+  guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -3024,6 +3027,169 @@ function matchingPerson(name) {
   return state.people.find(person => person.name.toLowerCase() === name.trim().toLowerCase());
 }
 
+function openPostDraftDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(POST_DRAFT_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(POST_DRAFT_STORE)) {
+        const store = database.createObjectStore(POST_DRAFT_STORE, { keyPath:'id' });
+        store.createIndex('owner', 'owner', { unique:false });
+        store.createIndex('expiresAt', 'expiresAt', { unique:false });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Draft storage could not open.'));
+  });
+}
+
+async function postDraftTransaction(mode, operation) {
+  const database = await openPostDraftDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = database.transaction(POST_DRAFT_STORE, mode);
+      const store = transaction.objectStore(POST_DRAFT_STORE);
+      let result;
+      try { result = operation(store); }
+      catch (error) { reject(error); return; }
+      transaction.oncomplete = () => resolve(result?.result);
+      transaction.onerror = () => reject(transaction.error || result?.error || new Error('Draft storage failed.'));
+      transaction.onabort = () => reject(transaction.error || new Error('Draft storage was interrupted.'));
+    });
+  } finally { database.close(); }
+}
+
+function currentPostFiles() {
+  return state.postDraftFiles.length ? [...state.postDraftFiles] : [...$('#mediaFile').files];
+}
+
+function postDraftTitle(draft) {
+  return draft.caption || draft.location || draft.files?.[0]?.name || `Untitled ${draft.kind === 'clip' ? 'clips' : 'photos'}`;
+}
+
+function renderPostDrafts() {
+  const list = $('#postDraftList');
+  const drafts = state.postDrafts;
+  $('#postDraftCount').textContent = String(drafts.length);
+  if (!drafts.length) {
+    list.innerHTML = '<p class="post-draft-empty">No saved drafts on this device.</p>';
+    return;
+  }
+  list.innerHTML = drafts.map(draft => {
+    const count = draft.files?.length || 0;
+    const age = new Intl.DateTimeFormat(undefined, { month:'short', day:'numeric' }).format(new Date(draft.updatedAt));
+    return `<article class="post-draft-card"><span><b>${esc(postDraftTitle(draft))}</b><small>${draft.kind === 'clip' ? 'CLIPS' : 'PHOTOS'} · ${count} ${count === 1 ? 'file' : 'files'} · saved ${esc(age)}</small></span><button type="button" data-open-post-draft="${esc(draft.id)}" aria-label="Open draft"><svg><use href="#i-edit"/></svg></button><button type="button" data-delete-post-draft="${esc(draft.id)}" aria-label="Delete draft"><svg><use href="#i-close"/></svg></button></article>`;
+  }).join('');
+}
+
+async function loadPostDrafts() {
+  if (!state.profile?.id || !window.indexedDB) return;
+  try {
+    const all = await postDraftTransaction('readonly', store => store.getAll());
+    const now = Date.now();
+    const owned = (all || []).filter(draft => draft.owner === state.profile.id);
+    const expired = owned.filter(draft => Number(draft.expiresAt || 0) <= now);
+    if (expired.length) {
+      await postDraftTransaction('readwrite', store => {
+        expired.forEach(draft => store.delete(draft.id));
+      });
+    }
+    state.postDrafts = owned.filter(draft => Number(draft.expiresAt || 0) > now).sort((a, b) => b.updatedAt - a.updatedAt);
+    renderPostDrafts();
+  } catch (error) {
+    console.warn('Draft loading failed:', error);
+    $('#postDraftList').innerHTML = '<p class="post-draft-empty">Drafts are unavailable on this device.</p>';
+  }
+}
+
+function postDraftFields() {
+  return {
+    creator:$('#filmerName').value.trim(),
+    subject:$('#surferName').value.trim(),
+    board:$('#boardName').value.trim(),
+    location:$('#postSpot').value.trim(),
+    caption:$('#postCaption').value.trim(),
+    ratio:selectedPostRatio(),
+  };
+}
+
+async function savePostDraft() {
+  if (state.editingPostId) return;
+  const button = $('#postDraftSave');
+  button.disabled = true;
+  try {
+    const files = currentPostFiles();
+    if (files.length) await validatePostSelection(files);
+    const fields = postDraftFields();
+    if (!files.length && !Object.values(fields).some(value => value && value !== 'original')) {
+      throw new Error('Add media or some post details before saving a draft.');
+    }
+    const now = Date.now();
+    const draft = {
+      id:state.editingPostDraftId || crypto.randomUUID(),
+      owner:state.profile.id,
+      kind:selectedPostKind(),
+      files,
+      ...fields,
+      createdAt:state.postDrafts.find(item => item.id === state.editingPostDraftId)?.createdAt || now,
+      updatedAt:now,
+      expiresAt:now + POST_DRAFT_TTL,
+    };
+    await postDraftTransaction('readwrite', store => store.put(draft));
+    resetPostComposer();
+    closeSheet();
+    toast('Draft saved on this device for 30 days.');
+  } catch (error) {
+    const message = error?.name === 'QuotaExceededError'
+      ? 'This device does not have enough free storage for that draft. Try fewer or smaller clips.'
+      : readableError(error);
+    toast(message, 7000);
+  } finally { button.disabled = false; }
+}
+
+function showPostFilePreview(files) {
+  if (!files.length) return;
+  if (state.postPreviewUrl) URL.revokeObjectURL(state.postPreviewUrl);
+  state.postPreviewUrl = URL.createObjectURL(files[0]);
+  const previewImage = $('#postRatioPreview img');
+  const previewVideo = $('#postRatioPreview video');
+  if (selectedPostKind() === 'photo') previewImage.src = state.postPreviewUrl;
+  else previewVideo.src = state.postPreviewUrl;
+  $('#postRatioPreview').classList.remove('hidden');
+  applyPostRatioPreview();
+}
+
+async function openPostDraft(id) {
+  await loadPostDrafts();
+  const draft = state.postDrafts.find(item => item.id === id);
+  if (!draft) { toast('That draft expired or was deleted.'); return; }
+  resetPostComposer();
+  state.editingPostDraftId = draft.id;
+  state.postDraftFiles = [...(draft.files || [])];
+  setPostKind(draft.kind);
+  $('#filmerName').value = draft.creator || '';
+  $('#surferName').value = draft.subject || '';
+  $('#boardName').value = draft.board || '';
+  $('#postSpot').value = draft.location || '';
+  $('#postCaption').value = draft.caption || '';
+  setPostRatio(draft.ratio);
+  const count = state.postDraftFiles.length;
+  $('#fileLabel').textContent = count ? `${count} ${draft.kind === 'clip' ? 'clips' : 'photos'} restored from draft` : (draft.kind === 'clip' ? 'Choose up to 5 clips' : 'Choose up to 10 photos');
+  showPostFilePreview(state.postDraftFiles);
+  $('#postSheetTitle').textContent = draft.kind === 'clip' ? 'Finish clip draft' : 'Finish photo draft';
+  $('#postSheetDescription').textContent = 'This draft stays on this device until you publish or delete it.';
+  $('#postDraftSave').textContent = 'Update draft';
+  openSheet('postSheet');
+}
+
+async function deletePostDraft(id, confirmDelete = true) {
+  if (confirmDelete && !confirm('Delete this draft from this device?')) return;
+  await postDraftTransaction('readwrite', store => store.delete(id));
+  if (state.editingPostDraftId === id) resetPostComposer();
+  await loadPostDrafts();
+  toast('Draft deleted.');
+}
+
 function selectedPostKind() {
   return $('input[name="postKind"]:checked')?.value === 'clip' ? 'clip' : 'photo';
 }
@@ -3036,6 +3202,7 @@ function setPostKind(kind = 'photo', options = {}) {
     input.disabled = editing;
   });
   const mediaInput = $('#mediaFile');
+  $('#postSheet').dataset.postKind = postKind;
   $('#postRatioPreview').dataset.kind = postKind;
   mediaInput.accept = postKind === 'photo'
     ? 'image/jpeg,image/png,image/webp,image/gif'
@@ -3063,6 +3230,7 @@ function setPostKind(kind = 'photo', options = {}) {
   }
   if (options.clearFile) {
     mediaInput.value = '';
+    state.postDraftFiles = [];
     if (state.postPreviewUrl) URL.revokeObjectURL(state.postPreviewUrl);
     state.postPreviewUrl = '';
     $('#postRatioPreview').classList.add('hidden');
@@ -3076,6 +3244,8 @@ function setPostKind(kind = 'photo', options = {}) {
 
 function resetPostComposer() {
   state.editingPostId = null;
+  state.editingPostDraftId = null;
+  state.postDraftFiles = [];
   if (state.postPreviewUrl) URL.revokeObjectURL(state.postPreviewUrl);
   state.postPreviewUrl = '';
   $('#postForm').reset();
@@ -3091,6 +3261,11 @@ function resetPostComposer() {
   setPostRatio('original');
   setPostKind('photo');
   $('#postSubmit').textContent = 'Share to Stoke';
+  $('#postDraftSave').textContent = 'Save draft';
+  $('#postDraftSave').classList.remove('hidden');
+  $('#postDraftsPanel').classList.remove('hidden');
+  $('#postDraftList').classList.add('hidden');
+  $('.post-drafts-toggle').setAttribute('aria-expanded', 'false');
   $('#postDelete').classList.add('hidden');
   $('#postDeleteNote').classList.add('hidden');
 }
@@ -3122,10 +3297,13 @@ function openPostComposer(postId = null) {
       setPostRatio(post.media_ratio);
     }
     $('#postSubmit').textContent = 'Save changes';
+    $('#postDraftSave').classList.add('hidden');
+    $('#postDraftsPanel').classList.add('hidden');
     $('#postDelete').classList.remove('hidden');
     $('#postDeleteNote').classList.remove('hidden');
   }
   openSheet('postSheet');
+  if (!post) void loadPostDrafts();
 }
 
 async function savePost(event) {
@@ -3156,7 +3334,7 @@ async function savePost(event) {
       const removedTags = await db.from('post_tags').delete().eq('post_id', editing);
       if (removedTags.error) throw removedTags.error;
     } else {
-      const files = [...$('#mediaFile').files];
+      const files = currentPostFiles();
       await validatePostSelection(files);
       const mediaType = selectedPostKind();
       const paths = [];
@@ -3205,6 +3383,7 @@ async function savePost(event) {
       const tagsResult = await db.from('post_tags').insert(tags);
       if (tagsResult.error) throw tagsResult.error;
     }
+    if (state.editingPostDraftId) await postDraftTransaction('readwrite', store => store.delete(state.editingPostDraftId));
     progress.value = 100; resetPostComposer(); closeSheet();
     await loadPosts(); await renderProfile(); toast(editing ? 'Stoke post updated.' : 'Shared with the whole community.');
   } catch (error) {
@@ -3699,6 +3878,8 @@ document.addEventListener('click', async event => {
   const shareClipDeliveryNode = event.target.closest('[data-share-clip-delivery]');
   const shareGuestClipsNode = event.target.closest('[data-share-guest-clips]');
   const editPostNode = event.target.closest('[data-edit-post]');
+  const openPostDraftNode = event.target.closest('[data-open-post-draft]');
+  const deletePostDraftNode = event.target.closest('[data-delete-post-draft]');
   const removeSessionPersonNode = event.target.closest('[data-remove-session-person]');
   const sessionMemberNode = event.target.closest('[data-session-member]');
   const likeNode = event.target.closest('[data-like]');
@@ -3710,6 +3891,8 @@ document.addEventListener('click', async event => {
   if (inviteClipClaimNode) { await shareClipClaimInvite(inviteClipClaimNode.dataset.inviteClipClaim); return; }
   if (shareClipDeliveryNode) { await shareExistingClipDelivery(shareClipDeliveryNode.dataset.shareClipDelivery); return; }
   if (shareGuestClipsNode) { await shareGuestClipLink(shareGuestClipsNode.dataset.shareGuestClips); return; }
+  if (openPostDraftNode) { await openPostDraft(openPostDraftNode.dataset.openPostDraft); return; }
+  if (deletePostDraftNode) { await deletePostDraft(deletePostDraftNode.dataset.deletePostDraft); return; }
   if (shareSessionMemberNode) { await shareSessionToMember(shareSessionMemberNode.dataset.shareSessionMember); return; }
   const eventRegionNode = event.target.closest('[data-event-region]');
   const eventRsvpNode = event.target.closest('[data-event-rsvp]');
@@ -3798,7 +3981,7 @@ document.addEventListener('click', async event => {
     if (state.preview) renderRoomMessages();
     else await loadRoomMessages();
   }
-  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || editClipDeliveryNode || sessionClipsNode || ['make-invite', 'share-invite', 'share-invite-overview', 'share-invite-setup', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'open-clip-delivery', 'mark-clips-ready', 'delete-clip-delivery', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
+  if (state.preview && (rsvpNode || startNode || endNode || shareSessionNode || shareEventNode || likeNode || editClipDeliveryNode || sessionClipsNode || ['make-invite', 'share-invite', 'share-invite-overview', 'share-invite-setup', 'share-invite-guide', 'edit-profile', 'delete-perk', 'delete-post', 'delete-listing', 'cancel-session', 'open-clip-delivery', 'mark-clips-ready', 'delete-clip-delivery', 'save-post-draft', 'toggle-push-device', 'sign-out'].includes(actionNode?.dataset.action))) {
     toast('Preview only — nothing saves here.');
     return;
   }
@@ -3859,6 +4042,12 @@ document.addEventListener('click', async event => {
     'add-session-person': addSessionPerson,
     'cancel-session': cancelSession,
     'open-post': () => openPostComposer(),
+    'toggle-post-drafts': () => {
+      const list = $('#postDraftList');
+      const expanded = list.classList.toggle('hidden') === false;
+      $('.post-drafts-toggle').setAttribute('aria-expanded', String(expanded));
+    },
+    'save-post-draft': savePostDraft,
     'open-event': () => openEventComposer(),
     'open-perk': () => openPerkComposer(),
     'open-listing': () => openListingComposer(),
@@ -3991,6 +4180,7 @@ $$('input[name="postKind"]').forEach(input => input.addEventListener('change', e
 }));
 $('#mediaFile').addEventListener('change', async event => {
   const files = [...event.target.files];
+  state.postDraftFiles = files;
   if (!files.length) return;
   if (state.postPreviewUrl) URL.revokeObjectURL(state.postPreviewUrl);
   state.postPreviewUrl = '';
@@ -4000,23 +4190,13 @@ $('#mediaFile').addEventListener('change', async event => {
     : `${files.length} ${selectedPostKind() === 'clip' ? 'clips' : 'photos'} selected · ${totalMb.toFixed(1)} MB total`;
   try {
     await validatePostSelection(files);
-    const photos = files.every(file => file.type.startsWith('image/'));
     $('#postRatioPicker').classList.remove('hidden');
-    const previewImage = $('#postRatioPreview img');
-    const previewVideo = $('#postRatioPreview video');
-    if (photos) {
-      state.postPreviewUrl = URL.createObjectURL(files[0]);
-      previewImage.src = state.postPreviewUrl;
-    } else {
-      state.postPreviewUrl = URL.createObjectURL(files[0]);
-      previewVideo.src = state.postPreviewUrl;
-    }
-    $('#postRatioPreview').classList.remove('hidden');
-    applyPostRatioPreview();
+    showPostFilePreview(files);
   }
   catch (error) {
     toast(readableError(error), 5000);
     event.target.value = '';
+    state.postDraftFiles = [];
     $('#fileLabel').textContent = selectedPostKind() === 'photo' ? 'Choose up to 10 photos' : 'Choose up to 5 clips';
   }
 });

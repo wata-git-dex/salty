@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=80-stream-carousels">
+  <link rel="stylesheet" href="./styles.css?v=81-stoke-drafts">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -67,7 +67,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.80</small>
+    <small class="boot-credit">Saltyview Productions · v1.81</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -341,6 +341,10 @@
             <label><input type="radio" name="postKind" value="clip"><span><svg><use href="#i-camera"/></svg><b>Clips</b><small>up to 5 · 90s each</small></span></label>
           </div>
         </fieldset>
+        <section id="postDraftsPanel" class="post-drafts-panel">
+          <button type="button" class="post-drafts-toggle" data-action="toggle-post-drafts" aria-expanded="false"><span><svg><use href="#i-folder"/></svg><b>Drafts</b><small>Saved on this device for 30 days</small></span><strong id="postDraftCount">0</strong><svg><use href="#i-chevron"/></svg></button>
+          <div id="postDraftList" class="post-draft-list hidden"></div>
+        </section>
         <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple required><svg id="postMediaIcon"><use href="#i-photo"/></svg><strong id="fileLabel">Choose up to 10 photos</strong><small id="postMediaHelp">Original shapes are preserved unless you choose a crop below.</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
         <fieldset id="postRatioPicker" class="post-ratio-picker">
           <legend><span id="postRatioLegendLabel">Photo shape</span> <small>optional · Original never crops</small></legend>
@@ -359,6 +363,7 @@
         <label>Location <small>optional</small><input id="postSpot" maxlength="120" placeholder="City, beach, or general area" list="locationsList"></label>
         <input id="postLocation" type="hidden">
         <label><span id="postNotesLabel">Photo notes</span> <small>optional</small><textarea id="postCaption" maxlength="1000" placeholder="Anything about these photos?"></textarea></label>
+        <button id="postDraftSave" class="secondary-button post-draft-save" type="button" data-action="save-post-draft"><svg><use href="#i-folder"/></svg>Save draft</button>
         <button id="postSubmit" class="primary" type="submit">Share to Stoke</button>
         <button id="postDelete" class="danger-button hidden" type="button" data-action="delete-post"><svg><use href="#i-close"/></svg>Delete Stoke post</button>
         <p id="postDeleteNote" class="session-cancel-note hidden">Deletes the post and its photo or clip for everyone. Posting points already earned stay.</p>
@@ -471,9 +476,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.80</span>
-    <h3>Up to five clips in one Stoke post.</h3>
-    <ul><li>Large clips upload securely through Cloudflare Stream.</li><li>Interrupted uploads resume in small chunks.</li><li>Cloudflare prepares smooth playback for every phone and connection.</li></ul>
+    <span>NEW IN V1.81</span>
+    <h3>Save Stoke posts as drafts.</h3>
+    <ul><li>Photo and clip drafts keep their media and details for 30 days.</li><li>Open or delete drafts directly inside the Stoke composer.</li><li>Photo mode is blue; clip mode is amber, so you always know where you are.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -487,6 +492,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
-  <script src="./app.js?v=80-stream-carousels" defer></script>
+  <script src="./app.js?v=81-stoke-drafts" defer></script>
 </body>
 </html>
