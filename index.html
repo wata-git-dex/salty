@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=102-tap-reactions">
+  <link rel="stylesheet" href="./styles.css?v=103-sodium-emojis">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -555,21 +555,22 @@
 
     <section id="messageReactionSheet" class="sheet message-reaction-sheet" aria-modal="true" role="dialog" aria-labelledby="messageReactionTitle">
       <i class="grab"></i><button class="sheet-close" data-action="close-message-reaction" aria-label="Close emoji picker"><svg><use href="#i-close"/></svg></button>
-      <span class="sheet-eyebrow">REACTION</span><h2 id="messageReactionTitle">Choose any emoji</h2><p>Use any emoji from your phone keyboard.</p>
-      <div id="messageReactionQuickPicks" class="reaction-quick-picks" aria-label="Your quick emoji reactions"></div>
-      <form id="messageReactionForm">
-        <label>Your emoji<input id="messageReactionEmoji" type="text" maxlength="32" autocomplete="off" placeholder="Tap your emoji keyboard" aria-describedby="messageReactionHelp"></label>
-        <small id="messageReactionHelp">One emoji per reaction. Tap it again later to remove it.</small>
-        <button class="primary" type="submit">Add reaction</button>
-      </form>
+      <span class="sheet-eyebrow">REACTION</span><h2 id="messageReactionTitle">Give some stoke</h2><p>Reactions use Sodium icons. Type regular emojis normally inside your message.</p>
+      <div id="messageReactionQuickPicks" class="reaction-quick-picks" aria-label="Quick Sodium reactions"></div>
+      <div class="custom-reaction-picker">
+        <span>SODIUM EMOJIS</span>
+        <div id="customReactionTabs" class="custom-reaction-tabs" aria-label="Sodium emoji categories"></div>
+        <div id="customReactionGrid" class="custom-reaction-grid" aria-label="Sodium emoji pack"></div>
+      </div>
+      <small class="custom-reaction-note">Tap a Sodium icon to react. Tap the same reaction again later to remove it.</small>
     </section>
   </div>
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.102</span>
-    <h3>Cleaner chat reactions.</h3>
-    <ul><li>Tap any message to reveal your quick reactions underneath it.</li><li>Reactions already given stay visible.</li><li>The + button opens every emoji on your phone.</li></ul>
+    <span>NEW IN V1.103</span>
+    <h3>Sodium emojis are here.</h3>
+    <ul><li>Type normal phone emojis inside any message.</li><li>Tap a message to react with Sodium icons.</li><li>Use + to open all 90 custom reactions.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -584,6 +585,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
-  <script src="./app.js?v=102-tap-reactions" defer></script>
+  <script src="./app.js?v=103-sodium-emojis" defer></script>
 </body>
 </html>

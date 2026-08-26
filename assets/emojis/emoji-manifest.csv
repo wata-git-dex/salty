@@ -1,0 +1,91 @@
+category,display_name,shortcode,filename
+Sodium Core,"Salt Shaker Smile",:salt-shaker-smile:,png/core/salt-shaker-smile.png
+Sodium Core,"Salt Shaker Laugh",:salt-shaker-laugh:,png/core/salt-shaker-laugh.png
+Sodium Core,"Salt Shaker Stoked",:salt-shaker-stoked:,png/core/salt-shaker-stoked.png
+Sodium Core,"Salt Shaker Skeptical",:salt-shaker-skeptical:,png/core/salt-shaker-skeptical.png
+Sodium Core,"Salt Shaker Pissed",:salt-shaker-pissed:,png/core/salt-shaker-pissed.png
+Sodium Core,"Salt Shaker Sad",:salt-shaker-sad:,png/core/salt-shaker-sad.png
+Sodium Core,"Salt Crystal Love",:salt-crystal-love:,png/core/salt-crystal-love.png
+Sodium Core,"Salt Crystal Shocked",:salt-crystal-shocked:,png/core/salt-crystal-shocked.png
+Sodium Core,"Salt Crystal Dead",:salt-crystal-dead:,png/core/salt-crystal-dead.png
+Sodium Core,"Cooked",:salt-pile-cooked:,png/core/salt-pile-cooked.png
+Sodium Core,"Salty",:salt-pile-salty:,png/core/salt-pile-salty.png
+Sodium Core,"Salt Crystal Cheers",:salt-crystal-cheers:,png/core/salt-crystal-cheers.png
+Sodium Core,"Pumping",:wave-pumping:,png/core/wave-pumping.png
+Sodium Core,"Huge",:wave-huge:,png/core/wave-huge.png
+Sodium Core,"Glassy",:wave-glassy:,png/core/wave-glassy.png
+Sodium Core,"Flat",:wave-flat:,png/core/wave-flat.png
+Sodium Core,"Blown Out",:wave-blown-out:,png/core/wave-blown-out.png
+Sodium Core,"Whitewater",:wave-whitewater:,png/core/wave-whitewater.png
+Sodium Core,"Board Good",:surfboard-good:,png/core/surfboard-good.png
+Sodium Core,"Board Stoked",:surfboard-stoked:,png/core/surfboard-stoked.png
+Sodium Core,"Board Tired",:surfboard-tired:,png/core/surfboard-tired.png
+Sodium Core,"Board Unsure",:surfboard-unsure:,png/core/surfboard-unsure.png
+Sodium Core,"Board Dinged",:surfboard-dinged:,png/core/surfboard-dinged.png
+Sodium Core,"Board Broken",:surfboard-broken:,png/core/surfboard-broken.png
+Sodium Core,"Full Heart",:heart-full:,png/core/heart-full.png
+Sodium Core,"Half Heart",:heart-half:,png/core/heart-half.png
+Sodium Core,"Empty Heart",:heart-empty:,png/core/heart-empty.png
+Sodium Core,"Broken Heart",:heart-broken:,png/core/heart-broken.png
+Sodium Core,"Ocean Heart",:heart-ocean:,png/core/heart-ocean.png
+Sodium Core,"Salt Heart",:heart-salt:,png/core/heart-salt.png
+Surf Lore,"Otter Board Thief",:otter-board-thief:,png/surf-lore/otter-board-thief.png
+Surf Lore,"Seal Side-Eye",:seal-side-eye:,png/surf-lore/seal-side-eye.png
+Surf Lore,"Dolphin Launch",:dolphin-launch:,png/surf-lore/dolphin-launch.png
+Surf Lore,"Pelican on Board",:pelican-on-board:,png/surf-lore/pelican-on-board.png
+Surf Lore,"Crab Celebrate",:crab-celebrate:,png/surf-lore/crab-celebrate.png
+Surf Lore,"Octopus Overloaded",:octopus-overloaded:,png/surf-lore/octopus-overloaded.png
+Surf Lore,"Sharky",:sharky:,png/surf-lore/sharky.png
+Surf Lore,"Turtle Cruise",:turtle-cruise:,png/surf-lore/turtle-cruise.png
+Surf Lore,"Seagull Thief",:seagull-thief:,png/surf-lore/seagull-thief.png
+Surf Lore,"Whale Splash",:whale-splash:,png/surf-lore/whale-splash.png
+Surf Lore,"Fish Scatter",:fish-scatter:,png/surf-lore/fish-scatter.png
+Surf Lore,"Sea Lion and Salt",:sea-lion-salt:,png/surf-lore/sea-lion-salt.png
+Surf Lore,"Snake",:snake:,png/surf-lore/snake.png
+Surf Lore,"Foamie Kook",:foamie-kook:,png/surf-lore/foamie-kook.png
+Surf Lore,"Foamie Send It",:foamie-send-it:,png/surf-lore/foamie-send-it.png
+Surf Lore,"Foamie Pearled",:foamie-pearled:,png/surf-lore/foamie-pearled.png
+Surf Lore,"Foamie Tangled",:foamie-tangled:,png/surf-lore/foamie-tangled.png
+Surf Lore,"Foamie Destroyed",:foamie-destroyed:,png/surf-lore/foamie-destroyed.png
+Surf Lore,"Crowded",:crowded:,png/surf-lore/crowded.png
+Surf Lore,"Dropped In",:dropped-in:,png/surf-lore/dropped-in.png
+Surf Lore,"Going Straight",:foamie-going-straight:,png/surf-lore/foamie-going-straight.png
+Surf Lore,"Wrong Way",:foamie-wrong-way:,png/surf-lore/foamie-wrong-way.png
+Surf Lore,"Yard Sale",:yard-sale:,png/surf-lore/yard-sale.png
+Surf Lore,"Cleanup",:cleanup:,png/surf-lore/cleanup.png
+Chat Essentials,"Fire",:fire:,png/chat-essentials/fire.png
+Chat Essentials,"Eyes",:eyes:,png/chat-essentials/eyes.png
+Chat Essentials,"Skull",:skull:,png/chat-essentials/skull.png
+Chat Essentials,"Sparkle",:sparkle:,png/chat-essentials/sparkle.png
+Chat Essentials,"100",:one-hundred:,png/chat-essentials/one-hundred.png
+Chat Essentials,"Poop",:poop:,png/chat-essentials/poop.png
+Chat Essentials,"Yes",:yes:,png/chat-essentials/yes.png
+Chat Essentials,"No",:no:,png/chat-essentials/no.png
+Chat Essentials,"Question",:question:,png/chat-essentials/question.png
+Chat Essentials,"Alert",:alert:,png/chat-essentials/alert.png
+Chat Essentials,"Thumbs Up",:thumbs-up:,png/chat-essentials/thumbs-up.png
+Chat Essentials,"Thumbs Down",:thumbs-down:,png/chat-essentials/thumbs-down.png
+Chat Essentials,"Salt Coin",:salt-coin:,png/chat-essentials/salt-coin.png
+Chat Essentials,"Salt Coins",:salt-coins:,png/chat-essentials/salt-coins.png
+Chat Essentials,"Flying Money",:flying-money:,png/chat-essentials/flying-money.png
+Chat Essentials,"Treasure",:treasure:,png/chat-essentials/treasure.png
+Chat Essentials,"Rare Salt Crystal",:salt-crystal-rare:,png/chat-essentials/salt-crystal-rare.png
+Chat Essentials,"Broke",:broke:,png/chat-essentials/broke.png
+Chat Essentials,"Time",:time:,png/chat-essentials/time.png
+Chat Essentials,"Calendar",:calendar:,png/chat-essentials/calendar.png
+Chat Essentials,"Location",:location:,png/chat-essentials/location.png
+Chat Essentials,"Dawn Patrol",:dawn-patrol:,png/chat-essentials/dawn-patrol.png
+Chat Essentials,"Night Surf",:night-surf:,png/chat-essentials/night-surf.png
+Chat Essentials,"Surf Car",:surf-car:,png/chat-essentials/surf-car.png
+Chat Essentials,"Photo",:photo:,png/chat-essentials/photo.png
+Chat Essentials,"Video",:video:,png/chat-essentials/video.png
+Chat Essentials,"Play",:play:,png/chat-essentials/play.png
+Chat Essentials,"Music",:music:,png/chat-essentials/music.png
+Chat Essentials,"Headphones",:headphones:,png/chat-essentials/headphones.png
+Chat Essentials,"Wave Trophy",:wave-trophy:,png/chat-essentials/wave-trophy.png
+Chat Essentials,"Party",:party:,png/chat-essentials/party.png
+Chat Essentials,"Birthday",:birthday:,png/chat-essentials/birthday.png
+Chat Essentials,"Gift",:gift:,png/chat-essentials/gift.png
+Chat Essentials,"Cheers",:cheers:,png/chat-essentials/cheers.png
+Chat Essentials,"Coffee",:coffee:,png/chat-essentials/coffee.png
+Chat Essentials,"Pizza",:pizza:,png/chat-essentials/pizza.png

@@ -6,8 +6,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.102.
-- This release keeps chat uncluttered by revealing quick reactions when a member taps a message. Reactions already given remain visible, and the `+` button retains the full phone-emoji picker.
+- Current release: v1.103.
+- This release adds the supplied 90-piece Sodium emoji pack to Community Chat and DMs. Members type normal phone emojis inside messages; tapping a message reveals branded Sodium reactions, and `+` opens Sodium Core, Surf Lore, and Chat Essentials.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -95,9 +95,9 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - A member's own message bubble follows their selected Sodium theme instead of receiving a random speaker color; other senders retain distinct colors for quick scanning.
 - DMs remain text-only and private to the two participants.
 - A sender can edit or delete only their own messages in either chat surface.
-- Message reactions accept any single emoji from the member's phone keyboard. Each member chooses four quick picks in Settings; those choices follow their Sodium account across devices. Custom emoji reactions display and count normally.
+- Members can type any phone emoji normally inside message text. Message reactions are intentionally separate and use the packaged Sodium artwork; legacy phone-emoji reactions remain readable and removable.
 - Quick reactions appear directly below a message when it is tapped; existing reaction counts remain visible when the picker is closed.
-- Packaged Sodium custom emojis can be added from user-supplied transparent PNG, WebP, or SVG artwork without changing message privacy or exposing uploads publicly.
+- The packaged Sodium emoji library contains 90 user-supplied transparent pixel-art PNGs organized as Sodium Core, Surf Lore, and Chat Essentials. It is available in both Community Chat and DMs without changing message privacy or exposing uploads publicly.
 
 ## Clip deliveries
 
@@ -142,3 +142,5 @@ Version 1.90 makes phone clip uploads resilient to brief network interruptions a
 Version 1.91 raises the per-clip duration cap to five minutes while retaining the 1 GB file cap and five-clip carousel limit. It also uses Cloudflare’s required 5 MiB minimum TUS chunk size for large resumable uploads.
 
 Version 1.92 simplifies clip sharing for both audiences. Member links open the saved Sodium delivery; guest links open a delivery-only landing page with **Open your clips** as the primary action and optional membership second. Delivery-specific messages are removed, and every active invite PNG/PDF is refreshed to match the current behavior and media limits.
+
+Version 1.103 adds the 90-piece Sodium emoji pack to message reactions. Members keep their normal phone emoji keyboard while writing messages; tapping a message reveals four branded Sodium reactions, and `+` opens categorized Sodium Core, Surf Lore, and Chat Essentials artwork.

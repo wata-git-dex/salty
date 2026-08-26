@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.102';
+const APP_VERSION = '1.103';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -57,7 +57,9 @@ const NOTIFICATION_DEFAULTS = Object.freeze({
   clip_deliveries: true,
   new_members: true,
 });
-const DEFAULT_MESSAGE_REACTIONS = Object.freeze(['🌊', '🔥', '😂', '❤️']);
+const DEFAULT_MESSAGE_REACTIONS = Object.freeze(['s_wave-pumping', 's_salt-shaker-stoked', 's_salt-shaker-laugh', 's_heart-full']);
+const CUSTOM_REACTION_MANIFEST = './assets/emojis/emoji-manifest.csv';
+const CUSTOM_REACTION_CATEGORIES = Object.freeze(['Sodium Core', 'Surf Lore', 'Chat Essentials']);
 
 const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
@@ -84,6 +86,7 @@ const state = {
   editingMessageKind: '', editingMessageId: '', editingMessageHasAttachment: false,
   reactingMessageKind: '', reactingMessageId: '',
   quickMessageReactions: [...DEFAULT_MESSAGE_REACTIONS],
+  customMessageReactions: [], customReactionCategory: CUSTOM_REACTION_CATEGORIES[0],
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -156,13 +159,8 @@ function ensureThemeOptions() {
 }
 
 function ensureQuickReactionSettings() {
-  if ($('#quickReactionSettingsForm')) return;
-  const themeCard = $('.icon-settings');
-  if (!themeCard) return;
-  const card = document.createElement('div');
-  card.className = 'copy-card quick-reaction-settings';
-  card.innerHTML = `<span>CHAT</span><h3>Your quick reactions</h3><p>Choose the four emojis that appear under every message. The + button always opens the full emoji keyboard.</p><form id="quickReactionSettingsForm"><div class="quick-reaction-inputs">${[0,1,2,3].map(index => `<label><small>${index + 1}</small><input type="text" maxlength="32" autocomplete="off" data-quick-reaction-slot="${index}" aria-label="Quick reaction ${index + 1}"></label>`).join('')}</div><button class="secondary-button" type="submit">Save quick reactions</button></form><small class="quick-reaction-note">Use four different emojis from your phone keyboard. Your choices follow your Sodium account.</small>`;
-  themeCard.before(card);
+  // Message typing already has the phone keyboard. Reactions intentionally use
+  // the branded Sodium pack so the two interaction modes remain distinct.
 }
 
 function applyIconTheme(theme = 'ink', announce = false) {
@@ -271,7 +269,7 @@ async function init() {
   const params = new URLSearchParams(location.search);
   state.driveConnectResult = params.get('drive') || '';
   if (params.get('preview') === '1') {
-    runPreview();
+    await runPreview();
     return;
   }
   state.guestClipToken = params.get('guest-clips')?.trim() || '';
@@ -325,7 +323,7 @@ async function init() {
 
 }
 
-function runPreview() {
+async function runPreview() {
   const userId = '11111111-1111-4111-8111-111111111111';
   const regionId = '22222222-2222-4222-8222-222222222222';
   state.preview = true;
@@ -380,6 +378,7 @@ function runPreview() {
     { id:'issue-1', reporter:'jonah', reporter_profile:{ id:'jonah', name:'Jonah' }, category:'broken', description:'The Join surf button looked pressed, but my name did not appear until I reopened Sodium.', expected_behavior:'My name should show under Surfers immediately.', screen:'Sessions', app_version:APP_VERSION, user_agent:'iPhone · Mobile Safari', status:'new', admin_notes:'', created_at:new Date(Date.now() - 48 * 60000).toISOString() },
     { id:'issue-2', reporter:'mateo', reporter_profile:{ id:'mateo', name:'Mateo' }, category:'suggestion', description:'Could the event card make the address easier to tap?', expected_behavior:null, screen:'Events', app_version:APP_VERSION, user_agent:'iPhone · Home Screen app', status:'reviewing', admin_notes:'Check the map target size.', created_at:new Date(Date.now() - 26 * 3600000).toISOString() },
   ];
+  await loadCustomMessageReactions();
   renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderWeeklyRecaps(); renderPerks(); renderMarketplace(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderClipDeliveries(); renderIssueReports(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
@@ -643,7 +642,7 @@ async function enterCommunity() {
   localStorage.removeItem('salty:invite');
 
   state.profile = profile;
-  state.quickMessageReactions = normalizeQuickReactions(profile.quick_reactions);
+  state.quickMessageReactions = [...DEFAULT_MESSAGE_REACTIONS];
   if (!profile.onboarding_complete) {
     await showProfileSetup();
     return;
@@ -707,7 +706,7 @@ async function loadApp() {
     || state.regions.find(region => region.name === 'California') || state.regions[0];
   state.eventRegion = state.currentRegion;
   state.chatRegion = state.currentRegion;
-  await Promise.all([loadAvatarUrls(), loadNonprofitLogoUrls()]);
+  await Promise.all([loadAvatarUrls(), loadNonprofitLogoUrls(), loadCustomMessageReactions()]);
   renderChrome();
   await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadListings(), loadRoomMessages(), loadDmInbox(), loadClipDeliveries(), loadNotificationPreferences()]);
   await renderProfile();
@@ -1592,9 +1591,68 @@ function isSingleEmoji(value) {
   return segments.length === 1 && (/\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Presentation}/u.test(emoji) || /\uFE0F|\u20E3/u.test(emoji));
 }
 
+function parseCsvRow(line) {
+  const values = [];
+  let value = '';
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"' && quoted && line[index + 1] === '"') { value += '"'; index += 1; }
+    else if (character === '"') quoted = !quoted;
+    else if (character === ',' && !quoted) { values.push(value); value = ''; }
+    else value += character;
+  }
+  values.push(value);
+  return values;
+}
+
+async function loadCustomMessageReactions() {
+  if (state.customMessageReactions.length) return;
+  try {
+    const response = await fetch(CUSTOM_REACTION_MANIFEST, { cache:'force-cache' });
+    if (!response.ok) throw new Error(`Emoji pack returned ${response.status}`);
+    const rows = (await response.text()).trim().split(/\r?\n/).slice(1);
+    state.customMessageReactions = rows.map(parseCsvRow).map(([category, name, shortcode, filename]) => ({
+      category,
+      name,
+      id:`s_${String(shortcode || '').replaceAll(':', '')}`,
+      src:`./assets/emojis/${filename}`,
+    })).filter(reaction => reaction.id.length <= 32 && CUSTOM_REACTION_CATEGORIES.includes(reaction.category));
+  } catch (error) {
+    console.warn('Sodium emoji pack unavailable:', error);
+    state.customMessageReactions = [];
+  }
+}
+
+function customReaction(value) {
+  return state.customMessageReactions.find(reaction => reaction.id === value) || null;
+}
+
+function isMessageReaction(value) {
+  return isSingleEmoji(value) || Boolean(customReaction(value));
+}
+
+function reactionVisual(value) {
+  const reaction = customReaction(value);
+  return reaction
+    ? `<img class="custom-reaction-art" src="${esc(reaction.src)}" alt="${esc(reaction.name)}" loading="lazy">`
+    : `<span>${esc(value)}</span>`;
+}
+
+function renderCustomReactionPicks() {
+  const tabs = $('#customReactionTabs');
+  const grid = $('#customReactionGrid');
+  if (!tabs || !grid) return;
+  const availableCategories = CUSTOM_REACTION_CATEGORIES.filter(category => state.customMessageReactions.some(reaction => reaction.category === category));
+  if (!availableCategories.includes(state.customReactionCategory)) state.customReactionCategory = availableCategories[0] || '';
+  tabs.innerHTML = availableCategories.map(category => `<button type="button" class="${category === state.customReactionCategory ? 'active' : ''}" data-custom-reaction-category="${esc(category)}">${esc(category.replace('Sodium ', ''))}</button>`).join('');
+  const reactions = state.customMessageReactions.filter(reaction => reaction.category === state.customReactionCategory);
+  grid.innerHTML = reactions.map(reaction => `<button type="button" data-pick-custom-reaction="${esc(reaction.id)}" aria-label="React with ${esc(reaction.name)}" title="${esc(reaction.name)}"><img src="${esc(reaction.src)}" alt="" loading="lazy"><span>${esc(reaction.name)}</span></button>`).join('');
+}
+
 function normalizeQuickReactions(value) {
   const reactions = Array.isArray(value) ? value.map(item => String(item || '').trim()) : [];
-  return reactions.length === 4 && new Set(reactions).size === 4 && reactions.every(isSingleEmoji)
+  return reactions.length === 4 && new Set(reactions).size === 4 && reactions.every(item => Boolean(customReaction(item)))
     ? reactions
     : [...DEFAULT_MESSAGE_REACTIONS];
 }
@@ -1602,17 +1660,14 @@ function normalizeQuickReactions(value) {
 function renderQuickReactionPicks() {
   const container = $('#messageReactionQuickPicks');
   if (!container) return;
-  container.innerHTML = state.quickMessageReactions.map(emoji => `<button type="button" data-pick-message-emoji="${esc(emoji)}" aria-label="React ${esc(emoji)}">${esc(emoji)}</button>`).join('');
+  container.innerHTML = state.quickMessageReactions.map(emoji => {
+    const reaction = customReaction(emoji);
+    return `<button type="button" data-pick-custom-reaction="${esc(emoji)}" aria-label="React with ${esc(reaction?.name || 'Sodium emoji')}">${reactionVisual(emoji)}</button>`;
+  }).join('');
 }
 
 function renderQuickReactionSettings() {
   ensureQuickReactionSettings();
-  const form = $('#quickReactionSettingsForm');
-  if (!form) return;
-  normalizeQuickReactions(state.profile?.quick_reactions || state.quickMessageReactions).forEach((emoji, index) => {
-    const input = $(`[data-quick-reaction-slot="${index}"]`, form);
-    if (input) input.value = emoji;
-  });
 }
 
 async function saveQuickReactionSettings(event) {
@@ -1654,7 +1709,8 @@ function messageReactionsMarkup(kind, messageId) {
   const counts = Object.fromEntries(emojis.map(emoji => [emoji, reactions.filter(reaction => reaction.emoji === emoji).length]));
   return `<div class="message-reactions ${reactions.length ? 'has-reactions' : ''}" data-message-reaction-bar="${kind}:${messageId}" aria-label="Message reactions">${emojis.map(emoji => {
     const mine = reactions.some(reaction => reaction.emoji === emoji && reaction.user_id === state.profile.id);
-    return `<button class="${mine ? 'active ' : ''}${counts[emoji] ? 'has-count' : 'quick-only'}" data-message-reaction="${kind}:${messageId}:${emoji}" aria-label="React ${emoji}"><span>${emoji}</span>${counts[emoji] ? `<b>${counts[emoji]}</b>` : ''}</button>`;
+    const custom = customReaction(emoji);
+    return `<button class="${mine ? 'active ' : ''}${counts[emoji] ? 'has-count' : 'quick-only'}${custom ? ' custom-reaction' : ''}" data-message-reaction="${kind}:${messageId}:${esc(emoji)}" aria-label="React ${esc(custom?.name || emoji)}">${reactionVisual(emoji)}${counts[emoji] ? `<b>${counts[emoji]}</b>` : ''}</button>`;
   }).join('')}<button class="message-reaction-add" data-add-message-reaction="${kind}:${messageId}" aria-label="Choose another emoji"><span>＋</span></button></div>`;
 }
 
@@ -1671,9 +1727,15 @@ function toggleMessageReactionBar(trigger) {
 }
 
 async function toggleMessageReaction(kind, messageId, emoji) {
-  if (!isSingleEmoji(emoji)) { toast('Choose one emoji from your phone keyboard.'); return; }
+  if (!isMessageReaction(emoji)) { toast('Choose a Sodium reaction or one emoji from your phone keyboard.'); return; }
   const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
   const existing = state.messageReactions.find(reaction => reaction[key] === messageId && reaction.user_id === state.profile.id && reaction.emoji === emoji);
+  if (state.preview) {
+    if (existing) state.messageReactions = state.messageReactions.filter(reaction => reaction.id !== existing.id);
+    else state.messageReactions.push({ id:`preview-reaction-${Date.now()}`, [key]:messageId, user_id:state.profile.id, emoji });
+    if (kind === 'room') renderRoomMessages(); else renderDmConversation();
+    return;
+  }
   const result = existing
     ? await db.from('message_reactions').delete().eq('id', existing.id).eq('user_id', state.profile.id)
     : await db.from('message_reactions').insert({ [key]:messageId, user_id:state.profile.id, emoji });
@@ -1681,13 +1743,14 @@ async function toggleMessageReaction(kind, messageId, emoji) {
   if (kind === 'room') await loadRoomMessages(); else await loadDmConversation();
 }
 
-function openMessageReactionPicker(kind, messageId) {
+async function openMessageReactionPicker(kind, messageId) {
   state.reactingMessageKind = kind;
   state.reactingMessageId = messageId;
-  $('#messageReactionForm').reset();
+  $('#messageReactionForm')?.reset();
   renderQuickReactionPicks();
+  await loadCustomMessageReactions();
+  renderCustomReactionPicks();
   openSheet('messageReactionSheet');
-  setTimeout(() => $('#messageReactionEmoji').focus({ preventScroll:true }), 80);
 }
 
 function closeMessageReactionPicker() {
@@ -5116,6 +5179,8 @@ document.addEventListener('click', async event => {
   const messageReactionNode = event.target.closest('[data-message-reaction]');
   const addMessageReactionNode = event.target.closest('[data-add-message-reaction]');
   const pickMessageEmojiNode = event.target.closest('[data-pick-message-emoji]');
+  const customReactionCategoryNode = event.target.closest('[data-custom-reaction-category]');
+  const pickCustomReactionNode = event.target.closest('[data-pick-custom-reaction]');
   const profileStatTabNode = event.target.closest('[data-profile-stat-tab]');
   const carouselDirectionNode = event.target.closest('[data-carousel-direction]');
   const viewNode = event.target.closest('[data-view]');
@@ -5156,7 +5221,18 @@ document.addEventListener('click', async event => {
   }
   if (addMessageReactionNode) {
     const [kind, id] = addMessageReactionNode.dataset.addMessageReaction.split(':');
-    openMessageReactionPicker(kind, id); return;
+    await openMessageReactionPicker(kind, id); return;
+  }
+  if (customReactionCategoryNode) {
+    state.customReactionCategory = customReactionCategoryNode.dataset.customReactionCategory;
+    renderCustomReactionPicks(); return;
+  }
+  if (pickCustomReactionNode) {
+    const kind = state.reactingMessageKind;
+    const id = state.reactingMessageId;
+    const reaction = pickCustomReactionNode.dataset.pickCustomReaction;
+    closeMessageReactionPicker();
+    await toggleMessageReaction(kind, id, reaction); return;
   }
   if (pickMessageEmojiNode) {
     $('#messageReactionEmoji').value = pickMessageEmojiNode.dataset.pickMessageEmoji;
