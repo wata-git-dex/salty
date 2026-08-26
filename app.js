@@ -1616,7 +1616,7 @@ async function loadCustomMessageReactions() {
       category,
       name,
       id:`s_${String(shortcode || '').replaceAll(':', '')}`,
-      src:`./assets/emojis/${filename}`,
+      src:`./assets/emojis/${filename}?v=2`,
     })).filter(reaction => reaction.id.length <= 32 && CUSTOM_REACTION_CATEGORIES.includes(reaction.category));
   } catch (error) {
     console.warn('Sodium emoji pack unavailable:', error);
