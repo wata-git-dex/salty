@@ -552,9 +552,11 @@ async function signInWithGoogle() {
     }
   }
 
-  const redirect = new URL('./', location.href);
-  redirect.search = '';
-  redirect.hash = '';
+  const redirect = NATIVE_APP ? new URL('sodium://auth') : new URL('./', location.href);
+  if (!NATIVE_APP) {
+    redirect.search = '';
+    redirect.hash = '';
+  }
   redirect.searchParams.set('auth', 'google');
   if (isNew) redirect.searchParams.set('invite', state.pendingInvite);
   if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
@@ -575,8 +577,25 @@ async function signInWithGoogle() {
     message.classList.remove('hidden');
     toast(readableError(error), 6000);
   } else if (NATIVE_APP && data?.url) {
-    await NATIVE_BROWSER.open({ url:data.url, presentationStyle:'popover' });
+    try {
+      if (typeof NATIVE_BROWSER?.open === 'function') {
+        await NATIVE_BROWSER.open({ url:data.url, presentationStyle:'popover' });
+      } else {
+        location.assign(data.url);
+      }
+    } catch (browserError) {
+      button.disabled = false;
+      button.innerHTML = originalLabel;
+      toast(readableError(browserError), 6000);
+    }
   }
+}
+
+function resetGoogleAuthButton() {
+  const button = $('#googleAuthButton');
+  if (!button || button.textContent.trim() !== 'Opening Google…') return;
+  button.disabled = false;
+  button.innerHTML = '<span class="oauth-g" aria-hidden="true">G</span><span>Continue with Google</span>';
 }
 
 async function handleNativeAuthUrl(event) {
@@ -6138,5 +6157,19 @@ window.addEventListener('appinstalled', () => {
 });
 
 applyIconTheme(localStorage.getItem('salty:theme') || localStorage.getItem('salty:icon-theme') || 'ink');
-if (NATIVE_APP_LINKS?.addListener) void NATIVE_APP_LINKS.addListener('appUrlOpen', handleNativeAuthUrl);
-init().catch(error => { showWelcome(); toast(readableError(error), 6000); });
+
+async function bootstrap() {
+  if (NATIVE_APP_LINKS?.addListener) await NATIVE_APP_LINKS.addListener('appUrlOpen', handleNativeAuthUrl);
+  if (NATIVE_APP_LINKS?.addListener) {
+    await NATIVE_APP_LINKS.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) setTimeout(resetGoogleAuthButton, 750);
+    });
+  }
+  await init();
+  if (NATIVE_APP_LINKS?.getLaunchUrl) {
+    const launch = await NATIVE_APP_LINKS.getLaunchUrl();
+    if (launch?.url) await handleNativeAuthUrl(launch);
+  }
+}
+
+bootstrap().catch(error => { showWelcome(); toast(readableError(error), 6000); });
