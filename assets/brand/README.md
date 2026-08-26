@@ -44,6 +44,12 @@ The product wordmark and display headings use **Archivo** at heavy weights. Prod
 - `themes/` — optional user-selectable app appearance icons.
 - `palette/` — reusable color tokens.
 
+The native iPhone build treats this folder as its source of truth. Running
+`pnpm native:build` copies `png/sodium-ios-app-icon-1024.png` and
+`png/sodium-launch-screen-2732.png` into the Xcode asset catalog. Edit or
+replace the master files here first; do not independently replace the copies
+inside `ios/App/App/Assets.xcassets/`.
+
 The matching source pack is also mirrored to iCloud under:
 
 `SODIUM/APPS/Sodium Community App/Sodium Brand Assets`

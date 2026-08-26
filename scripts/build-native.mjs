@@ -5,6 +5,26 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = resolve(root, 'native-web');
 
+// The checked-in brand pack is the single source of truth for native artwork.
+// Sync these files on every native build so Xcode cannot drift from the
+// approved Sodium community identity stored in assets/brand/.
+const nativeBrandAssets = [
+  {
+    source: 'assets/brand/png/sodium-ios-app-icon-1024.png',
+    destinations: [
+      'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png',
+    ],
+  },
+  {
+    source: 'assets/brand/png/sodium-launch-screen-2732.png',
+    destinations: [
+      'ios/App/App/Assets.xcassets/Splash.imageset/splash-2732x2732.png',
+      'ios/App/App/Assets.xcassets/Splash.imageset/splash-2732x2732-1.png',
+      'ios/App/App/Assets.xcassets/Splash.imageset/splash-2732x2732-2.png',
+    ],
+  },
+];
+
 const files = [
   'app.js',
   'styles.css',
@@ -39,6 +59,12 @@ const directories = [
 
 await rm(output, { recursive:true, force:true });
 await mkdir(output, { recursive:true });
+
+for (const asset of nativeBrandAssets) {
+  for (const destination of asset.destinations) {
+    await cp(resolve(root, asset.source), resolve(root, destination));
+  }
+}
 
 for (const file of files) {
   const destination = resolve(output, file);
