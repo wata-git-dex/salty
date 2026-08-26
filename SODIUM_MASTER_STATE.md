@@ -6,7 +6,7 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.103.
+- Current release: v1.104.
 - This release adds the supplied 90-piece Sodium emoji pack to Community Chat and DMs. Members type normal phone emojis inside messages; tapping a message reveals branded Sodium reactions, and `+` opens Sodium Core, Surf Lore, and Chat Essentials.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
@@ -144,3 +144,5 @@ Version 1.91 raises the per-clip duration cap to five minutes while retaining th
 Version 1.92 simplifies clip sharing for both audiences. Member links open the saved Sodium delivery; guest links open a delivery-only landing page with **Open your clips** as the primary action and optional membership second. Delivery-specific messages are removed, and every active invite PNG/PDF is refreshed to match the current behavior and media limits.
 
 Version 1.103 adds the 90-piece Sodium emoji pack to message reactions. Members keep their normal phone emoji keyboard while writing messages; tapping a message reveals four branded Sodium reactions, and `+` opens categorized Sodium Core, Surf Lore, and Chat Essentials artwork.
+
+Version 1.104 repairs the Stoke composer: people can be tagged as members or typed names, posts can link to a session, saved drafts reopen from Stoke, media-type changes clear stale upload errors, captions support Sodium emoji artwork, and large clips use the supported `tus-js-client` resumable upload path instead of the hand-built retry loop.

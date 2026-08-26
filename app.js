@@ -1,4 +1,4 @@
-/* global supabase, QRCode */
+/* global supabase, QRCode, tus */
 'use strict';
 
 if (location.hostname === 'app.saltyviewfinder.com') {
@@ -26,7 +26,9 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.103';
+const APP_VERSION = '1.104';
+const POST_PERSON_TAG_PREFIX = '__person__:';
+const POST_SESSION_TAG_PREFIX = '__session__:';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -44,7 +46,6 @@ const POST_DRAFT_STORE = 'drafts';
 const POST_DRAFT_TTL = 30 * 24 * 60 * 60 * 1000;
 const STREAM_UPLOAD_SESSION_KEY = 'sodium:stream-upload-sessions';
 const STREAM_UPLOAD_SESSION_TTL = 24 * 60 * 60 * 1000;
-const STREAM_RETRY_DELAYS = Object.freeze([0, 1000, 2500, 5000, 10000, 20000, 30000, 45000, 60000]);
 const CLIP_INBOX_SEEN_KEY = 'sodium:clip-inbox-seen';
 const NOTIFICATION_DEFAULTS = Object.freeze({
   master_enabled: true,
@@ -79,14 +80,14 @@ const state = {
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
   marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent', sharingSessionId: null,
   guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
-  postMemberTags: [], postCustomTags: [], qrInviteUrl: '', qrInviteRegionName: '',
+  postMemberTags: [], postPersonNames: [], postCustomTags: [], postSessionId: '', qrInviteUrl: '', qrInviteRegionName: '',
   nonprofitLogoUrls: {}, editingNonprofitId: null, drawerScrollY: 0,
   googleDriveConnected: false, googleDriveChecked: false, googleDriveSyncTimer: null,
   driveConnectResult: '', driveReconnectWarned: false,
   editingMessageKind: '', editingMessageId: '', editingMessageHasAttachment: false,
   reactingMessageKind: '', reactingMessageId: '',
   quickMessageReactions: [...DEFAULT_MESSAGE_REACTIONS],
-  customMessageReactions: [], customReactionCategory: CUSTOM_REACTION_CATEGORIES[0],
+  customMessageReactions: [], customReactionCategory: CUSTOM_REACTION_CATEGORIES[0], emojiPickerMode: 'reaction', activePostUpload: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -709,6 +710,7 @@ async function loadApp() {
   await Promise.all([loadAvatarUrls(), loadNonprofitLogoUrls(), loadCustomMessageReactions()]);
   renderChrome();
   await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadListings(), loadRoomMessages(), loadDmInbox(), loadClipDeliveries(), loadNotificationPreferences()]);
+  await loadPostDrafts();
   await renderProfile();
   renderMembers();
   if (state.profile?.is_admin) await loadIssueReports({ silent:true });
@@ -1175,7 +1177,7 @@ function renderChrome() {
 function updateCreateFab(view = state.view) {
   const createOptions = {
     surfing: { action:'open-session', label:'New session', icon:'i-surf' },
-    feed: { action:'open-post', label:'Add photo or clip', icon:'i-photo' },
+    feed: { action:'open-post', label:'Share to Stoke', icon:'i-wave' },
     events: { action:'open-event', label:'Add event', icon:'i-calendar' },
     dms: state.inboxTab === 'clips'
       ? { action:'open-clip-delivery', label:'Send clips', icon:'i-camera', tone:'clip-fab' }
@@ -1615,6 +1617,7 @@ async function loadCustomMessageReactions() {
     state.customMessageReactions = rows.map(parseCsvRow).map(([category, name, shortcode, filename]) => ({
       category,
       name,
+      shortcode,
       id:`s_${String(shortcode || '').replaceAll(':', '')}`,
       src:`./assets/emojis/${filename}?v=2`,
     })).filter(reaction => reaction.id.length <= 32 && CUSTOM_REACTION_CATEGORIES.includes(reaction.category));
@@ -1637,6 +1640,15 @@ function reactionVisual(value) {
   return reaction
     ? `<img class="custom-reaction-art" src="${esc(reaction.src)}" alt="${esc(reaction.name)}" loading="lazy">`
     : `<span>${esc(value)}</span>`;
+}
+
+function postCaptionMarkup(value) {
+  let html = esc(value || '');
+  state.customMessageReactions.forEach(reaction => {
+    if (!reaction.shortcode || !html.includes(reaction.shortcode)) return;
+    html = html.replaceAll(reaction.shortcode, `<img class="caption-sodium-emoji" src="${esc(reaction.src)}" alt="${esc(reaction.name)}" title="${esc(reaction.name)}">`);
+  });
+  return html;
 }
 
 function renderCustomReactionPicks() {
@@ -1744,6 +1756,7 @@ async function toggleMessageReaction(kind, messageId, emoji) {
 }
 
 async function openMessageReactionPicker(kind, messageId) {
+  state.emojiPickerMode = 'reaction';
   state.reactingMessageKind = kind;
   state.reactingMessageId = messageId;
   $('#messageReactionForm')?.reset();
@@ -1753,10 +1766,45 @@ async function openMessageReactionPicker(kind, messageId) {
   openSheet('messageReactionSheet');
 }
 
+async function openCaptionEmojiPicker() {
+  await loadCustomMessageReactions();
+  const panel = $('#captionEmojiPanel');
+  const opening = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !opening);
+  if (opening) renderCaptionEmojiPicks();
+}
+
+function renderCaptionEmojiPicks() {
+  const tabs = $('#captionEmojiTabs');
+  const grid = $('#captionEmojiGrid');
+  const categories = CUSTOM_REACTION_CATEGORIES.filter(category => state.customMessageReactions.some(reaction => reaction.category === category));
+  if (!categories.includes(state.customReactionCategory)) state.customReactionCategory = categories[0] || '';
+  tabs.innerHTML = categories.map(category => `<button type="button" class="${category === state.customReactionCategory ? 'active' : ''}" data-caption-emoji-category="${esc(category)}">${esc(category.replace('Sodium ', ''))}</button>`).join('');
+  grid.innerHTML = state.customMessageReactions.filter(reaction => reaction.category === state.customReactionCategory).map(reaction => `<button type="button" data-pick-caption-emoji="${esc(reaction.id)}" aria-label="Add ${esc(reaction.name)}"><img src="${esc(reaction.src)}" alt="" loading="lazy"><span>${esc(reaction.name)}</span></button>`).join('');
+}
+
+function insertCaptionEmoji(reactionId) {
+  const reaction = customReaction(reactionId);
+  const input = $('#postCaption');
+  if (!reaction?.shortcode || !input) return;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  const before = input.value.slice(0, start).trimEnd();
+  const after = input.value.slice(end).trimStart();
+  const insertion = `${before ? ' ' : ''}${reaction.shortcode}${after ? ' ' : ''}`;
+  input.value = `${input.value.slice(0, start)}${insertion}${input.value.slice(end)}`.slice(0, input.maxLength);
+  $('#captionEmojiPanel').classList.add('hidden');
+  input.focus();
+}
+
 function closeMessageReactionPicker() {
   state.reactingMessageKind = '';
   state.reactingMessageId = '';
   $('#messageReactionForm')?.reset();
+  $('#messageReactionTitle').textContent = 'Give some stoke';
+  $('#messageReactionTitle').nextElementSibling.textContent = 'Reactions use Sodium icons. Type regular emojis normally inside your message.';
+  $('#messageReactionQuickPicks').classList.remove('hidden');
+  state.emojiPickerMode = 'reaction';
   closeSheet();
 }
 
@@ -3936,11 +3984,14 @@ function renderPosts() {
     const boardCredit = post.media_type === 'clip' && post.board ? `<span class="credit"><b>Board</b>${esc(post.board)}</span>` : '';
     const memberTags = (post.post_tags || []).filter(tag => tag.role === 'surfer' && tag.profile?.name).map(tag => tag.profile.name);
     const legacySubject = post.surfer_name && !memberTags.some(name => name.toLowerCase() === post.surfer_name.toLowerCase()) ? [post.surfer_name] : [];
-    const visualTags = [...memberTags, ...legacySubject, ...(Array.isArray(post.custom_tags) ? post.custom_tags : [])];
+    const unpackedTags = unpackPostCustomTags(post.custom_tags);
+    const visualTags = [...memberTags, ...legacySubject, ...unpackedTags.people, ...unpackedTags.custom];
+    const linkedSession = unpackedTags.sessionId ? state.sessions.find(session => session.id === unpackedTags.sessionId) : null;
+    const sessionCredit = linkedSession ? `<span class="credit linked-session"><b>Session</b>${esc(postSessionLabel(linkedSession))}</span>` : '';
     const tagMarkup = visualTags.map(label => `<span>${esc(label)}</span>`).join('');
     const tagUi = visualTags.length ? `<button class="post-tag-trigger" type="button" data-toggle-post-tags="${post.id}" aria-label="Show tags"><svg><use href="#i-user"/></svg><b>${visualTags.length}</b></button><div class="post-visual-tags" data-post-tags="${post.id}">${tagMarkup}</div>` : '';
     const stokeLabel = liked ? 'Remove the Stoke you gave this post' : 'Give this post Stoke';
-    return `<article class="post-card"><div class="post-media ratio-${ratio}"${mediaStyle}>${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}${tagUi}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>${subjectRole}</b>${esc(post.surfer_name)}</span>` : ''}${boardCredit}<span class="credit filmer"><b>${creatorRole}</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${esc(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="stoke-button ${liked ? 'liked' : ''}" aria-label="${stokeLabel}"><svg><use href="#i-wave"/></svg><span>Stoke</span><b>${post.post_likes.length}</b></button><button data-comment-toggle="${post.id}" aria-label="Show comments"><svg><use href="#i-chat"/></svg><span>Comment</span><b>${post.post_comments.length}</b></button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
+    return `<article class="post-card"><div class="post-media ratio-${ratio}"${mediaStyle}>${media}<span class="post-author">${esc(post.spot?.name || post.author_profile?.name || 'Sodium')}</span>${edit}${tagUi}<div class="post-overlay"><div class="credits">${post.surfer_name ? `<span class="credit"><b>${subjectRole}</b>${esc(post.surfer_name)}</span>` : ''}${sessionCredit}${boardCredit}<span class="credit filmer"><b>${creatorRole}</b>${esc(post.filmer_name)}</span></div>${post.caption ? `<p class="post-caption">${postCaptionMarkup(post.caption)}</p>` : ''}</div></div><div class="post-foot"><button data-like="${post.id}" class="stoke-button ${liked ? 'liked' : ''}" aria-label="${stokeLabel}"><svg><use href="#i-wave"/></svg><span>Stoke</span><b>${post.post_likes.length}</b></button><button data-comment-toggle="${post.id}" aria-label="Show comments"><svg><use href="#i-chat"/></svg><span>Comment</span><b>${post.post_comments.length}</b></button><small>◎ Everyone sees this</small></div><div class="comments" data-comments="${post.id}">${comments}<form class="comment-form" data-comment-form="${post.id}"><input maxlength="1000" required placeholder="Add a comment…"><button>↑</button></form></div></article>`;
   }).join('');
   bindPostCarousels();
 }
@@ -3983,10 +4034,6 @@ async function uploadMedia(file, path) {
   return path;
 }
 
-function pause(milliseconds) {
-  return new Promise(resolve => setTimeout(resolve, milliseconds));
-}
-
 function streamUploadFingerprint(file) {
   return [state.profile?.id || 'member', file.name, file.size, file.lastModified || 0, file.type || 'video'].join(':');
 }
@@ -4019,84 +4066,6 @@ function clearStreamUploadSession(fingerprint) {
   } catch (_error) { /* Nothing else to clean up. */ }
 }
 
-async function waitForUploadNetwork(statusCallback) {
-  if (navigator.onLine !== false) return;
-  statusCallback('Upload paused—waiting for internet…');
-  await new Promise(resolve => {
-    const timer = setTimeout(resolve, 60000);
-    addEventListener('online', () => { clearTimeout(timer); resolve(); }, { once:true });
-  });
-}
-
-async function streamUploadOffset(uploadUrl, fallbackOffset) {
-  try {
-    const response = await fetch(uploadUrl, {
-      method:'HEAD',
-      headers:{ 'Tus-Resumable':'1.0.0' },
-      cache:'no-store',
-    });
-    if (!response.ok) return { ok:false, status:response.status, offset:fallbackOffset };
-    const offsetHeader = response.headers.get('Upload-Offset');
-    const serverOffset = offsetHeader === null ? NaN : Number(offsetHeader);
-    return { ok:true, status:response.status, offset:Number.isFinite(serverOffset) ? serverOffset : fallbackOffset };
-  } catch (_error) {
-    return { ok:false, status:0, offset:fallbackOffset };
-  }
-}
-
-async function uploadStreamChunk(uploadUrl, chunk, offset, statusCallback) {
-  let lastError;
-  for (let attempt = 0; attempt < STREAM_RETRY_DELAYS.length; attempt += 1) {
-    const delay = STREAM_RETRY_DELAYS[attempt];
-    if (delay) {
-      statusCallback(`Connection interrupted—retrying in ${Math.ceil(delay / 1000)}s…`);
-      await pause(delay);
-    }
-    await waitForUploadNetwork(statusCallback);
-    if (attempt) {
-      const checkpoint = await streamUploadOffset(uploadUrl, offset);
-      if (checkpoint.ok && checkpoint.offset > offset) return { offset:checkpoint.offset };
-      if ([404, 410].includes(checkpoint.status)) throw new Error('This upload checkpoint expired. Start the clip again.');
-    }
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 180000);
-      let response;
-      try {
-        response = await fetch(uploadUrl, {
-          method:'PATCH',
-          headers:{
-            'Tus-Resumable':'1.0.0',
-            'Upload-Offset':String(offset),
-            'Content-Type':'application/offset+octet-stream',
-          },
-          body:chunk,
-          signal:controller.signal,
-        });
-      } finally { clearTimeout(timeout); }
-      if (response.ok) {
-        const offsetHeader = response.headers.get('Upload-Offset');
-        const header = offsetHeader === null ? NaN : Number(offsetHeader);
-        return { offset:Number.isFinite(header) ? header : offset + chunk.size };
-      }
-      if (response.status === 409) {
-        const checkpoint = await streamUploadOffset(uploadUrl, offset);
-        if (checkpoint.ok) return { offset:checkpoint.offset };
-      }
-      if (response.status < 500 && response.status !== 408 && response.status !== 429) {
-        throw new Error(`Cloudflare rejected this clip with status ${response.status}.`);
-      }
-      lastError = new Error(`Upload service returned ${response.status}.`);
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  const error = new Error('The upload is paused because the connection keeps dropping.');
-  error.recoverableUpload = true;
-  error.cause = lastError;
-  throw error;
-}
-
 async function uploadStreamClip(file, progressCallback = () => {}, statusCallback = () => {}) {
   const fingerprint = streamUploadFingerprint(file);
   const saved = readStreamUploadSessions()[fingerprint];
@@ -4106,19 +4075,6 @@ async function uploadStreamClip(file, progressCallback = () => {}, statusCallbac
     return { uid:saved.uid, duration:saved.duration, fingerprint };
   }
   let created = saved?.uploadUrl && saved?.uid ? saved : null;
-  let offset = 0;
-  if (created) {
-    statusCallback('Checking the saved upload…');
-    const checkpoint = await streamUploadOffset(created.uploadUrl, Number(created.offset) || 0);
-    if (checkpoint.ok) {
-      offset = checkpoint.offset;
-      progressCallback(offset / file.size);
-      statusCallback(offset ? `Resuming at ${Math.round(offset / file.size * 100)}%…` : 'Resuming upload…');
-    } else if ([404, 410].includes(checkpoint.status)) {
-      clearStreamUploadSession(fingerprint);
-      created = null;
-    }
-  }
   if (!created) {
     statusCallback('Preparing a secure resumable upload…');
     created = await streamRequest('/upload', {
@@ -4128,37 +4084,52 @@ async function uploadStreamClip(file, progressCallback = () => {}, statusCallbac
     });
     saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:0 });
   }
-  // Cloudflare TUS requires non-final chunks to be at least 5 MiB and divisible by 256 KiB.
-  const chunkSize = 5 * 1024 * 1024;
-  const attemptStartedAt = Date.now();
-  const attemptStartingOffset = offset;
-  try {
-    while (offset < file.size) {
-      const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
-      statusCallback(`Uploading · ${Math.round(offset / file.size * 100)}%`);
-      const result = await uploadStreamChunk(created.uploadUrl, chunk, offset, statusCallback);
-      offset = result.offset;
-      saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset });
-      progressCallback(offset / file.size);
-      const elapsedSeconds = Math.max(1, (Date.now() - attemptStartedAt) / 1000);
-      const bytesThisAttempt = Math.max(0, offset - attemptStartingOffset);
-      const bytesPerSecond = bytesThisAttempt / elapsedSeconds;
-      const remainingSeconds = bytesPerSecond > 0 ? (file.size - offset) / bytesPerSecond : 0;
-      const eta = remainingSeconds >= 1 ? ` · about ${formatUploadTime(remainingSeconds)} left` : '';
-      statusCallback(`Uploading · ${Math.min(100, Math.round(offset / file.size * 100))}%${eta}`);
-    }
-    const duration = await videoDuration(file);
-    saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:file.size, duration, complete:true });
-    statusCallback('Upload complete—Cloudflare is processing the clip…');
-    return { uid:created.uid, duration, fingerprint };
-  } catch (error) {
-    saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset });
-    if (error.recoverableUpload) throw error;
-    try { await streamRequest(`/video/${encodeURIComponent(created.uid)}`, { method:'DELETE' }); }
-    catch (_cleanupError) { /* Cloudflare will retain an incomplete upload until expiry. */ }
-    clearStreamUploadSession(fingerprint);
-    throw error;
-  }
+  if (!globalThis.tus?.Upload) throw new Error('The resumable uploader did not load. Close and reopen Sodium, then try again.');
+  const duration = await videoDuration(file);
+  const startedAt = Date.now();
+  let lastBytes = Number(saved?.offset) || 0;
+  return await new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      uploadUrl:created.uploadUrl,
+      // Cloudflare requires at least 5 MiB. Ten MiB keeps retries small on weak mobile connections.
+      chunkSize:10 * 1024 * 1024,
+      retryDelays:[0, 2000, 5000],
+      removeFingerprintOnSuccess:true,
+      onShouldRetry(error, attempt, options) {
+        if (attempt >= options.retryDelays.length) return false;
+        const status = error?.originalResponse?.getStatus?.() || 0;
+        return !status || status === 408 || status === 409 || status === 423 || status === 429 || status >= 500;
+      },
+      onError(error) {
+        state.activePostUpload = null;
+        saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:lastBytes });
+        const paused = new Error('Upload paused because the connection dropped. Your progress is saved.');
+        paused.recoverableUpload = true;
+        paused.cause = error;
+        reject(paused);
+      },
+      onProgress(bytesUploaded, bytesTotal) {
+        lastBytes = bytesUploaded;
+        saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:bytesUploaded });
+        const fraction = bytesTotal ? bytesUploaded / bytesTotal : 0;
+        progressCallback(fraction);
+        const elapsed = Math.max(1, (Date.now() - startedAt) / 1000);
+        const speed = Math.max(1, bytesUploaded - (Number(saved?.offset) || 0)) / elapsed;
+        const remaining = speed > 0 ? (bytesTotal - bytesUploaded) / speed : 0;
+        const eta = remaining >= 2 ? ` · about ${formatUploadTime(remaining)} left` : '';
+        statusCallback(`Uploading · ${Math.round(fraction * 100)}%${eta}`);
+      },
+      onSuccess() {
+        state.activePostUpload = null;
+        saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:file.size, duration, complete:true });
+        statusCallback('Upload complete—Cloudflare is processing the clip…');
+        resolve({ uid:created.uid, duration, fingerprint });
+      },
+    });
+    state.activePostUpload = upload;
+    statusCallback(saved?.offset ? 'Resuming saved upload…' : 'Starting resumable upload…');
+    upload.start();
+  });
 }
 
 function formatUploadTime(seconds) {
@@ -4211,25 +4182,63 @@ function currentPostFiles() {
   return state.postDraftFiles.length ? [...state.postDraftFiles] : [...$('#mediaFile').files];
 }
 
+function storedPostCustomTags() {
+  return [
+    ...state.postPersonNames.map(name => `${POST_PERSON_TAG_PREFIX}${name}`),
+    ...state.postCustomTags,
+    ...(state.postSessionId ? [`${POST_SESSION_TAG_PREFIX}${state.postSessionId}`] : []),
+  ];
+}
+
+function unpackPostCustomTags(tags = []) {
+  const values = Array.isArray(tags) ? tags.filter(value => typeof value === 'string') : [];
+  return {
+    people:values.filter(value => value.startsWith(POST_PERSON_TAG_PREFIX)).map(value => value.slice(POST_PERSON_TAG_PREFIX.length)).filter(Boolean),
+    sessionId:values.find(value => value.startsWith(POST_SESSION_TAG_PREFIX))?.slice(POST_SESSION_TAG_PREFIX.length) || '',
+    custom:values.filter(value => !value.startsWith(POST_PERSON_TAG_PREFIX) && !value.startsWith(POST_SESSION_TAG_PREFIX)),
+  };
+}
+
+function postSessionLabel(session) {
+  const spot = session?.spot?.name || session?.spot_name || 'Session';
+  const when = session?.surf_time ? new Intl.DateTimeFormat(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }).format(new Date(session.surf_time)) : (session?.when_label || '');
+  return `${spot}${when ? ` · ${when}` : ''}`;
+}
+
+function renderPostSessionOptions(selected = state.postSessionId) {
+  const select = $('#postSession');
+  if (!select) return;
+  const sessions = [...state.sessions].sort((a, b) => new Date(b.surf_time || b.created_at || 0) - new Date(a.surf_time || a.created_at || 0));
+  select.innerHTML = '<option value="">No linked session</option>' + sessions.map(session => `<option value="${esc(session.id)}">${esc(postSessionLabel(session))}</option>`).join('');
+  if (selected && !sessions.some(session => session.id === selected)) select.insertAdjacentHTML('beforeend', `<option value="${esc(selected)}">Linked session</option>`);
+  select.value = selected || '';
+}
+
 function renderPostTagEditors() {
   const members = $('#postMemberTags');
   const custom = $('#postCustomTags');
   if (!members || !custom) return;
-  members.innerHTML = state.postMemberTags.map(person => `<button type="button" data-remove-post-member-tag="${esc(person.id)}"><svg><use href="#i-user"/></svg>${esc(person.name)}<i>×</i></button>`).join('');
+  members.innerHTML = state.postMemberTags.map(person => `<button type="button" data-remove-post-member-tag="${esc(person.id)}"><svg><use href="#i-user"/></svg>${esc(person.name)}<i>×</i></button>`).join('')
+    + state.postPersonNames.map((name, index) => `<button type="button" class="not-member" data-remove-post-person-name="${index}"><svg><use href="#i-user"/></svg>${esc(name)}<small>not on Sodium</small><i>×</i></button>`).join('');
   custom.innerHTML = state.postCustomTags.map((label, index) => `<button type="button" data-remove-post-custom-tag="${index}">${esc(label)}<i>×</i></button>`).join('');
-  members.classList.toggle('empty', !state.postMemberTags.length);
+  members.classList.toggle('empty', !state.postMemberTags.length && !state.postPersonNames.length);
   custom.classList.toggle('empty', !state.postCustomTags.length);
 }
 
 function addPostMemberTag() {
   const input = $('#postMemberTagInput');
-  const value = input.value.trim().toLowerCase();
+  const rawValue = input.value.trim().replace(/\s+/g, ' ');
+  const value = rawValue.toLowerCase();
   if (!value) return;
   const person = state.people.find(item => item.name?.trim().toLowerCase() === value);
-  if (!person) { toast('Choose a Sodium member from the name list. Use Custom tags for anyone or anything else.'); return; }
-  if (state.postMemberTags.some(item => item.id === person.id)) { input.value = ''; return; }
-  if (state.postMemberTags.length >= 10) { toast('You can tag up to 10 Sodium members on one post.'); return; }
-  state.postMemberTags.push({ id:person.id, name:person.name });
+  if (state.postMemberTags.length + state.postPersonNames.length >= 10) { toast('You can tag up to 10 people on one post.'); return; }
+  if (person) {
+    if (state.postMemberTags.some(item => item.id === person.id)) { input.value = ''; return; }
+    state.postMemberTags.push({ id:person.id, name:person.name });
+  } else {
+    if (state.postPersonNames.some(name => name.toLowerCase() === value)) { input.value = ''; return; }
+    state.postPersonNames.push(rawValue);
+  }
   input.value = '';
   renderPostTagEditors();
 }
@@ -4255,13 +4264,23 @@ function renderPostDrafts() {
   $('#postDraftCount').textContent = String(drafts.length);
   if (!drafts.length) {
     list.innerHTML = '<p class="post-draft-empty">No saved drafts on this device.</p>';
+    renderStokeDraftBanner();
     return;
   }
   list.innerHTML = drafts.map(draft => {
     const count = draft.files?.length || 0;
     const age = new Intl.DateTimeFormat(undefined, { month:'short', day:'numeric' }).format(new Date(draft.updatedAt));
-    return `<article class="post-draft-card"><span><b>${esc(postDraftTitle(draft))}</b><small>${draft.kind === 'clip' ? 'CLIPS' : 'PHOTOS'} · ${count} ${count === 1 ? 'file' : 'files'} · saved ${esc(age)}</small></span><button type="button" data-open-post-draft="${esc(draft.id)}" aria-label="Open draft"><svg><use href="#i-edit"/></svg></button><button type="button" data-delete-post-draft="${esc(draft.id)}" aria-label="Delete draft"><svg><use href="#i-close"/></svg></button></article>`;
+    return `<article class="post-draft-card" data-open-post-draft="${esc(draft.id)}" tabindex="0"><span><b>${esc(postDraftTitle(draft))}</b><small>${draft.kind === 'clip' ? 'CLIPS' : 'PHOTOS'} · ${count} ${count === 1 ? 'file' : 'files'} · saved ${esc(age)}</small></span><button type="button" data-open-post-draft="${esc(draft.id)}" aria-label="Continue draft"><svg><use href="#i-edit"/></svg></button><button type="button" data-delete-post-draft="${esc(draft.id)}" aria-label="Delete draft"><svg><use href="#i-close"/></svg></button></article>`;
   }).join('');
+  renderStokeDraftBanner();
+}
+
+function renderStokeDraftBanner() {
+  const banner = $('#postDraftBanner');
+  if (!banner) return;
+  const draft = state.postDrafts[0];
+  banner.classList.toggle('hidden', !draft);
+  banner.innerHTML = draft ? `<button type="button" data-open-post-draft="${esc(draft.id)}"><svg><use href="#i-folder"/></svg><span><b>${state.postDrafts.length === 1 ? 'You have 1 saved draft' : `You have ${state.postDrafts.length} saved drafts`}</b><small>Continue ${esc(postDraftTitle(draft))}</small></span><svg><use href="#i-chevron"/></svg></button>` : '';
 }
 
 async function loadPostDrafts() {
@@ -4288,7 +4307,9 @@ function postDraftFields() {
   return {
     creator:$('#filmerName').value.trim(),
     memberTags:state.postMemberTags.map(person => ({ id:person.id, name:person.name })),
+    personNames:[...state.postPersonNames],
     customTags:[...state.postCustomTags],
+    sessionId:$('#postSession').value || '',
     board:$('#boardName').value.trim(),
     location:$('#postSpot').value.trim(),
     caption:$('#postCaption').value.trim(),
@@ -4322,6 +4343,7 @@ async function savePostDraft() {
     await postDraftTransaction('readwrite', store => store.put(draft));
     resetPostComposer();
     closeSheet();
+    await loadPostDrafts();
     toast('Draft saved on this device for 30 days.');
   } catch (error) {
     const message = error?.name === 'QuotaExceededError'
@@ -4351,12 +4373,15 @@ async function openPostDraft(id) {
   state.editingPostDraftId = draft.id;
   state.postDraftFiles = [...(draft.files || [])];
   state.postMemberTags = (draft.memberTags || []).filter(person => person?.id && person?.name);
+  state.postPersonNames = (draft.personNames || []).filter(Boolean);
   state.postCustomTags = (draft.customTags || (draft.subject ? [draft.subject] : [])).filter(Boolean);
+  state.postSessionId = draft.sessionId || '';
   setPostKind(draft.kind);
   $('#filmerName').value = draft.creator || '';
   $('#boardName').value = draft.board || '';
   $('#postSpot').value = draft.location || '';
   $('#postCaption').value = draft.caption || '';
+  renderPostSessionOptions(state.postSessionId);
   setPostRatio(draft.ratio);
   const count = state.postDraftFiles.length;
   $('#fileLabel').textContent = count ? `${count} ${draft.kind === 'clip' ? 'clips' : 'photos'} restored from draft` : (draft.kind === 'clip' ? 'Choose up to 5 clips' : 'Choose up to 10 photos');
@@ -4397,10 +4422,10 @@ function setPostKind(kind = 'photo', options = {}) {
   $('#postMediaIcon use').setAttribute('href', postKind === 'photo' ? '#i-photo' : '#i-camera');
   $('#postCreatorLabel').textContent = postKind === 'photo' ? 'Photographer' : 'Filmer';
   $('#filmerName').placeholder = postKind === 'photo' ? "Photographer's name" : "Filmer's name";
-  $('#postSubjectLabel').textContent = postKind === 'photo' ? 'Tag people / surfers' : 'Tag surfers / people';
+  $('#postSubjectLabel').textContent = 'People in this post';
   $('#postBoardField').classList.toggle('hidden', postKind === 'photo');
-  $('#postNotesLabel').textContent = postKind === 'photo' ? 'Photo notes' : 'Clip notes';
-  $('#postCaption').placeholder = postKind === 'photo' ? 'Anything about these photos?' : 'Anything about this clip?';
+  $('#postNotesLabel').textContent = 'Caption';
+  $('#postCaption').placeholder = postKind === 'photo' ? 'Anything about these photos?' : 'Anything about these clips?';
   $('#postRatioPicker').classList.remove('hidden');
   $('#postRatioLegendLabel').textContent = postKind === 'photo' ? 'Photo shape' : 'Clip shape';
   if (!editing) {
@@ -4414,6 +4439,10 @@ function setPostKind(kind = 'photo', options = {}) {
       : 'MP4, MOV, or WebM · 5 minutes and 1 GB max per clip.';
   }
   if (options.clearFile) {
+    if (state.activePostUpload) {
+      void state.activePostUpload.abort(false);
+      state.activePostUpload = null;
+    }
     mediaInput.value = '';
     state.postDraftFiles = [];
     if (state.postPreviewUrl) URL.revokeObjectURL(state.postPreviewUrl);
@@ -4423,16 +4452,32 @@ function setPostKind(kind = 'photo', options = {}) {
     const video = $('#postRatioPreview video');
     video.pause(); video.removeAttribute('src'); video.load();
     setPostRatio('original');
+    clearPostUploadUi();
   }
   applyPostRatioPreview();
 }
 
+function clearPostUploadUi() {
+  const progress = $('#uploadProgress');
+  const status = $('#uploadStatus');
+  if (progress) { progress.value = 0; progress.classList.add('hidden'); }
+  if (status) { status.textContent = ''; status.classList.add('hidden'); }
+  const submit = $('#postSubmit');
+  if (submit && !state.editingPostId) submit.textContent = 'Share to Stoke';
+}
+
 function resetPostComposer() {
+  if (state.activePostUpload) {
+    void state.activePostUpload.abort(false);
+    state.activePostUpload = null;
+  }
   state.editingPostId = null;
   state.editingPostDraftId = null;
   state.postDraftFiles = [];
   state.postMemberTags = [];
+  state.postPersonNames = [];
   state.postCustomTags = [];
+  state.postSessionId = '';
   if (state.postPreviewUrl) URL.revokeObjectURL(state.postPreviewUrl);
   state.postPreviewUrl = '';
   $('#postForm').reset();
@@ -4447,11 +4492,14 @@ function resetPostComposer() {
   previewVideo.pause(); previewVideo.removeAttribute('src'); previewVideo.load();
   setPostRatio('original');
   setPostKind('photo');
+  renderPostSessionOptions('');
+  clearPostUploadUi();
   $('#postSubmit').textContent = 'Share to Stoke';
   $('#postDraftSave').textContent = 'Save draft';
   $('#postDraftSave').classList.remove('hidden');
   $('#postDraftsPanel').classList.remove('hidden');
   $('#postDraftList').classList.add('hidden');
+  $('#captionEmojiPanel').classList.add('hidden');
   $('.post-drafts-toggle').setAttribute('aria-expanded', 'false');
   $('#postDelete').classList.add('hidden');
   $('#postDeleteNote').classList.add('hidden');
@@ -4471,13 +4519,17 @@ function openPostComposer(postId = null) {
     setPostKind(post.media_type, { editing:true });
     $('#filmerName').value = post.filmer_name || '';
     state.postMemberTags = (post.post_tags || []).filter(tag => tag.role === 'surfer' && tag.profile).map(tag => ({ id:tag.user_id, name:tag.profile.name }));
-    state.postCustomTags = Array.isArray(post.custom_tags) ? [...post.custom_tags] : [];
+    const unpacked = unpackPostCustomTags(post.custom_tags);
+    state.postPersonNames = unpacked.people;
+    state.postCustomTags = unpacked.custom;
+    state.postSessionId = unpacked.sessionId;
     if (!state.postMemberTags.length && !state.postCustomTags.length && post.surfer_name) state.postCustomTags = [post.surfer_name];
     renderPostTagEditors();
     $('#boardName').value = post.board || '';
     $('#postSpot').value = post.spot?.general_location || post.spot?.name || '';
     $('#postLocation').value = '';
     $('#postCaption').value = post.caption || '';
+    renderPostSessionOptions(state.postSessionId);
     if (post.media_url) {
       $('#postRatioPicker').classList.remove('hidden');
       const previewImage = $('#postRatioPreview img');
@@ -4514,7 +4566,7 @@ async function savePost(event) {
     const filmer = matchingPerson(filmerName);
     const details = {
       filmer_name: filmerName, filmer_user: filmer?.id || null, surfer_name: null,
-      custom_tags:[...state.postCustomTags],
+      custom_tags:storedPostCustomTags(),
       board: selectedPostKind() === 'clip' ? ($('#boardName').value.trim() || null) : null, spot_id: spot?.id || null,
       caption: $('#postCaption').value.trim() || null,
       media_ratio: selectedPostRatio(),
@@ -5181,6 +5233,8 @@ document.addEventListener('click', async event => {
   const pickMessageEmojiNode = event.target.closest('[data-pick-message-emoji]');
   const customReactionCategoryNode = event.target.closest('[data-custom-reaction-category]');
   const pickCustomReactionNode = event.target.closest('[data-pick-custom-reaction]');
+  const captionEmojiCategoryNode = event.target.closest('[data-caption-emoji-category]');
+  const pickCaptionEmojiNode = event.target.closest('[data-pick-caption-emoji]');
   const profileStatTabNode = event.target.closest('[data-profile-stat-tab]');
   const carouselDirectionNode = event.target.closest('[data-carousel-direction]');
   const viewNode = event.target.closest('[data-view]');
@@ -5200,6 +5254,7 @@ document.addEventListener('click', async event => {
   const openPostDraftNode = event.target.closest('[data-open-post-draft]');
   const deletePostDraftNode = event.target.closest('[data-delete-post-draft]');
   const removePostMemberTagNode = event.target.closest('[data-remove-post-member-tag]');
+  const removePostPersonNameNode = event.target.closest('[data-remove-post-person-name]');
   const removePostCustomTagNode = event.target.closest('[data-remove-post-custom-tag]');
   const togglePostTagsNode = event.target.closest('[data-toggle-post-tags]');
   const removeSessionPersonNode = event.target.closest('[data-remove-session-person]');
@@ -5227,6 +5282,11 @@ document.addEventListener('click', async event => {
     state.customReactionCategory = customReactionCategoryNode.dataset.customReactionCategory;
     renderCustomReactionPicks(); return;
   }
+  if (captionEmojiCategoryNode) {
+    state.customReactionCategory = captionEmojiCategoryNode.dataset.captionEmojiCategory;
+    renderCaptionEmojiPicks(); return;
+  }
+  if (pickCaptionEmojiNode) { insertCaptionEmoji(pickCaptionEmojiNode.dataset.pickCaptionEmoji); return; }
   if (pickCustomReactionNode) {
     const kind = state.reactingMessageKind;
     const id = state.reactingMessageId;
@@ -5255,10 +5315,14 @@ document.addEventListener('click', async event => {
   if (inviteClipClaimNode) { await shareClipClaimInvite(inviteClipClaimNode.dataset.inviteClipClaim); return; }
   if (shareClipDeliveryNode) { await shareExistingClipDelivery(shareClipDeliveryNode.dataset.shareClipDelivery); return; }
   if (shareGuestClipsNode) { await shareGuestClipLink(shareGuestClipsNode.dataset.shareGuestClips); return; }
-  if (openPostDraftNode) { await openPostDraft(openPostDraftNode.dataset.openPostDraft); return; }
   if (deletePostDraftNode) { await deletePostDraft(deletePostDraftNode.dataset.deletePostDraft); return; }
+  if (openPostDraftNode) { await openPostDraft(openPostDraftNode.dataset.openPostDraft); return; }
   if (removePostMemberTagNode) {
     state.postMemberTags = state.postMemberTags.filter(person => person.id !== removePostMemberTagNode.dataset.removePostMemberTag);
+    renderPostTagEditors(); return;
+  }
+  if (removePostPersonNameNode) {
+    state.postPersonNames.splice(Number(removePostPersonNameNode.dataset.removePostPersonName), 1);
     renderPostTagEditors(); return;
   }
   if (removePostCustomTagNode) {
@@ -5452,6 +5516,7 @@ document.addEventListener('click', async event => {
     'open-post': () => openPostComposer(),
     'add-post-member-tag': addPostMemberTag,
     'add-post-custom-tag': addPostCustomTag,
+    'open-caption-emojis': openCaptionEmojiPicker,
     'toggle-post-drafts': () => {
       const list = $('#postDraftList');
       const expanded = list.classList.toggle('hidden') === false;
@@ -5649,6 +5714,13 @@ $('#mediaFile').addEventListener('change', async event => {
   }
 });
 $$('input[name="postRatio"]').forEach(input => input.addEventListener('change', applyPostRatioPreview));
+$('#postSession').addEventListener('change', event => {
+  state.postSessionId = event.target.value || '';
+  const session = state.sessions.find(item => item.id === state.postSessionId);
+  if (!session) return;
+  const location = session.spot?.general_location || session.spot?.name || '';
+  if (location && !$('#postSpot').value.trim()) $('#postSpot').value = location;
+});
 $('#issueScreenshot').addEventListener('change', event => {
   const file = event.target.files[0];
   if (!file) { $('#issueScreenshotLabel').textContent = 'Choose screenshot'; return; }
