@@ -92,6 +92,7 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 ## Chat
 
 - Community Chat supports text, photos, full-name `@` mentions, sender profile photos, and distinct sender colors.
+- A member's own message bubble follows their selected Sodium theme instead of receiving a random speaker color; other senders retain distinct colors for quick scanning.
 - DMs remain text-only and private to the two participants.
 - A sender can edit or delete only their own messages in either chat surface.
 - Message reactions accept any single emoji from the member's phone keyboard. Each member chooses four quick picks in Settings; those choices follow their Sodium account across devices. Custom emoji reactions display and count normally.
