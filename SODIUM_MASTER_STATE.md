@@ -6,8 +6,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.92.
-- This release makes clip delivery a clean folder handoff. Members open saved deliveries in Sodium; guests open a private folder link without an account, with joining offered only as an optional secondary action. Delivery-specific messaging has been removed from the UI.
+- Current release: v1.99.
+- This release gives Community Chat and DMs sender profile photos, distinct sender colors, owner-only message editing/deletion, and positive emoji reactions. DM reactions remain visible only to the two conversation participants; Community Chat reactions remain member-only.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -88,6 +88,13 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - Linked member tags and custom visual tags are supported.
 - Photos and clips can be edited or deleted by their author.
 - Members can give posts **Stoke** with the wave reaction and leave comments. There are no negative reactions or downvotes. Legacy `post_likes` identifiers remain internal to avoid an unnecessary data migration.
+
+## Chat
+
+- Community Chat supports text, photos, full-name `@` mentions, sender profile photos, and distinct sender colors.
+- DMs remain text-only and private to the two participants.
+- A sender can edit or delete only their own messages in either chat surface.
+- Message reactions are positive-only: wave, fire, laugh, and heart. There is no negative reaction or shaka emoji.
 
 ## Clip deliveries
 
