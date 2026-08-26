@@ -10,6 +10,7 @@ const html = read('index.html');
 const app = read('app.js');
 const worker = read('sw.js');
 const sessionChatMigration = read('supabase/session-chat-v1-migration.sql');
+const apiMiddleware = read('functions/api/_middleware.js');
 
 test('HTML IDs are unique and hard JavaScript selectors resolve', () => {
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
@@ -87,4 +88,16 @@ test('large Stream uploads recover stale sessions and tolerate mobile interrupti
   assert.match(app, /starting a fresh upload automatically/);
   assert.match(app, /navigator\.wakeLock\.request\('screen'\)/);
   assert.match(app, /chunkSize:5 \* 1024 \* 1024/);
+});
+
+test('native Sodium routes protected APIs to production and compresses before Stream upload', () => {
+  assert.match(app, /const NATIVE_APP = Boolean\(globalThis\.Capacitor\?\.isNativePlatform/);
+  assert.match(app, /const API_ORIGIN = NATIVE_APP \? 'https:\/\/community\.saltyviewfinder\.com' : ''/);
+  assert.match(app, /registerPlugin\('SodiumMedia'\)/);
+  assert.match(app, /pickAndCompressVideos/);
+  assert.match(app, /Compressed on this iPhone\. Ready to upload\./);
+  assert.match(app, /new URL\('sodium:\/\/auth'\)/);
+  assert.match(app, /addListener\('appUrlOpen', handleNativeAuthUrl\)/);
+  assert.match(apiMiddleware, /capacitor:\/\/localhost/);
+  assert.match(apiMiddleware, /request\.method === 'OPTIONS'/);
 });

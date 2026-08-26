@@ -1,0 +1,12 @@
+{
+  "appId": "com.saltyviewfinder.sodium",
+  "appName": "Sodium",
+  "webDir": "native-web",
+  "loggingBehavior": "debug",
+  "ios": {
+    "contentInset": "always",
+    "preferredContentMode": "mobile",
+    "scheme": "Sodium",
+    "backgroundColor": "#081722"
+  }
+}

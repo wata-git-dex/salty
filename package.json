@@ -4,10 +4,25 @@
   "type": "module",
   "scripts": {
     "check": "node --check app.js && node --check sw.js && node --test functions/test/*.test.mjs",
-    "cf-types": "wrangler types"
+    "cf-types": "wrangler types",
+    "native:build": "node scripts/build-native.mjs",
+    "native:sync": "pnpm native:build && cap sync ios",
+    "native:open": "pnpm native:sync && cap open ios"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "@cloudflare/workers-types": "latest",
     "wrangler": "^4.125.0"
+  },
+  "dependencies": {
+    "@capacitor/app": "8.0.1",
+    "@capacitor/browser": "8.0.1",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/haptics": "8.0.1",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/push-notifications": "8.0.1",
+    "@capacitor/share": "8.0.1",
+    "@capacitor/splash-screen": "8.0.1",
+    "@capacitor/status-bar": "8.0.1"
   }
 }

@@ -11,6 +11,16 @@ This file consolidates decisions and implementation state from the Sodium Commun
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
+## Native iOS transition
+
+- The Apple Developer membership is active and Xcode installation began on August 26, 2026.
+- Sodium now has a committed Capacitor iOS project using bundle ID `com.saltyviewfinder.sodium`; the existing HTML/CSS/JavaScript interface remains the product UI rather than being redesigned.
+- Native builds package a curated local web bundle and route protected Stream/Drive API requests to `https://community.saltyviewfinder.com`. Cloudflare API middleware explicitly permits the Capacitor origin without relaxing browser origins generally.
+- The first native media bridge uses the iOS Photos picker and AVFoundation to create network-optimized 1080p MP4 copies before the existing resumable Cloudflare Stream upload. Originals remain untouched. The PWA keeps its original-file resumable fallback.
+- Native Google authentication is designed to return through `sodium://auth`; this redirect still requires production Supabase allowlist verification before device testing.
+- Push, Browser, App Links, Share, Haptics, Splash Screen, and Status Bar Capacitor packages are installed. Native APNs registration and server delivery still require Apple signing/capability configuration after Xcode is ready.
+- Do not represent the native build as beta-ready until the Swift media bridge compiles in Xcode and real-device auth, compression, upload, background/interruption, notifications, and deep links pass testing.
+
 ## Core product
 
 Sodium is a private, invite-only surf community app for organizing sessions, finding friends or filmers, delivering clips, sharing Stoke, chatting, planning events, and supporting things made or done by community members.

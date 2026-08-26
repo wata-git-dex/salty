@@ -45,6 +45,17 @@ const POST_DRAFT_DB_NAME = 'sodium-post-drafts';
 const POST_DRAFT_STORE = 'drafts';
 const POST_DRAFT_TTL = 30 * 24 * 60 * 60 * 1000;
 const STREAM_UPLOAD_SESSION_KEY = 'sodium:stream-upload-sessions';
+const NATIVE_APP = Boolean(globalThis.Capacitor?.isNativePlatform?.());
+const API_ORIGIN = NATIVE_APP ? 'https://community.saltyviewfinder.com' : '';
+const NATIVE_MEDIA = NATIVE_APP && globalThis.Capacitor?.registerPlugin
+  ? globalThis.Capacitor.registerPlugin('SodiumMedia')
+  : null;
+const NATIVE_APP_LINKS = NATIVE_APP && globalThis.Capacitor?.registerPlugin
+  ? globalThis.Capacitor.registerPlugin('App')
+  : null;
+const NATIVE_BROWSER = NATIVE_APP && globalThis.Capacitor?.registerPlugin
+  ? globalThis.Capacitor.registerPlugin('Browser')
+  : null;
 // Direct Stream upload URLs are intentionally short-lived. Keeping one longer
 // than the active editing window can make a restored draft repeatedly target a
 // dead endpoint, so old checkpoints are replaced rather than retried forever.
@@ -484,7 +495,7 @@ async function sendMagicLink(event) {
     }
   }
 
-  const redirect = new URL('./', location.href);
+  const redirect = NATIVE_APP ? new URL('sodium://auth') : new URL('./', location.href);
   redirect.searchParams.set('auth', 'callback');
   if (isNew) redirect.searchParams.set('invite', state.pendingInvite);
   if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
@@ -551,9 +562,9 @@ async function signInWithGoogle() {
   if (state.pendingDeliveryId) redirect.searchParams.set('delivery', state.pendingDeliveryId);
   if (state.pendingEventRegion) redirect.searchParams.set('region', state.pendingEventRegion);
   if (state.pendingOpen) redirect.searchParams.set('open', state.pendingOpen);
-  const { error } = await db.auth.signInWithOAuth({
+  const { data, error } = await db.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: redirect.href },
+    options: { redirectTo: redirect.href, skipBrowserRedirect:NATIVE_APP },
   });
   if (error) {
     button.disabled = false;
@@ -562,7 +573,46 @@ async function signInWithGoogle() {
     message.textContent = readableError(error);
     message.classList.remove('hidden');
     toast(readableError(error), 6000);
+  } else if (NATIVE_APP && data?.url) {
+    await NATIVE_BROWSER.open({ url:data.url, presentationStyle:'popover' });
   }
+}
+
+async function handleNativeAuthUrl(event) {
+  if (!NATIVE_APP || !event?.url) return;
+  let url;
+  try { url = new URL(event.url); }
+  catch (_error) { return; }
+  if (url.protocol !== 'sodium:' || url.hostname !== 'auth') return;
+
+  const params = url.searchParams;
+  const fragment = new URLSearchParams(url.hash.replace(/^#/, ''));
+  const accessToken = fragment.get('access_token');
+  const refreshToken = fragment.get('refresh_token');
+  if (params.get('invite')) {
+    state.pendingInvite = params.get('invite');
+    localStorage.setItem('salty:invite', state.pendingInvite);
+  }
+  state.pendingSessionId = params.get('session') || state.pendingSessionId;
+  state.pendingSessionRegion = params.get('region') || state.pendingSessionRegion;
+  state.pendingEventId = params.get('event') || state.pendingEventId;
+  state.pendingDeliveryId = params.get('delivery') || state.pendingDeliveryId;
+  state.pendingOpen = params.get('open') || state.pendingOpen;
+
+  try { await NATIVE_BROWSER?.close(); }
+  catch (_error) { /* The browser may already be closed. */ }
+  if (!accessToken || !refreshToken) {
+    toast('Google did not return a complete Sodium sign-in. Try again.', 6000);
+    return;
+  }
+  const { data, error } = await db.auth.setSession({ access_token:accessToken, refresh_token:refreshToken });
+  if (error || !data.session) {
+    toast(readableError(error || new Error('Google sign-in did not create a session.')), 6000);
+    return;
+  }
+  state.session = data.session;
+  clearPendingAuth();
+  await finishAuthentication();
 }
 
 async function verifyEmailCode() {
@@ -2064,7 +2114,7 @@ async function googleDriveRequest(path, options = {}, authenticated = true) {
     headers.Authorization = `Bearer ${session.access_token}`;
   }
   if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
-  const response = await fetch(`/api/google-drive/${path}`, { ...options, headers });
+  const response = await fetch(`${API_ORIGIN}/api/google-drive/${path}`, { ...options, headers });
   const payload = response.headers.get('content-type')?.includes('application/json') ? await response.json() : {};
   if (!response.ok) {
     const error = new Error(payload.error || 'Google Drive is unavailable. Paste the folder link instead.');
@@ -4001,7 +4051,7 @@ async function loadPosts() {
 async function streamRequest(path, options = {}) {
   const session = state.session || (await db.auth.getSession()).data.session;
   if (!session?.access_token) throw new Error('Sign in again before uploading clips.');
-  const response = await fetch(`/api/stream${path}`, {
+  const response = await fetch(`${API_ORIGIN}/api/stream${path}`, {
     ...options,
     headers: {
       Authorization:`Bearer ${session.access_token}`,
@@ -4206,6 +4256,35 @@ async function validatePostSelection(files) {
   if (kind === 'clip' && files.length > CONFIG.maxStreamClips) throw new Error(`A Stoke video carousel can have up to ${CONFIG.maxStreamClips} clips.`);
   if (kind === 'photo' && files.length > 10) throw new Error('A Stoke carousel can have up to 10 photos.');
   await Promise.all(files.map(validateMedia));
+}
+
+async function pickNativeClips() {
+  if (!NATIVE_MEDIA) return;
+  const status = $('#uploadStatus');
+  status.classList.remove('hidden');
+  status.textContent = 'Choose up to five clips. Sodium will make upload-ready copies on this iPhone.';
+  try {
+    const result = await NATIVE_MEDIA.pickAndCompressVideos({ maxCount:CONFIG.maxStreamClips, maxDurationSeconds:CONFIG.maxClipSeconds });
+    const selected = Array.isArray(result?.files) ? result.files : [];
+    if (!selected.length) { clearPostUploadUi(); return; }
+    status.textContent = 'Preparing compressed clips…';
+    const files = [];
+    for (const item of selected) {
+      const localUrl = globalThis.Capacitor.convertFileSrc(item.path);
+      const response = await fetch(localUrl);
+      if (!response.ok) throw new Error('Sodium could not open one compressed clip.');
+      const blob = await response.blob();
+      files.push(new File([blob], item.name || 'sodium-clip.mp4', { type:item.type || 'video/mp4', lastModified:Date.now() }));
+    }
+    await validatePostSelection(files);
+    state.postDraftFiles = files;
+    $('#fileLabel').textContent = `${files.length} compressed ${files.length === 1 ? 'clip' : 'clips'} ready`;
+    status.textContent = 'Compressed on this iPhone. Ready to upload.';
+    showPostFilePreview(files);
+  } catch (error) {
+    status.textContent = readableError(error);
+    toast(readableError(error), 7000);
+  }
 }
 
 async function uploadMedia(file, path) {
@@ -5938,6 +6017,23 @@ $('#mediaFile').addEventListener('change', async event => {
     $('#fileLabel').textContent = selectedPostKind() === 'photo' ? 'Choose up to 10 photos' : 'Choose up to 5 clips';
   }
 });
+
+$('#mediaFile').addEventListener('click', event => {
+  if (!NATIVE_MEDIA || selectedPostKind() !== 'clip' || state.editingPostId) return;
+  event.preventDefault();
+  void pickNativeClips();
+});
+
+if (NATIVE_MEDIA?.addListener) {
+  void NATIVE_MEDIA.addListener('compressionProgress', detail => {
+    const status = $('#uploadStatus');
+    if (!status || selectedPostKind() !== 'clip') return;
+    const current = Math.min(Number(detail.index || 0) + 1, Number(detail.total || 1));
+    const percent = Math.max(0, Math.min(100, Math.round(Number(detail.progress || 0) * 100)));
+    status.classList.remove('hidden');
+    status.textContent = `Compressing clip ${current} of ${detail.total || 1} · ${percent}%`;
+  });
+}
 $$('input[name="postRatio"]').forEach(input => input.addEventListener('change', applyPostRatioPreview));
 $('#postSession').addEventListener('change', event => {
   state.postSessionId = event.target.value || '';
@@ -6041,4 +6137,5 @@ window.addEventListener('appinstalled', () => {
 });
 
 applyIconTheme(localStorage.getItem('salty:theme') || localStorage.getItem('salty:icon-theme') || 'ink');
+if (NATIVE_APP_LINKS?.addListener) void NATIVE_APP_LINKS.addListener('appUrlOpen', handleNativeAuthUrl);
 init().catch(error => { showWelcome(); toast(readableError(error), 6000); });
