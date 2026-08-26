@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="description" content="Sodium — surf with your friends, not your feed.">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'sha256-3c89LCajFIcYa3gJG+BT+TDhA7lOkJhgrUVZoL4wcqY=' https://cdn.jsdelivr.net https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https://maihhnwrstewzapsvrec.supabase.co https://*.cloudflarestream.com https://*.videodelivery.net; connect-src 'self' https://maihhnwrstewzapsvrec.supabase.co wss://maihhnwrstewzapsvrec.supabase.co https://*.videodelivery.net https://www.googleapis.com; frame-src https://*.cloudflarestream.com https://iframe.videodelivery.net https://accounts.google.com https://docs.google.com https://drive.google.com; worker-src 'self'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'sha256-3c89LCajFIcYa3gJG+BT+TDhA7lOkJhgrUVZoL4wcqY=' https://cdn.jsdelivr.net https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https://maihhnwrstewzapsvrec.supabase.co https://*.cloudflarestream.com https://*.videodelivery.net; connect-src 'self' https://maihhnwrstewzapsvrec.supabase.co wss://maihhnwrstewzapsvrec.supabase.co https://api.cloudflare.com https://*.videodelivery.net https://www.googleapis.com; frame-src https://*.cloudflarestream.com https://iframe.videodelivery.net https://accounts.google.com https://docs.google.com https://drive.google.com; worker-src 'self'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
   <meta property="og:title" content="You're invited to Sodium">
   <meta property="og:description" content="A private surf community built to help friends surf and film together more often.">
   <meta property="og:site_name" content="Sodium">
@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=104-stoke-uploader">
+  <link rel="stylesheet" href="./styles.css?v=104-stoke-hotfix">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -371,13 +371,9 @@
           <legend>What are you sharing?</legend>
           <div>
             <label><input type="radio" name="postKind" value="photo" checked><span><svg><use href="#i-photo"/></svg><b>Photos</b><small>up to 10</small></span></label>
-            <label><input type="radio" name="postKind" value="clip"><span><svg><use href="#i-camera"/></svg><b>Clips</b><small>up to 5 · 90s each</small></span></label>
+            <label><input type="radio" name="postKind" value="clip"><span><svg><use href="#i-camera"/></svg><b>Clips</b><small>up to 5 · 5 min each</small></span></label>
           </div>
         </fieldset>
-        <section id="postDraftsPanel" class="post-drafts-panel">
-          <button type="button" class="post-drafts-toggle" data-action="toggle-post-drafts" aria-expanded="false"><span><svg><use href="#i-folder"/></svg><b>Drafts</b><small>Saved on this device for 30 days</small></span><strong id="postDraftCount">0</strong><svg><use href="#i-chevron"/></svg></button>
-          <div id="postDraftList" class="post-draft-list hidden"></div>
-        </section>
         <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple required><svg id="postMediaIcon"><use href="#i-photo"/></svg><strong id="fileLabel">Choose up to 10 photos</strong><small id="postMediaHelp">Original shapes are preserved unless you choose a crop below.</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress><small id="uploadStatus" class="upload-status hidden" role="status" aria-live="polite"></small></label>
         <fieldset id="postRatioPicker" class="post-ratio-picker">
           <legend><span id="postRatioLegendLabel">Photo shape</span> <small>optional · Original never crops</small></legend>
@@ -593,6 +589,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
   <script src="./vendor/tus.min.js?v=4.3.1" defer></script>
-  <script src="./app.js?v=104-stoke-uploader" defer></script>
+  <script src="./app.js?v=104-stoke-hotfix" defer></script>
 </body>
 </html>

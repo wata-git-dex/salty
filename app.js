@@ -4091,9 +4091,9 @@ async function uploadStreamClip(file, progressCallback = () => {}, statusCallbac
   return await new Promise((resolve, reject) => {
     const upload = new tus.Upload(file, {
       uploadUrl:created.uploadUrl,
-      // Cloudflare requires at least 5 MiB. Ten MiB keeps retries small on weak mobile connections.
-      chunkSize:10 * 1024 * 1024,
-      retryDelays:[0, 2000, 5000],
+      // Cloudflare's 5 MiB minimum keeps each retry as small as possible on mobile connections.
+      chunkSize:5 * 1024 * 1024,
+      retryDelays:[0, 1000, 3000, 5000, 10000, 20000],
       removeFingerprintOnSuccess:true,
       onShouldRetry(error, attempt, options) {
         if (attempt >= options.retryDelays.length) return false;
@@ -4101,6 +4101,7 @@ async function uploadStreamClip(file, progressCallback = () => {}, statusCallbac
         return !status || status === 408 || status === 409 || status === 423 || status === 429 || status >= 500;
       },
       onError(error) {
+        console.error('Cloudflare Stream upload paused:', error);
         state.activePostUpload = null;
         saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:lastBytes });
         const paused = new Error('Upload paused because the connection dropped. Your progress is saved.');
@@ -4259,19 +4260,6 @@ function postDraftTitle(draft) {
 }
 
 function renderPostDrafts() {
-  const list = $('#postDraftList');
-  const drafts = state.postDrafts;
-  $('#postDraftCount').textContent = String(drafts.length);
-  if (!drafts.length) {
-    list.innerHTML = '<p class="post-draft-empty">No saved drafts on this device.</p>';
-    renderStokeDraftBanner();
-    return;
-  }
-  list.innerHTML = drafts.map(draft => {
-    const count = draft.files?.length || 0;
-    const age = new Intl.DateTimeFormat(undefined, { month:'short', day:'numeric' }).format(new Date(draft.updatedAt));
-    return `<article class="post-draft-card" data-open-post-draft="${esc(draft.id)}" tabindex="0"><span><b>${esc(postDraftTitle(draft))}</b><small>${draft.kind === 'clip' ? 'CLIPS' : 'PHOTOS'} · ${count} ${count === 1 ? 'file' : 'files'} · saved ${esc(age)}</small></span><button type="button" data-open-post-draft="${esc(draft.id)}" aria-label="Continue draft"><svg><use href="#i-edit"/></svg></button><button type="button" data-delete-post-draft="${esc(draft.id)}" aria-label="Delete draft"><svg><use href="#i-close"/></svg></button></article>`;
-  }).join('');
   renderStokeDraftBanner();
 }
 
@@ -4299,7 +4287,11 @@ async function loadPostDrafts() {
     renderPostDrafts();
   } catch (error) {
     console.warn('Draft loading failed:', error);
-    $('#postDraftList').innerHTML = '<p class="post-draft-empty">Drafts are unavailable on this device.</p>';
+    const banner = $('#postDraftBanner');
+    if (banner) {
+      banner.classList.remove('hidden');
+      banner.innerHTML = '<p class="post-draft-empty">Drafts are unavailable on this device.</p>';
+    }
   }
 }
 
@@ -4387,7 +4379,7 @@ async function openPostDraft(id) {
   $('#fileLabel').textContent = count ? `${count} ${draft.kind === 'clip' ? 'clips' : 'photos'} restored from draft` : (draft.kind === 'clip' ? 'Choose up to 5 clips' : 'Choose up to 10 photos');
   showPostFilePreview(state.postDraftFiles);
   $('#postSheetTitle').textContent = draft.kind === 'clip' ? 'Finish clip draft' : 'Finish photo draft';
-  $('#postSheetDescription').textContent = 'This draft stays on this device until you publish or delete it.';
+  $('#postSheetDescription').textContent = 'This draft stays on this device for 30 days, or until you publish or delete it.';
   $('#postDraftSave').textContent = 'Update draft';
   renderPostTagEditors();
   openSheet('postSheet');
@@ -4497,10 +4489,7 @@ function resetPostComposer() {
   $('#postSubmit').textContent = 'Share to Stoke';
   $('#postDraftSave').textContent = 'Save draft';
   $('#postDraftSave').classList.remove('hidden');
-  $('#postDraftsPanel').classList.remove('hidden');
-  $('#postDraftList').classList.add('hidden');
   $('#captionEmojiPanel').classList.add('hidden');
-  $('.post-drafts-toggle').setAttribute('aria-expanded', 'false');
   $('#postDelete').classList.add('hidden');
   $('#postDeleteNote').classList.add('hidden');
   renderPostTagEditors();
@@ -4541,7 +4530,6 @@ function openPostComposer(postId = null) {
     }
     $('#postSubmit').textContent = 'Save changes';
     $('#postDraftSave').classList.add('hidden');
-    $('#postDraftsPanel').classList.add('hidden');
     $('#postDelete').classList.remove('hidden');
     $('#postDeleteNote').classList.remove('hidden');
   }
@@ -5517,11 +5505,6 @@ document.addEventListener('click', async event => {
     'add-post-member-tag': addPostMemberTag,
     'add-post-custom-tag': addPostCustomTag,
     'open-caption-emojis': openCaptionEmojiPicker,
-    'toggle-post-drafts': () => {
-      const list = $('#postDraftList');
-      const expanded = list.classList.toggle('hidden') === false;
-      $('.post-drafts-toggle').setAttribute('aria-expanded', String(expanded));
-    },
     'save-post-draft': savePostDraft,
     'open-event': () => openEventComposer(),
     'open-nonprofit': () => openNonprofitComposer(),

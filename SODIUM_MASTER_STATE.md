@@ -146,3 +146,5 @@ Version 1.92 simplifies clip sharing for both audiences. Member links open the s
 Version 1.103 adds the 90-piece Sodium emoji pack to message reactions. Members keep their normal phone emoji keyboard while writing messages; tapping a message reveals four branded Sodium reactions, and `+` opens categorized Sodium Core, Surf Lore, and Chat Essentials artwork.
 
 Version 1.104 repairs the Stoke composer: people can be tagged as members or typed names, posts can link to a session, saved drafts reopen from Stoke, media-type changes clear stale upload errors, captions support Sodium emoji artwork, and large clips use the supported `tus-js-client` resumable upload path instead of the hand-built retry loop.
+
+The v1.104 production hotfix allows the browser to connect to Cloudflare's direct Stream upload endpoint, which the original content security policy accidentally blocked. It also removes the duplicate draft browser from inside the composer, keeps draft access on the Stoke page, reduces resumable chunks to 5 MiB for mobile connections, and corrects the visible five-minute clip limit.
