@@ -1,6 +1,6 @@
-const CACHE = 'sodium-shell-v91-longer-clips';
-const GUIDE_PAGES = Array.from({ length:4 }, (_, index) => `./docs/guide-v13/page-${String(index + 1).padStart(2, '0')}.jpg`);
-const SHELL = ['./', './index.html', './styles.css?v=91-longer-clips', './app.js?v=91-longer-clips', './privacy.html', './vendor/qrcode.min.js?v=1.0.0', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './icon-pink.svg', './docs/SODIUM_Quick_Start_Guide_V13.pdf', './docs/SODIUM_Master_Instruction_Manual_V1.pdf', './docs/SODIUM_App_Overview_One_Pager_V9.png', './docs/SODIUM_Setup_One_Pager_V2.png', './docs/SODIUM_Plan_A_Surf_One_Pager_V1.png', './docs/SODIUM_Get_Your_Clips_One_Pager_V1.png', ...GUIDE_PAGES];
+const CACHE = 'sodium-shell-v92-share-guides';
+const GUIDE_PAGES = Array.from({ length:4 }, (_, index) => `./docs/guide-v14/page-${String(index + 1).padStart(2, '0')}.jpg`);
+const SHELL = ['./', './index.html', './styles.css?v=92-share-guides', './app.js?v=92-share-guides', './privacy.html', './vendor/qrcode.min.js?v=1.0.0', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './icon-pink.svg', './docs/SODIUM_Quick_Start_Guide_V14.pdf', './docs/SODIUM_Master_Instruction_Manual_V2.pdf', './docs/SODIUM_App_Overview_One_Pager_V10.png', './docs/SODIUM_Setup_One_Pager_V3.png', './docs/SODIUM_Plan_A_Surf_One_Pager_V2.png', './docs/SODIUM_Get_Your_Clips_One_Pager_V2.png', ...GUIDE_PAGES];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));

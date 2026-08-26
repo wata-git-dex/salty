@@ -26,14 +26,14 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.91';
+const APP_VERSION = '1.92';
 const CONSENT_VERSION = '1.0';
-const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V13.pdf';
-const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V1.pdf';
-const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V9.png';
-const SETUP_PATH = './docs/SODIUM_Setup_One_Pager_V2.png';
-const PLAN_SURF_PATH = './docs/SODIUM_Plan_A_Surf_One_Pager_V1.png';
-const GET_CLIPS_PATH = './docs/SODIUM_Get_Your_Clips_One_Pager_V1.png';
+const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
+const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
+const OVERVIEW_PATH = './docs/SODIUM_App_Overview_One_Pager_V10.png';
+const SETUP_PATH = './docs/SODIUM_Setup_One_Pager_V3.png';
+const PLAN_SURF_PATH = './docs/SODIUM_Plan_A_Surf_One_Pager_V2.png';
+const GET_CLIPS_PATH = './docs/SODIUM_Get_Your_Clips_One_Pager_V2.png';
 const CLIP_COUNT_NOTE = 'Clip totals may include waves, B-roll, wipeouts, and other footage from the session.';
 const GUIDE_PAGE_COUNT = 4;
 const PENDING_AUTH_KEY = 'salty:pending-auth';
@@ -338,7 +338,7 @@ function runPreview() {
   state.dmMessages = [{ id:'dm-1', sender:'jonah', recipient:userId, body:'Want to hit Lowers Friday?', created_at:new Date(Date.now() - 35 * 60000).toISOString(), read_at:null }];
   state.dmThreads = [{ memberId:'jonah', message:state.dmMessages[0] }];
   state.clipDeliveries = [
-    { id:'clips-guest', sender:userId, recipient:null, recipient_name:'Heston', subject_names:['Heston'], session_id:'live-mine', provider:'google_drive', folder_url:'https://drive.google.com/', expected_count:18, uploaded_count:4, tracking_mode:'manual', status:'uploading', note:'Today at C Street.', created_at:new Date(Date.now() - 20 * 60000).toISOString(), updated_at:new Date(Date.now() - 4 * 60000).toISOString(), sender_profile:state.profile, recipient_profile:null, session:state.previewSessions[0], clip_delivery_messages:[{id:'gm1',sender_user:null,guest_name:'Heston',body:'Did the last right make it in?',created_at:new Date().toISOString()}] },
+    { id:'clips-guest', sender:userId, recipient:null, recipient_name:'Heston', subject_names:['Heston'], session_id:'live-mine', provider:'google_drive', folder_url:'https://drive.google.com/', expected_count:18, uploaded_count:4, tracking_mode:'manual', status:'uploading', note:'Today at C Street.', created_at:new Date(Date.now() - 20 * 60000).toISOString(), updated_at:new Date(Date.now() - 4 * 60000).toISOString(), sender_profile:state.profile, recipient_profile:null, session:state.previewSessions[0] },
     { id:'clips-heston', sender:userId, recipient:'jonah', subject_names:['Heston'], session_id:'past-surf', provider:'google_drive', folder_url:'https://drive.google.com/', expected_count:24, uploaded_count:7, tracking_mode:'manual', status:'uploading', note:'Raw clips from C Street.', created_at:new Date(Date.now() - 55 * 60000).toISOString(), updated_at:new Date(Date.now() - 12 * 60000).toISOString(), sender_profile:state.profile, recipient_profile:state.people[1], session:state.previewSessions[4] },
     { id:'clips-steve', sender:'mateo', recipient:userId, subject_names:['Cyrus'], session_id:'mateo-surf', provider:'dropbox', folder_url:'https://dropbox.com/', expected_count:11, uploaded_count:11, tracking_mode:'manual', status:'ready', note:null, ready_at:new Date(Date.now() - 20 * 60000).toISOString(), created_at:new Date(Date.now() - 2 * 3600000).toISOString(), updated_at:new Date(Date.now() - 20 * 60000).toISOString(), sender_profile:state.people[2], recipient_profile:state.profile, session:state.previewSessions[2] },
   ];
@@ -1611,7 +1611,7 @@ function renderGuestClipDelivery() {
   if (!delivery) return;
   const ready = delivery.status === 'ready' || Number(delivery.uploaded_count) >= Number(delivery.expected_count);
   const percent = delivery.expected_count ? Math.min(100, Math.round(Number(delivery.uploaded_count) / Number(delivery.expected_count) * 100)) : 0;
-  $('#guestClipContent').innerHTML = `<div class="guest-clip-summary"><span>${esc(delivery.sender_name)} SENT YOU</span><h1>${esc((delivery.subject_names || []).join(', ') || 'Your clips')}</h1><small>${delivery.session_spot ? `${esc(delivery.session_spot)}${delivery.session_location ? ` · ${esc(delivery.session_location)}` : ''}` : 'Sodium clip delivery'}</small><div class="clip-progress-copy"><b>${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}</b><span>${ready ? 'Clips ready' : `${percent}% uploaded`}</span></div><div class="clip-progress-track"><span style="width:${ready ? 100 : percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p>${esc(delivery.note)}</p>` : ''}<button class="guest-clip-join" data-action="guest-clip-join">Join Sodium + open clips</button><a class="guest-clip-open guest-clip-open-secondary" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener">${ready ? 'View clips without an account' : 'View uploading folder without an account'}</a></div>`;
+  $('#guestClipContent').innerHTML = `<div class="guest-clip-summary"><span>${esc(delivery.sender_name)} SENT YOU CLIPS OF</span><h1>${esc((delivery.subject_names || []).join(', ') || 'Your session')}</h1><small>${delivery.session_spot ? `${esc(delivery.session_spot)}${delivery.session_location ? ` · ${esc(delivery.session_location)}` : ''}` : 'Sodium clip delivery'}</small><div class="clip-progress-copy"><b>${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}</b><span>${ready ? 'Clips ready' : `${percent}% uploaded`}</span></div><div class="clip-progress-track"><span style="width:${ready ? 100 : percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p>${esc(delivery.note)}</p>` : ''}<a class="guest-clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener">${ready ? 'Open your clips' : 'View the uploading folder'}</a><small class="guest-no-account">No Sodium account needed.</small><button class="guest-clip-join guest-clip-join-secondary" data-action="guest-clip-join">Join Sodium + save this delivery</button></div>`;
   $('#guestClipAccountActions').classList.remove('hidden');
 }
 
@@ -1681,18 +1681,6 @@ async function joinFromGuestClip() {
   location.href = url.href;
 }
 
-async function sendMemberClipMessage(event) {
-  event.preventDefault();
-  const deliveryId = event.target.dataset.clipMessageForm;
-  const input = $('input', event.target);
-  const body = input.value.trim();
-  if (!body) return;
-  const result = await db.from('clip_delivery_messages').insert({ delivery_id:deliveryId, sender_user:state.profile.id, body });
-  if (result.error) { toast(readableError(result.error), 6000); return; }
-  input.value = '';
-  await loadClipDeliveries();
-}
-
 function clipSessionLabel(delivery) {
   const spot = delivery.session?.spot?.name;
   if (spot) return spot;
@@ -1746,10 +1734,7 @@ function clipDeliveryMarkup(delivery) {
       ? `<button class="clip-open clip-share-again" data-share-clip-delivery="${delivery.id}"><svg><use href="#i-share"/></svg>Share delivery again</button>`
       : `<button class="clip-open" data-invite-clip-claim="${delivery.id}">Invite to Sodium + send clips</button><button class="clip-edit guest-instructions" data-share-guest-clips="${delivery.id}" title="Account optional">Private clip link · account optional</button>`)
     : '';
-  const messages = (delivery.clip_delivery_messages || []).slice(-3).map(message => `<div class="guest-clip-message"><b>${esc(memberById(message.sender_user)?.name || message.guest_name || 'Guest')}</b><p>${esc(message.body)}</p></div>`).join('');
-  const threadCount = (delivery.clip_delivery_messages || []).length;
-  const thread = `<details class="clip-thread"><summary><svg><use href="#i-chat"/></svg><span>Messages${threadCount ? ` · ${threadCount}` : ''}</span><b>Open</b></summary>${messages || '<small>No Sodium messages yet.</small>'}<form data-clip-message-form="${delivery.id}"><input maxlength="1000" required placeholder="Ask about a missing wave…"><button>Send</button></form></details>`;
-  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><details class="clip-card-details"><summary><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-summary-meta"><span>${esc(formatCount(delivery.expected_count))} clips · ${esc(clipSessionLabel(delivery))}</span><svg><use href="#i-back"/></svg></div></summary><div class="clip-delivery-expanded"><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}${thread}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${shareAction}${edit}</div></div></details></article>`;
+  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><details class="clip-card-details"><summary><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-summary-meta"><span>${esc(formatCount(delivery.expected_count))} clips · ${esc(clipSessionLabel(delivery))}</span><svg><use href="#i-back"/></svg></div></summary><div class="clip-delivery-expanded"><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${shareAction}${edit}</div></div></details></article>`;
 }
 
 function renderInboxTabs() {
@@ -1806,23 +1791,15 @@ function renderDmClipDeliveries() {
 
 async function loadClipDeliveries() {
   if (!state.profile || state.preview) return;
-  let result = await db.from('clip_deliveries')
-    .select('*,sender_profile:profiles!clip_deliveries_sender_fkey(id,name,nickname,avatar_path),recipient_profile:profiles!clip_deliveries_recipient_fkey(id,name,nickname,avatar_path),session:sessions!clip_deliveries_session_id_fkey(id,surf_time,when_label,status,spot:spots(name,general_location)),clip_delivery_messages(id,sender_user,guest_name,body,created_at)')
+  const result = await db.from('clip_deliveries')
+    .select('*,sender_profile:profiles!clip_deliveries_sender_fkey(id,name,nickname,avatar_path),recipient_profile:profiles!clip_deliveries_recipient_fkey(id,name,nickname,avatar_path),session:sessions!clip_deliveries_session_id_fkey(id,surf_time,when_label,status,spot:spots(name,general_location))')
     .or(`sender.eq.${state.profile.id},recipient.eq.${state.profile.id}`)
     .order('updated_at', { ascending:false }).limit(250);
   if (result.error) {
-    console.warn('Clip delivery messages did not load; showing delivery history without messages:', result.error.message);
-    result = await db.from('clip_deliveries')
-      .select('*,sender_profile:profiles!clip_deliveries_sender_fkey(id,name,nickname,avatar_path),recipient_profile:profiles!clip_deliveries_recipient_fkey(id,name,nickname,avatar_path),session:sessions!clip_deliveries_session_id_fkey(id,surf_time,when_label,status,spot:spots(name,general_location))')
-      .or(`sender.eq.${state.profile.id},recipient.eq.${state.profile.id}`)
-      .order('updated_at', { ascending:false }).limit(250);
-    if (result.error) {
-      console.warn('Clip deliveries are not ready:', result.error.message);
-      const target = $('#clipDeliveries');
-      if (target) target.innerHTML = '<div class="empty clip-empty"><span>OUTBOX</span><h2>Could not load sent clips</h2><p>Close and reopen Sodium. If this remains, report the error from Settings.</p></div>';
-      return;
-    }
-    result.data = (result.data || []).map(delivery => ({ ...delivery, clip_delivery_messages:[] }));
+    console.warn('Clip deliveries are not ready:', result.error.message);
+    const target = $('#clipDeliveries');
+    if (target) target.innerHTML = '<div class="empty clip-empty"><span>OUTBOX</span><h2>Could not load sent clips</h2><p>Close and reopen Sodium. If this remains, report the error from Settings.</p></div>';
+    return;
   }
   state.clipDeliveries = result.data || [];
   renderClipDeliveries();
@@ -4226,7 +4203,7 @@ function openGuide() {
   if (!pages.childElementCount) {
     pages.innerHTML = Array.from({ length:GUIDE_PAGE_COUNT }, (_, index) => {
       const page = String(index + 1).padStart(2, '0');
-      return `<img src="./docs/guide-v13/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
+      return `<img src="./docs/guide-v14/page-${page}.jpg" alt="Quick Start Guide page ${index + 1} of ${GUIDE_PAGE_COUNT}" loading="${index < 2 ? 'eager' : 'lazy'}" decoding="async">`;
     }).join('');
   }
   viewer.classList.remove('hidden');
@@ -4243,7 +4220,7 @@ function closeGuide() {
 async function quickStartGuideFile() {
   const response = await fetch(quickStartGuideUrl());
   if (!response.ok) throw new Error('The Quick Start Guide could not be loaded.');
-  return new File([await response.blob()], 'SODIUM_Quick_Start_Guide_V13.pdf', { type:'application/pdf' });
+  return new File([await response.blob()], 'SODIUM_Quick_Start_Guide_V14.pdf', { type:'application/pdf' });
 }
 
 function overviewUrl() {
@@ -4253,7 +4230,7 @@ function overviewUrl() {
 async function overviewFile() {
   const response = await fetch(overviewUrl());
   if (!response.ok) throw new Error('The Sodium overview could not be loaded.');
-  return new File([await response.blob()], 'SODIUM_App_Overview_One_Pager_V9.png', { type:'image/png' });
+  return new File([await response.blob()], 'SODIUM_App_Overview_One_Pager_V10.png', { type:'image/png' });
 }
 
 function setupGuideUrl() {
@@ -4263,7 +4240,7 @@ function setupGuideUrl() {
 async function setupGuideFile() {
   const response = await fetch(setupGuideUrl());
   if (!response.ok) throw new Error('The Sodium phone setup guide could not be loaded.');
-  return new File([await response.blob()], 'SODIUM_Setup_One_Pager_V2.png', { type:'image/png' });
+  return new File([await response.blob()], 'SODIUM_Setup_One_Pager_V3.png', { type:'image/png' });
 }
 
 async function taskGuideFile(path, filename) {
@@ -4335,7 +4312,7 @@ async function sharePlanSurfInvite(event) {
     const text = `Yo ${name} — use this Sodium invite to post the surf you’re planning. Add the spot, time, surfers, and whether you want clips. You’ll get the organizer credit.`;
     closeSheet();
     let file = null;
-    try { file = await taskGuideFile(PLAN_SURF_PATH, 'SODIUM_Plan_A_Surf_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
+    try { file = await taskGuideFile(PLAN_SURF_PATH, 'SODIUM_Plan_A_Surf_One_Pager_V2.png'); } catch (_error) { /* Link remains available. */ }
     await shareSodiumContent({ title:'Plan a surf on Sodium', text, url:url.href, file, copiedMessage:`Planning invite for ${name} copied.` });
   } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
 }
@@ -4350,7 +4327,7 @@ async function shareSessionClaimInvite(sessionId) {
     if (invite.region?.id) url.searchParams.set('region', invite.region.id);
     const text = `Yo ${session.initiator_name} — I added the ${session.spot?.name || 'surf'} session you organized to Sodium. Join here to claim it and its organizer credit.`;
     let file = null;
-    try { file = await taskGuideFile(PLAN_SURF_PATH, 'SODIUM_Plan_A_Surf_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
+    try { file = await taskGuideFile(PLAN_SURF_PATH, 'SODIUM_Plan_A_Surf_One_Pager_V2.png'); } catch (_error) { /* Link remains available. */ }
     await shareSodiumContent({ title:'Claim your surf on Sodium', text, url:url.href, file, copiedMessage:`Claim invite for ${session.initiator_name} copied.` });
   } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
 }
@@ -4367,7 +4344,7 @@ async function shareClipClaimInvite(deliveryId) {
     url.searchParams.set('invite', invite.code); url.searchParams.set('open', 'claim-delivery'); url.searchParams.set('delivery', delivery.id);
     const text = `${copy.sentence} Join Sodium here and the delivery opens automatically. You can sign in with Google or use your email, then save Sodium to your phone or computer.`;
     let file = null;
-    try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
+    try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V2.png'); } catch (_error) { /* Link remains available. */ }
     await shareSodiumContent({ title:'Your clips on Sodium', text, url:url.href, file, copiedMessage:`Clip invite for ${copy.greeting} copied.` });
   } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
 }
@@ -4379,9 +4356,9 @@ async function shareExistingClipDelivery(deliveryId) {
   const copy = clipShareCopy(delivery, name);
   const url = new URL('./', location.href); url.search = ''; url.hash = '';
   url.searchParams.set('open', 'clips'); url.searchParams.set('delivery', delivery.id);
-  const text = `${copy.sentence} Open it here to get the folder or message me about a missing wave.`;
+  const text = `${copy.sentence} Open it in Sodium to get the folder.`;
   let file = null;
-  try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V1.png'); } catch (_error) { /* Delivery link remains available. */ }
+  try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V2.png'); } catch (_error) { /* Delivery link remains available. */ }
   try { await shareSodiumContent({ title:'Your Sodium clip delivery', text, url:url.href, file, copiedMessage:`${copy.greeting}’s clip delivery copied.` }); }
   catch (error) { if (error?.name !== 'AbortError') prompt('Copy this clip delivery:', `${text}\n${url.href}`); }
 }
@@ -4394,9 +4371,9 @@ async function shareGuestClipLink(deliveryId) {
   const url = new URL('./', location.href); url.search = ''; url.hash = ''; url.searchParams.set('guest-clips', result.data);
   const name = delivery.recipient_name || delivery.recipient_profile?.name || 'dude';
   const copy = clipShareCopy(delivery, name);
-  const text = `${copy.sentence} Open the clips without an account, or join Sodium from the same page.`;
+  const text = `${copy.sentence} No Sodium account needed—tap Open your clips. Joining from the same page is optional.`;
   let file = null;
-  try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V1.png'); } catch (_error) { /* Link remains available. */ }
+  try { file = await taskGuideFile(GET_CLIPS_PATH, 'SODIUM_Get_Your_Clips_One_Pager_V2.png'); } catch (_error) { /* Link remains available. */ }
   try { await shareSodiumContent({ title:'Your clips from Sodium', text, url:url.href, file, copiedMessage:'Private guest clip link copied.' }); }
   catch (error) { if (error?.name !== 'AbortError') prompt('Copy this guest clip link:', `${text}\n${url.href}`); }
 }
@@ -4927,7 +4904,6 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
   else if (event.target.id === 'clipDeliveryForm') await saveClipDelivery(event);
   else if (event.target.id === 'planInviteForm') await sharePlanSurfInvite(event);
-  else if (event.target.matches('[data-clip-message-form]')) await sendMemberClipMessage(event);
   else if (event.target.id === 'locationForm') await saveLocation(event);
   else if (event.target.id === 'issueReportForm') await saveIssueReport(event);
   else if (event.target.matches('[data-comment-form]')) await addComment(event, event.target.dataset.commentForm);

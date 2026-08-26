@@ -6,8 +6,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.91.
-- This release allows finished edits up to five minutes and corrects mobile TUS chunking to Cloudflare’s current resumable-upload requirements. Members can give posts **Stoke** with a positive-only wave reaction alongside comments.
+- Current release: v1.92.
+- This release makes clip delivery a clean folder handoff. Members open saved deliveries in Sodium; guests open a private folder link without an account, with joining offered only as an optional secondary action. Delivery-specific messaging has been removed from the UI.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -94,6 +94,8 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - Clip deliveries link to Drive, Dropbox, iCloud, or another external folder.
 - The sender specifies the expected clip count and the recipient can be a member or a named guest.
 - Guest links expose only that delivery, not the Sodium community.
+- Guest links lead to **Open your clips** first. No Sodium account is required; joining is optional.
+- Clip deliveries do not have their own chat. Members can use a normal DM when they need to talk.
 - The clip outbox allows the sender to reopen, edit, and reshare deliveries.
 - A recipient joining Sodium can claim a prepared delivery.
 - Google Drive is optional. A filmer may connect with the narrow `drive.file` permission, choose one folder with Google Picker, and let Sodium refresh its completed-video count while a sender, recipient, or guest is viewing the delivery.
@@ -128,3 +130,5 @@ Version 1.89 adds the optional Google Drive folder picker and view-time clip cou
 Version 1.90 makes phone clip uploads resilient to brief network interruptions and replaces the generic heart/like presentation with the positive-only action of giving a post Stoke. Existing reaction data is preserved.
 
 Version 1.91 raises the per-clip duration cap to five minutes while retaining the 1 GB file cap and five-clip carousel limit. It also uses Cloudflare’s required 5 MiB minimum TUS chunk size for large resumable uploads.
+
+Version 1.92 simplifies clip sharing for both audiences. Member links open the saved Sodium delivery; guest links open a delivery-only landing page with **Open your clips** as the primary action and optional membership second. Delivery-specific messages are removed, and every active invite PNG/PDF is refreshed to match the current behavior and media limits.

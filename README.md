@@ -44,7 +44,7 @@ For the Sodium Phase 1 rename, run `supabase/sodium-brand-v1-migration.sql` once
 
 Before release v1.59, run `supabase/clip-deliveries-v1-migration.sql` once. It adds provider-neutral clip handoffs to the Inbox: sender, recipient, surfers in the footage, optional related session, external folder link, and manual progress. Videos remain in Drive, Dropbox, iCloud, or another provider. When the uploaded count reaches the expected total, the delivery becomes **Clips ready** and notifies the recipient automatically. Future provider OAuth can automate the count without changing this data model.
 
-Before release v1.60, run `supabase/session-attribution-invites-v1-migration.sql` once. It separates the member who entered a session from the person who initiated it, preserves all existing sessions, adds claimable task-specific invitations, allows pending clip recipients, and adds isolated guest clip links with a delivery-only message thread. Guest links never expose sessions, community chat, profiles, or other member data.
+Before release v1.60, run `supabase/session-attribution-invites-v1-migration.sql` once. It separates the member who entered a session from the person who initiated it, preserves all existing sessions, adds claimable task-specific invitations, allows pending clip recipients, and adds isolated guest clip links. Guest links never expose sessions, community chat, profiles, or other member data. The legacy migration also created a clip-message table, but v1.92 intentionally removes delivery messaging from the product UI; clip delivery is a clean folder handoff.
 
 Release v1.82 adds multiple linked member tags to Stoke through the existing `post_tags` relationship and author-written visual labels through `supabase/stoke-visual-tags-v1-migration.sql`. The migration is additive, preserves every existing post, and is safe to run more than once.
 
@@ -73,6 +73,6 @@ Admins can create, edit, hide, and delete discounts from the Perks screen. Delet
 
 ## Current member guide
 
-The member documentation has three levels. `docs/SODIUM_App_Overview_One_Pager_V9.png` is the simple first-contact overview. `docs/SODIUM_Setup_One_Pager_V2.png` is the four-step phone setup sheet. `docs/SODIUM_Quick_Start_Guide_V13.pdf` is the optional four-page manual; its in-app pages live in `docs/guide-v13/`. Task-specific invites attach `SODIUM_Plan_A_Surf_One_Pager_V1.png` or `SODIUM_Get_Your_Clips_One_Pager_V1.png`, including the no-account guest delivery path.
+The member documentation has three levels. `docs/SODIUM_App_Overview_One_Pager_V10.png` is the simple first-contact overview. `docs/SODIUM_Setup_One_Pager_V3.png` is the four-step phone setup sheet. `docs/SODIUM_Quick_Start_Guide_V14.pdf` is the optional four-page manual; its in-app pages live in `docs/guide-v14/`. Task-specific invites attach `SODIUM_Plan_A_Surf_One_Pager_V2.png` or `SODIUM_Get_Your_Clips_One_Pager_V2.png`. The clip guide makes the two routes explicit: members open the delivery in Sodium; guests tap **Open your clips** with no account, while joining remains optional.
 
 Before deploying Marketplace to a fresh Supabase project, run `supabase/marketplace-v1-migration.sql` after the base schema. It is additive, preserves existing data, enables RLS, and creates the private `sodium-marketplace` image bucket.
