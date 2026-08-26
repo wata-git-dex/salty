@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.94';
+const APP_VERSION = '1.95';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -1914,7 +1914,7 @@ function updateClipProgressPreview() {
   $('i span', preview).style.width = `${percent}%`;
   $('small', preview).textContent = ready
     ? 'Complete. The recipient gets the ready notification automatically.'
-    : `At ${formatCount(expected)} of ${formatCount(expected)}, this automatically becomes Clips ready.`;
+    : 'When the folder finishes uploading, reopen this delivery and tap Mark all clips ready.';
 }
 
 function updateClipProviderHint() {
@@ -1927,8 +1927,8 @@ function updateClipProviderHint() {
   }
   hint.classList.remove('clip-auto-count-note');
   hint.textContent = provider === 'other'
-    ? 'Any HTTPS folder link works.'
-    : `${clipProviderLabel(provider)} detected · manual clip counting stays available.`;
+    ? 'Any shareable HTTPS folder link works. Mark the delivery ready when the upload finishes.'
+    : `${clipProviderLabel(provider)} detected · mark the delivery ready when the folder finishes uploading.`;
 }
 
 function clipSessionOptions(selected = '') {
@@ -1962,7 +1962,6 @@ function openClipDeliveryComposer(deliveryId = null, sessionId = '', recipientId
   updateClipProviderHint();
   updateClipProgressPreview();
   renderGoogleDriveCard();
-  loadGoogleDriveStatus();
   openSheet('clipDeliverySheet');
 }
 
