@@ -1353,7 +1353,7 @@ function renderRoomMentionSuggestions() {
   if (!context) { target.innerHTML = ''; target.classList.add('hidden'); return; }
   const matches = state.people.filter(person => person.id !== state.profile.id
     && (!context.query || person.name.toLowerCase().includes(context.query) || (person.nickname || '').toLowerCase().includes(context.query))).slice(0, 7);
-  target.innerHTML = matches.map(person => `<button type="button" data-room-mention="${person.id}"><i>${esc(initials(person.name))}</i><span><b>${esc(person.name)}</b><small>${person.nickname ? `“${esc(person.nickname)}” · ` : ''}Sodium member</small></span></button>`).join('');
+  target.innerHTML = matches.map(person => `<button type="button" data-room-mention="${person.id}"><span><b>${esc(person.name)}</b><small>${person.nickname ? `“${esc(person.nickname)}” · ` : ''}Sodium member</small></span></button>`).join('');
   target.classList.toggle('hidden', !matches.length);
 }
 
