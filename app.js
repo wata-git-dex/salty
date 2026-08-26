@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.92';
+const APP_VERSION = '1.93';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -42,6 +42,9 @@ const WHATS_NEW_SEEN_KEY = 'salty:whats-new-seen';
 const POST_DRAFT_DB_NAME = 'sodium-post-drafts';
 const POST_DRAFT_STORE = 'drafts';
 const POST_DRAFT_TTL = 30 * 24 * 60 * 60 * 1000;
+const STREAM_UPLOAD_SESSION_KEY = 'sodium:stream-upload-sessions';
+const STREAM_UPLOAD_SESSION_TTL = 24 * 60 * 60 * 1000;
+const STREAM_RETRY_DELAYS = Object.freeze([0, 1000, 2500, 5000, 10000, 20000, 30000, 45000, 60000]);
 const NOTIFICATION_DEFAULTS = Object.freeze({
   master_enabled: true,
   new_sessions: true,
@@ -3549,6 +3552,47 @@ function pause(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
+function streamUploadFingerprint(file) {
+  return [state.profile?.id || 'member', file.name, file.size, file.lastModified || 0, file.type || 'video'].join(':');
+}
+
+function readStreamUploadSessions() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STREAM_UPLOAD_SESSION_KEY) || '{}');
+    const now = Date.now();
+    const active = Object.fromEntries(Object.entries(parsed).filter(([, value]) => value?.createdAt && now - value.createdAt < STREAM_UPLOAD_SESSION_TTL));
+    if (Object.keys(active).length !== Object.keys(parsed).length) localStorage.setItem(STREAM_UPLOAD_SESSION_KEY, JSON.stringify(active));
+    return active;
+  } catch (_error) {
+    return {};
+  }
+}
+
+function saveStreamUploadSession(fingerprint, session) {
+  try {
+    const sessions = readStreamUploadSessions();
+    sessions[fingerprint] = { ...session, createdAt:session.createdAt || Date.now(), updatedAt:Date.now() };
+    localStorage.setItem(STREAM_UPLOAD_SESSION_KEY, JSON.stringify(sessions));
+  } catch (_error) { /* Uploads still work when private storage is unavailable. */ }
+}
+
+function clearStreamUploadSession(fingerprint) {
+  try {
+    const sessions = readStreamUploadSessions();
+    delete sessions[fingerprint];
+    localStorage.setItem(STREAM_UPLOAD_SESSION_KEY, JSON.stringify(sessions));
+  } catch (_error) { /* Nothing else to clean up. */ }
+}
+
+async function waitForUploadNetwork(statusCallback) {
+  if (navigator.onLine !== false) return;
+  statusCallback('Upload paused—waiting for internet…');
+  await new Promise(resolve => {
+    const timer = setTimeout(resolve, 60000);
+    addEventListener('online', () => { clearTimeout(timer); resolve(); }, { once:true });
+  });
+}
+
 async function streamUploadOffset(uploadUrl, fallbackOffset) {
   try {
     const response = await fetch(uploadUrl, {
@@ -3556,30 +3600,54 @@ async function streamUploadOffset(uploadUrl, fallbackOffset) {
       headers:{ 'Tus-Resumable':'1.0.0' },
       cache:'no-store',
     });
-    if (!response.ok) return fallbackOffset;
+    if (!response.ok) return { ok:false, status:response.status, offset:fallbackOffset };
     const offsetHeader = response.headers.get('Upload-Offset');
     const serverOffset = offsetHeader === null ? NaN : Number(offsetHeader);
-    return Number.isFinite(serverOffset) ? serverOffset : fallbackOffset;
+    return { ok:true, status:response.status, offset:Number.isFinite(serverOffset) ? serverOffset : fallbackOffset };
   } catch (_error) {
-    return fallbackOffset;
+    return { ok:false, status:0, offset:fallbackOffset };
   }
 }
 
-async function uploadStreamChunk(uploadUrl, chunk, offset) {
+async function uploadStreamChunk(uploadUrl, chunk, offset, statusCallback) {
   let lastError;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  for (let attempt = 0; attempt < STREAM_RETRY_DELAYS.length; attempt += 1) {
+    const delay = STREAM_RETRY_DELAYS[attempt];
+    if (delay) {
+      statusCallback(`Connection interrupted—retrying in ${Math.ceil(delay / 1000)}s…`);
+      await pause(delay);
+    }
+    await waitForUploadNetwork(statusCallback);
+    if (attempt) {
+      const checkpoint = await streamUploadOffset(uploadUrl, offset);
+      if (checkpoint.ok && checkpoint.offset > offset) return { offset:checkpoint.offset };
+      if ([404, 410].includes(checkpoint.status)) throw new Error('This upload checkpoint expired. Start the clip again.');
+    }
     try {
-      const response = await fetch(uploadUrl, {
-        method:'PATCH',
-        headers:{
-          'Tus-Resumable':'1.0.0',
-          'Upload-Offset':String(offset),
-          'Content-Type':'application/offset+octet-stream',
-        },
-        body:chunk,
-      });
-      if (response.ok) return response;
-      if (response.status === 409) return null;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180000);
+      let response;
+      try {
+        response = await fetch(uploadUrl, {
+          method:'PATCH',
+          headers:{
+            'Tus-Resumable':'1.0.0',
+            'Upload-Offset':String(offset),
+            'Content-Type':'application/offset+octet-stream',
+          },
+          body:chunk,
+          signal:controller.signal,
+        });
+      } finally { clearTimeout(timeout); }
+      if (response.ok) {
+        const offsetHeader = response.headers.get('Upload-Offset');
+        const header = offsetHeader === null ? NaN : Number(offsetHeader);
+        return { offset:Number.isFinite(header) ? header : offset + chunk.size };
+      }
+      if (response.status === 409) {
+        const checkpoint = await streamUploadOffset(uploadUrl, offset);
+        if (checkpoint.ok) return { offset:checkpoint.offset };
+      }
       if (response.status < 500 && response.status !== 408 && response.status !== 429) {
         throw new Error(`Cloudflare rejected this clip with status ${response.status}.`);
       }
@@ -3587,42 +3655,85 @@ async function uploadStreamChunk(uploadUrl, chunk, offset) {
     } catch (error) {
       lastError = error;
     }
-    await pause(700 * (attempt + 1));
   }
-  throw lastError || new Error('The clip upload lost its connection.');
+  const error = new Error('The upload is paused because the connection keeps dropping.');
+  error.recoverableUpload = true;
+  error.cause = lastError;
+  throw error;
 }
 
-async function uploadStreamClip(file, progressCallback = () => {}) {
-  const created = await streamRequest('/upload', {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json' },
-    body:JSON.stringify({ filename:file.name, size:file.size }),
-  });
+async function uploadStreamClip(file, progressCallback = () => {}, statusCallback = () => {}) {
+  const fingerprint = streamUploadFingerprint(file);
+  const saved = readStreamUploadSessions()[fingerprint];
+  if (saved?.complete && saved.uid) {
+    progressCallback(1);
+    statusCallback('Recovered the completed clip. Finishing the post…');
+    return { uid:saved.uid, duration:saved.duration, fingerprint };
+  }
+  let created = saved?.uploadUrl && saved?.uid ? saved : null;
   let offset = 0;
+  if (created) {
+    statusCallback('Checking the saved upload…');
+    const checkpoint = await streamUploadOffset(created.uploadUrl, Number(created.offset) || 0);
+    if (checkpoint.ok) {
+      offset = checkpoint.offset;
+      progressCallback(offset / file.size);
+      statusCallback(offset ? `Resuming at ${Math.round(offset / file.size * 100)}%…` : 'Resuming upload…');
+    } else if ([404, 410].includes(checkpoint.status)) {
+      clearStreamUploadSession(fingerprint);
+      created = null;
+    }
+  }
+  if (!created) {
+    statusCallback('Preparing a secure resumable upload…');
+    created = await streamRequest('/upload', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({ filename:file.name, size:file.size }),
+    });
+    saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:0 });
+  }
   // Cloudflare TUS requires non-final chunks to be at least 5 MiB and divisible by 256 KiB.
   const chunkSize = 5 * 1024 * 1024;
+  const attemptStartedAt = Date.now();
+  const attemptStartingOffset = offset;
   try {
     while (offset < file.size) {
       const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
-      const response = await uploadStreamChunk(created.uploadUrl, chunk, offset);
-      if (!response) {
-        const correctedOffset = await streamUploadOffset(created.uploadUrl, offset);
-        if (correctedOffset === offset) throw new Error('The clip upload could not resume after a connection interruption.');
-        offset = correctedOffset;
-        progressCallback(offset / file.size);
-        continue;
-      }
-      const offsetHeader = response.headers.get('Upload-Offset');
-      const responseOffset = offsetHeader === null ? NaN : Number(offsetHeader);
-      offset = Number.isFinite(responseOffset) ? responseOffset : offset + chunk.size;
+      statusCallback(`Uploading · ${Math.round(offset / file.size * 100)}%`);
+      const result = await uploadStreamChunk(created.uploadUrl, chunk, offset, statusCallback);
+      offset = result.offset;
+      saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset });
       progressCallback(offset / file.size);
+      const elapsedSeconds = Math.max(1, (Date.now() - attemptStartedAt) / 1000);
+      const bytesThisAttempt = Math.max(0, offset - attemptStartingOffset);
+      const bytesPerSecond = bytesThisAttempt / elapsedSeconds;
+      const remainingSeconds = bytesPerSecond > 0 ? (file.size - offset) / bytesPerSecond : 0;
+      const eta = remainingSeconds >= 1 ? ` · about ${formatUploadTime(remainingSeconds)} left` : '';
+      statusCallback(`Uploading · ${Math.min(100, Math.round(offset / file.size * 100))}%${eta}`);
     }
-    return { uid:created.uid, duration:await videoDuration(file) };
+    const duration = await videoDuration(file);
+    saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:file.size, duration, complete:true });
+    statusCallback('Upload complete—Cloudflare is processing the clip…');
+    return { uid:created.uid, duration, fingerprint };
   } catch (error) {
+    saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset });
+    if (error.recoverableUpload) throw error;
     try { await streamRequest(`/video/${encodeURIComponent(created.uid)}`, { method:'DELETE' }); }
     catch (_cleanupError) { /* Cloudflare will retain an incomplete upload until expiry. */ }
+    clearStreamUploadSession(fingerprint);
     throw error;
   }
+}
+
+function formatUploadTime(seconds) {
+  const total = Math.max(1, Math.round(Number(seconds) || 0));
+  if (total < 60) return `${total}s`;
+  const minutes = Math.ceil(total / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
 }
 
 function matchingPerson(name) {
@@ -3955,8 +4066,10 @@ async function savePost(event) {
   event.preventDefault();
   const submit = $('#postSubmit'); submit.disabled = true;
   const progress = $('#uploadProgress');
+  const uploadStatus = $('#uploadStatus');
   let streamUploads = [];
   let streamMediaLinked = false;
+  let recoverableUpload = false;
   let postId = state.editingPostId;
   try {
     const editing = state.editingPostId;
@@ -3983,10 +4096,14 @@ async function savePost(event) {
       const mediaType = selectedPostKind();
       const paths = [];
       progress.value = 8; progress.classList.remove('hidden');
+      uploadStatus.textContent = mediaType === 'clip' ? 'Preparing upload…' : 'Uploading photos…';
+      uploadStatus.classList.remove('hidden');
       if (mediaType === 'clip') {
         for (let index = 0; index < files.length; index += 1) {
           const uploaded = await uploadStreamClip(files[index], fraction => {
             progress.value = 8 + Math.round(((index + fraction) / files.length) * 72);
+          }, message => {
+            uploadStatus.textContent = files.length > 1 ? `Clip ${index + 1} of ${files.length} · ${message}` : message;
           });
           streamUploads.push(uploaded);
         }
@@ -4028,20 +4145,36 @@ async function savePost(event) {
       if (tagsResult.error) throw tagsResult.error;
     }
     if (state.editingPostDraftId) await postDraftTransaction('readwrite', store => store.delete(state.editingPostDraftId));
+    streamUploads.forEach(item => clearStreamUploadSession(item.fingerprint));
     progress.value = 100; resetPostComposer(); closeSheet();
     await loadPosts(); await renderProfile(); toast(editing ? 'Stoke post updated.' : 'Shared with the whole community.');
   } catch (error) {
-    if (streamUploads.length && !streamMediaLinked) {
+    recoverableUpload = Boolean(error?.recoverableUpload);
+    if (streamUploads.length && !streamMediaLinked && !recoverableUpload) {
       await Promise.allSettled(streamUploads.map(item => streamRequest(`/video/${encodeURIComponent(item.uid)}`, { method:'DELETE' })));
+      streamUploads.forEach(item => clearStreamUploadSession(item.fingerprint));
       if (postId && !state.editingPostId) await db.from('posts').delete().eq('id', postId).eq('author', state.profile.id);
     }
     const message = readableError(error);
-    const uploadHelp = streamUploads.length || selectedPostKind() === 'clip'
-      ? `${message} Keep Sodium open and try again on a steady Wi-Fi or 5G connection.`
+    const uploadHelp = recoverableUpload
+      ? `${message} Keep the same clip selected and tap Resume upload. Sodium will continue from its saved checkpoint.`
+      : streamUploads.length || selectedPostKind() === 'clip'
+      ? `${message} The selected clip is still here so you can try again.`
       : message;
+    if (recoverableUpload) {
+      submit.textContent = 'Resume upload';
+      uploadStatus.textContent = 'Upload paused · tap Resume upload when the connection returns.';
+      uploadStatus.classList.remove('hidden');
+    }
     toast(uploadHelp, 9000);
   }
-  finally { submit.disabled = false; progress.classList.add('hidden'); progress.value = 0; }
+  finally {
+    submit.disabled = false;
+    if (!recoverableUpload) {
+      progress.classList.add('hidden'); progress.value = 0;
+      uploadStatus.classList.add('hidden'); uploadStatus.textContent = '';
+    }
+  }
 }
 
 async function deletePost() {

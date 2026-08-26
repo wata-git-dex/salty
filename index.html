@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=92-share-guides">
+  <link rel="stylesheet" href="./styles.css?v=93-resumable-uploads">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -69,7 +69,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.92</small>
+    <small class="boot-credit">Saltyview Productions · v1.93</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -375,7 +375,7 @@
           <button type="button" class="post-drafts-toggle" data-action="toggle-post-drafts" aria-expanded="false"><span><svg><use href="#i-folder"/></svg><b>Drafts</b><small>Saved on this device for 30 days</small></span><strong id="postDraftCount">0</strong><svg><use href="#i-chevron"/></svg></button>
           <div id="postDraftList" class="post-draft-list hidden"></div>
         </section>
-        <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple required><svg id="postMediaIcon"><use href="#i-photo"/></svg><strong id="fileLabel">Choose up to 10 photos</strong><small id="postMediaHelp">Original shapes are preserved unless you choose a crop below.</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress></label>
+        <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple required><svg id="postMediaIcon"><use href="#i-photo"/></svg><strong id="fileLabel">Choose up to 10 photos</strong><small id="postMediaHelp">Original shapes are preserved unless you choose a crop below.</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress><small id="uploadStatus" class="upload-status hidden" role="status" aria-live="polite"></small></label>
         <fieldset id="postRatioPicker" class="post-ratio-picker">
           <legend><span id="postRatioLegendLabel">Photo shape</span> <small>optional · Original never crops</small></legend>
           <div class="post-ratio-options">
@@ -544,9 +544,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.92</span>
-    <h3>Clip links are simpler.</h3>
-    <ul><li>Guests tap Open your clips—no Sodium account needed.</li><li>Joining Sodium from a guest delivery is optional.</li><li>Clip deliveries are clean folder handoffs, not another chat.</li></ul>
+    <span>NEW IN V1.93</span>
+    <h3>Clip uploads can recover.</h3>
+    <ul><li>Large clips now resume from a saved checkpoint after weak Wi-Fi.</li><li>Upload progress includes a live time estimate.</li><li>Keep Sodium open while a clip uploads; playback is still handled by Cloudflare Stream.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -561,6 +561,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
-  <script src="./app.js?v=92-share-guides" defer></script>
+  <script src="./app.js?v=93-resumable-uploads" defer></script>
 </body>
 </html>
