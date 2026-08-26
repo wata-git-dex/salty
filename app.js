@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.98';
+const APP_VERSION = '1.99';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -65,7 +65,7 @@ const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
 const state = {
   session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [], nonprofits: [], perks: [], listings: [],
   regionMemberships: [],
-  roomMessages: [], dmMessages: [], dmThreads: [], clipDeliveries: [], chatPhotoUrls: {}, activeDmMember: null,
+  roomMessages: [], dmMessages: [], dmThreads: [], messageReactions: [], clipDeliveries: [], chatPhotoUrls: {}, activeDmMember: null,
   currentRegion: null, eventRegion: null, chatRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
   pendingInviteRegion: '',
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
@@ -80,6 +80,7 @@ const state = {
   nonprofitLogoUrls: {}, editingNonprofitId: null, drawerScrollY: 0,
   googleDriveConnected: false, googleDriveChecked: false, googleDriveSyncTimer: null,
   driveConnectResult: '', driveReconnectWarned: false,
+  editingMessageKind: '', editingMessageId: '', editingMessageHasAttachment: false,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1312,6 +1313,7 @@ async function loadRoomMessages() {
     .order('created_at', { ascending:false }).limit(150);
   if (result.error) { toast(readableError(result.error)); return; }
   state.roomMessages = (result.data || []).reverse();
+  await loadMessageReactions('room', state.roomMessages.map(message => message.id));
   const photoMessages = state.roomMessages.filter(message => message.attachment_path);
   const signedEntries = await Promise.all(photoMessages.map(async message => {
     const signed = await db.storage.from(CONFIG.chatBucket).createSignedUrl(message.attachment_path, 3600);
@@ -1333,7 +1335,9 @@ function renderRoomMessages() {
     const profile = memberById(message.author) || { id:message.author, name:'Sodium member' };
     const own = message.author === state.profile.id;
     const photo = state.chatPhotoUrls[message.id];
-    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.author)}">${own ? '' : avatarMarkup(profile, 'message-avatar')}<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time></div><div class="message-bubble">${photo ? `<img src="${esc(photo)}" alt="Photo shared by ${esc(profile.name)}">` : ''}${message.body ? `<p>${roomMessageBodyMarkup(message.body)}</p>` : ''}</div></div></article>`;
+    const avatar = avatarMarkup(profile, 'message-avatar');
+    const stack = `<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time>${own ? `<button class="message-edit" data-edit-message="room:${message.id}" aria-label="Edit or delete this message"><svg><use href="#i-edit"/></svg></button>` : ''}</div><div class="message-bubble">${photo ? `<img src="${esc(photo)}" alt="Photo shared by ${esc(profile.name)}">` : ''}${message.body ? `<p>${roomMessageBodyMarkup(message.body)}</p>` : ''}</div>${messageReactionsMarkup('room', message.id)}</div>`;
+    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.author)}">${own ? '' : avatar}${stack}${own ? avatar : ''}</article>`;
   }).join('');
   requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
 }
@@ -1521,6 +1525,7 @@ async function loadDmConversation() {
     .order('created_at', { ascending:true }).limit(250);
   if (result.error) { toast(readableError(result.error)); return; }
   state.dmMessages = result.data || [];
+  await loadMessageReactions('dm', state.dmMessages.map(message => message.id));
   const unread = state.dmMessages.filter(message => message.sender === theirs && message.recipient === mine && !message.read_at);
   if (unread.length) {
     const marked = await db.rpc('mark_dm_read', { other_user:theirs });
@@ -1542,7 +1547,10 @@ function renderDmConversation() {
   }
   list.innerHTML = messages.map(message => {
     const own = message.sender === mine;
-    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.sender)}">${own ? '' : avatarMarkup(state.activeDmMember, 'message-avatar')}<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(state.activeDmMember.name)}</b><time>${esc(messageTime(message.created_at))}</time></div><div class="message-bubble"><p>${messageBodyMarkup(message.body)}</p></div></div></article>`;
+    const profile = own ? state.profile : state.activeDmMember;
+    const avatar = avatarMarkup(profile, 'message-avatar');
+    const stack = `<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time>${own ? `<button class="message-edit" data-edit-message="dm:${message.id}" aria-label="Edit or delete this message"><svg><use href="#i-edit"/></svg></button>` : ''}</div><div class="message-bubble"><p>${messageBodyMarkup(message.body)}</p></div>${messageReactionsMarkup('dm', message.id)}</div>`;
+    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.sender)}">${own ? '' : avatar}${stack}${own ? avatar : ''}</article>`;
   }).join('');
   requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
 }
@@ -1561,6 +1569,88 @@ async function sendDmMessage(event) {
     await loadDmConversation();
   } catch (error) { toast(readableError(error), 5000); }
   finally { submit.disabled = false; }
+}
+
+const MESSAGE_REACTION_OPTIONS = Object.freeze(['🌊', '🔥', '😂', '❤️']);
+
+async function loadMessageReactions(kind, messageIds) {
+  const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
+  state.messageReactions = state.messageReactions.filter(reaction => !reaction[key]);
+  if (!messageIds.length) return;
+  const result = await db.from('message_reactions').select('*').in(key, messageIds);
+  if (result.error) { console.warn('Message reactions unavailable:', result.error.message); return; }
+  state.messageReactions.push(...(result.data || []));
+}
+
+function messageReactionsMarkup(kind, messageId) {
+  const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
+  const reactions = state.messageReactions.filter(reaction => reaction[key] === messageId);
+  const counts = Object.fromEntries(MESSAGE_REACTION_OPTIONS.map(emoji => [emoji, reactions.filter(reaction => reaction.emoji === emoji).length]));
+  return `<div class="message-reactions" aria-label="Message reactions">${MESSAGE_REACTION_OPTIONS.map(emoji => {
+    const mine = reactions.some(reaction => reaction.emoji === emoji && reaction.user_id === state.profile.id);
+    return `<button class="${mine ? 'active' : ''}" data-message-reaction="${kind}:${messageId}:${emoji}" aria-label="React ${emoji}"><span>${emoji}</span>${counts[emoji] ? `<b>${counts[emoji]}</b>` : ''}</button>`;
+  }).join('')}</div>`;
+}
+
+async function toggleMessageReaction(kind, messageId, emoji) {
+  if (!MESSAGE_REACTION_OPTIONS.includes(emoji)) return;
+  const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
+  const existing = state.messageReactions.find(reaction => reaction[key] === messageId && reaction.user_id === state.profile.id && reaction.emoji === emoji);
+  const result = existing
+    ? await db.from('message_reactions').delete().eq('id', existing.id).eq('user_id', state.profile.id)
+    : await db.from('message_reactions').insert({ [key]:messageId, user_id:state.profile.id, emoji });
+  if (result.error) { toast(readableError(result.error), 5000); return; }
+  if (kind === 'room') await loadRoomMessages(); else await loadDmConversation();
+}
+
+function openMessageEditor(kind, messageId) {
+  const message = kind === 'room'
+    ? state.roomMessages.find(item => item.id === messageId && item.author === state.profile.id)
+    : state.dmMessages.find(item => item.id === messageId && item.sender === state.profile.id);
+  if (!message) return;
+  state.editingMessageKind = kind;
+  state.editingMessageId = messageId;
+  state.editingMessageHasAttachment = Boolean(message.attachment_path);
+  $('#messageEditBody').value = message.body || '';
+  openSheet('messageEditSheet');
+  setTimeout(() => $('#messageEditBody').focus({ preventScroll:true }), 80);
+}
+
+function closeMessageEditor() {
+  state.editingMessageKind = '';
+  state.editingMessageId = '';
+  state.editingMessageHasAttachment = false;
+  $('#messageEditForm')?.reset();
+  closeSheet();
+}
+
+async function saveMessageEdit(event) {
+  event.preventDefault();
+  const { editingMessageKind:kind, editingMessageId:id } = state;
+  const body = $('#messageEditBody').value.trim();
+  if (!kind || !id) return;
+  if (!body && !state.editingMessageHasAttachment) { toast('A text-only message cannot be empty.'); return; }
+  const table = kind === 'room' ? 'room_messages' : 'dm_messages';
+  const owner = kind === 'room' ? 'author' : 'sender';
+  const result = await db.from(table).update({ body:body || null }).eq('id', id).eq(owner, state.profile.id);
+  if (result.error) { toast(readableError(result.error), 5000); return; }
+  closeMessageEditor();
+  if (kind === 'room') await loadRoomMessages(); else await loadDmConversation();
+  toast('Message updated.');
+}
+
+async function deleteEditedMessage() {
+  const { editingMessageKind:kind, editingMessageId:id } = state;
+  if (!kind || !id || !confirm('Delete this message for everyone?')) return;
+  const table = kind === 'room' ? 'room_messages' : 'dm_messages';
+  const owner = kind === 'room' ? 'author' : 'sender';
+  const message = kind === 'room' ? state.roomMessages.find(item => item.id === id) : null;
+  const result = await db.from(table).delete().eq('id', id).eq(owner, state.profile.id);
+  if (result.error) { toast(readableError(result.error), 5000); return; }
+  if (message?.attachment_path) await db.storage.from(CONFIG.chatBucket).remove([message.attachment_path]);
+  closeMessageEditor();
+  if (kind === 'room') await loadRoomMessages(); else await loadDmConversation();
+  toast('Message deleted.');
 }
 
 function clipProviderFromUrl(value = '') {
@@ -4480,6 +4570,10 @@ function subscribeRealtime() {
       if (state.activeDmMember && state.view === 'dm') await loadDmConversation();
       else await loadDmInbox();
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, async () => {
+      if (state.view === 'chat') await loadRoomMessages();
+      else if (state.activeDmMember && state.view === 'dm') await loadDmConversation();
+    })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clip_deliveries' }, async () => await loadClipDeliveries())
     .subscribe();
 }
@@ -4913,6 +5007,8 @@ async function shareInvite({ includeGuide = false, includeOverview = false, incl
 document.addEventListener('click', async event => {
   const actionNode = event.target.closest('[data-action]');
   const roomMentionNode = event.target.closest('[data-room-mention]');
+  const editMessageNode = event.target.closest('[data-edit-message]');
+  const messageReactionNode = event.target.closest('[data-message-reaction]');
   const profileStatTabNode = event.target.closest('[data-profile-stat-tab]');
   const carouselDirectionNode = event.target.closest('[data-carousel-direction]');
   const viewNode = event.target.closest('[data-view]');
@@ -4940,6 +5036,14 @@ document.addEventListener('click', async event => {
   const sessionRoleNode = event.target.closest('[data-session-role]');
   const memberNode = event.target.closest('[data-member]');
   const iconThemeNode = event.target.closest('[data-icon-theme]');
+  if (editMessageNode) {
+    const [kind, id] = editMessageNode.dataset.editMessage.split(':');
+    openMessageEditor(kind, id); return;
+  }
+  if (messageReactionNode) {
+    const [kind, id, emoji] = messageReactionNode.dataset.messageReaction.split(':');
+    await toggleMessageReaction(kind, id, emoji); return;
+  }
   if (roomMentionNode) { insertRoomMention(roomMentionNode.dataset.roomMention); return; }
   if (!event.target.closest('#roomMessageForm')) $('#roomMentionSuggestions')?.classList.add('hidden');
   if (profileStatTabNode) {
@@ -5177,6 +5281,8 @@ document.addEventListener('click', async event => {
     'dismiss-install': dismissInstallNudge,
     'native-install': runNativeInstall,
     'close-sheet': closeSheet,
+    'close-message-edit': closeMessageEditor,
+    'delete-message': deleteEditedMessage,
     'open-guide': () => { closeDrawer(); openGuide(); },
     'open-master-guide': () => { closeDrawer(); openMasterGuide(); },
     'close-guide': closeGuide,
@@ -5231,6 +5337,7 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'listingForm') await saveListing(event);
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
+  else if (event.target.id === 'messageEditForm') await saveMessageEdit(event);
   else if (event.target.id === 'clipDeliveryForm') await saveClipDelivery(event);
   else if (event.target.id === 'planInviteForm') await sharePlanSurfInvite(event);
   else if (event.target.id === 'locationForm') await saveLocation(event);

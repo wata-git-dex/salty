@@ -155,6 +155,18 @@ create table public.dm_messages (
       or (attachment_path is not null and attachment_type is not null and attachment_size is not null))
 );
 
+create table public.message_reactions (
+  id uuid primary key default gen_random_uuid(),
+  room_message_id uuid references public.room_messages(id) on delete cascade,
+  dm_message_id uuid references public.dm_messages(id) on delete cascade,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  emoji text not null check (emoji in ('🌊', '🔥', '😂', '❤️')),
+  created_at timestamptz not null default now(),
+  check ((room_message_id is not null)::int + (dm_message_id is not null)::int = 1)
+);
+create unique index message_reactions_room_unique on public.message_reactions (room_message_id, user_id, emoji) where room_message_id is not null;
+create unique index message_reactions_dm_unique on public.message_reactions (dm_message_id, user_id, emoji) where dm_message_id is not null;
+
 create table public.nonprofit_organizations (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(trim(name)) between 2 and 160),
@@ -681,6 +693,7 @@ alter table public.post_likes enable row level security;
 alter table public.connections enable row level security;
 alter table public.room_messages enable row level security;
 alter table public.dm_messages enable row level security;
+alter table public.message_reactions enable row level security;
 alter table public.nonprofit_organizations enable row level security;
 alter table public.events enable row level security;
 alter table public.event_rsvps enable row level security;
@@ -744,6 +757,20 @@ create policy dms_insert_sender on public.dm_messages for insert with check (
   and (attachment_path is null or split_part(attachment_path, '/', 1) = auth.uid()::text)
 );
 create policy dms_delete_sender on public.dm_messages for delete using (sender = auth.uid());
+create policy dms_update_sender on public.dm_messages for update using (sender = auth.uid()) with check (sender = auth.uid());
+create policy message_reactions_read on public.message_reactions for select using (
+  public.is_member() and (
+    (room_message_id is not null and exists (select 1 from public.room_messages message where message.id = room_message_id))
+    or (dm_message_id is not null and exists (select 1 from public.dm_messages message where message.id = dm_message_id and auth.uid() in (message.sender, message.recipient)))
+  )
+);
+create policy message_reactions_insert_own on public.message_reactions for insert with check (
+  public.is_member() and user_id = auth.uid() and (
+    (room_message_id is not null and exists (select 1 from public.room_messages message where message.id = room_message_id))
+    or (dm_message_id is not null and exists (select 1 from public.dm_messages message where message.id = dm_message_id and auth.uid() in (message.sender, message.recipient)))
+  )
+);
+create policy message_reactions_delete_own on public.message_reactions for delete using (user_id = auth.uid());
 create policy nonprofit_organizations_read on public.nonprofit_organizations for select using (public.is_member() and (active or public.is_admin()));
 create policy nonprofit_organizations_admin_write on public.nonprofit_organizations for all using (public.is_admin()) with check (public.is_admin());
 create policy events_read on public.events for select using (public.is_member());
@@ -827,7 +854,8 @@ grant select on public.regions to authenticated;
 grant select (id, name, nickname, home_region, sponsors, social_url, avatar_path, onboarding_complete, created_at) on public.profiles to authenticated;
 grant update (name, nickname, phone, home_region, sponsors, social_url, avatar_path, onboarding_complete) on public.profiles to authenticated;
 grant select, insert, update, delete on public.spots, public.brands, public.sessions, public.session_rsvps, public.posts, public.post_comments, public.room_messages, public.nonprofit_organizations, public.events, public.rewards, public.notification_preferences, public.push_subscriptions, public.beta_issue_reports to authenticated;
-grant select, insert, delete on public.post_tags, public.post_likes, public.dm_messages, public.event_rsvps, public.mutes to authenticated;
+grant select, insert, delete on public.post_tags, public.post_likes, public.event_rsvps, public.mutes, public.message_reactions to authenticated;
+grant select, insert, update, delete on public.dm_messages to authenticated;
 grant select on public.connections, public.points_events, public.streaks, public.notification_queue to authenticated;
 grant select, insert, update on public.reward_claims, public.reports to authenticated;
 
@@ -917,6 +945,7 @@ using (bucket_id = 'sodium-nonprofits' and public.is_admin());
 
 -- Realtime tables used by the later chat phase and live core/feed refreshes.
 alter publication supabase_realtime add table public.sessions, public.session_rsvps, public.posts, public.post_comments, public.post_likes, public.room_messages, public.dm_messages, public.nonprofit_organizations;
+alter publication supabase_realtime add table public.message_reactions;
 
 -- Nightly stale-session safety net. Unschedule the legacy job if this script is adapted/re-run.
 select cron.schedule(
