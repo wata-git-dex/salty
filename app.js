@@ -1175,9 +1175,9 @@ function renderChrome() {
 
 function updateCreateFab(view = state.view) {
   const createOptions = {
-    surfing: { action:'open-session', label:'New session', icon:'i-plus', tone:'' },
-    feed: { action:'open-post', label:'Add photo or clip', icon:'i-plus', tone:'' },
-    events: { action:'open-event', label:'Add event', icon:'i-plus', tone:'' },
+    surfing: { action:'open-session', label:'New session', icon:'i-surf' },
+    feed: { action:'open-post', label:'Add photo or clip', icon:'i-photo' },
+    events: { action:'open-event', label:'Add event', icon:'i-calendar' },
     dms: state.inboxTab === 'clips'
       ? { action:'open-clip-delivery', label:'Send clips', icon:'i-camera', tone:'clip-fab' }
       : { action:'start-message', label:'Start a message', icon:'i-send', tone:'message-fab' },
@@ -1187,7 +1187,7 @@ function updateCreateFab(view = state.view) {
   createFab.classList.toggle('hidden', !createOption);
   createFab.classList.remove('clip-fab', 'message-fab');
   if (!createOption) return;
-  createFab.classList.toggle(createOption.tone, Boolean(createOption.tone));
+  if (createOption.tone) createFab.classList.add(createOption.tone);
   createFab.dataset.action = createOption.action;
   createFab.dataset.createView = view;
   createFab.setAttribute('aria-label', createOption.label);
