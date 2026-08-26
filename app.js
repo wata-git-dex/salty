@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.96';
+const APP_VERSION = '1.97';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -3246,21 +3246,27 @@ function renderSessionPeopleChips() {
   }).join('');
 }
 
-function renderSessionMemberSuggestions(rawQuery = $('#sessionPersonInput').value) {
-  const target = $('#sessionMemberSuggestions');
-  const query = rawQuery.trim().toLowerCase();
-  if (!query) { target.innerHTML = ''; target.classList.remove('open'); return; }
+function renderSessionPersonOptions() {
+  const target = $('#sessionPersonSelect');
   const selected = new Set(state.sessionPeople.map(name => name.toLowerCase()));
-  const matches = state.people.filter(person => {
-    if (person.id === state.profile.id || selected.has(person.name.toLowerCase())) return false;
-    return person.name.toLowerCase().includes(query) || (person.nickname || '').toLowerCase().includes(query);
-  }).slice(0, 6);
-  target.innerHTML = matches.map(person => {
-    const region = state.regions.find(item => item.id === person.home_region)?.name || 'Sodium member';
-    const nickname = person.nickname ? ` · ${esc(person.nickname)}` : '';
-    return `<button type="button" data-session-member="${person.id}">${avatarMarkup(person, 'member-suggestion-avatar')}<span><b>${esc(person.name)}</b><small>${esc(region)}${nickname}</small></span><em>Add</em></button>`;
-  }).join('');
-  target.classList.toggle('open', matches.length > 0);
+  const available = state.people.filter(person => person.id !== state.profile.id && !selected.has(person.name.toLowerCase()));
+  const role = $('[data-session-role].active')?.dataset.sessionRole;
+  const label = role === 'film' ? 'Choose a surfer' : 'Choose a community member';
+  target.innerHTML = `<option value="">${label}</option>`
+    + available.map(person => `<option value="${person.id}">${esc(person.name)}${person.nickname ? ` · ${esc(person.nickname)}` : ''}</option>`).join('')
+    + '<option value="other">Other · not in the community yet</option>';
+  target.value = '';
+}
+
+function addSessionMember(memberId) {
+  const person = state.people.find(item => item.id === memberId);
+  if (!person) return;
+  addSessionPerson(person.name);
+}
+
+function showOtherSessionPerson(show = true) {
+  $('#sessionOtherPersonRow').classList.toggle('hidden', !show);
+  if (show) setTimeout(() => $('#sessionPersonInput').focus({ preventScroll:true }), 50);
 }
 
 function addSessionPerson(rawName = $('#sessionPersonInput').value) {
@@ -3270,8 +3276,9 @@ function addSessionPerson(rawName = $('#sessionPersonInput').value) {
     if (!state.sessionPeople.some(existing => existing.toLowerCase() === name.toLowerCase()) && name.toLowerCase() !== state.profile.name.toLowerCase()) state.sessionPeople.push(name);
   });
   $('#sessionPersonInput').value = '';
+  showOtherSessionPerson(false);
   renderSessionPeopleChips();
-  renderSessionMemberSuggestions('');
+  renderSessionPersonOptions();
 }
 
 function resetSessionComposer() {
@@ -3286,10 +3293,11 @@ function resetSessionComposer() {
   $('#sessionTime').value = '';
   updateDateChoiceLabels();
   renderSessionPeopleChips();
-  renderSessionMemberSuggestions('');
+  showOtherSessionPerson(false);
+  renderSessionPersonOptions();
   const admin = Boolean(state.profile?.is_admin);
   $('#sessionInitiatorFields').classList.toggle('hidden', !admin);
-  $('#sessionPlanInvite').classList.toggle('hidden', !admin);
+  $('#sessionPlanInvite').classList.remove('hidden');
   if (admin) {
     $('#sessionInitiator').disabled = false;
     $('#sessionInitiatorName').disabled = false;
@@ -3306,9 +3314,10 @@ function updateSessionRoleUi(role) {
   $$('[data-session-role]').forEach(button => button.classList.toggle('active', button.dataset.sessionRole === role));
   $('#wantsFilmerRow').classList.toggle('hidden', isFilming);
   $('#sessionPeopleLabel').textContent = isFilming ? 'Surfers coming' : 'Surfing with';
-  $('#sessionPersonInput').placeholder = isFilming ? "Surfer's name" : "Crew member's name";
+  $('#sessionPersonInput').placeholder = isFilming ? "Type the surfer's name" : "Type their name";
   if (isFilming) $('#wantsFilmer').checked = false;
-  if (!state.editingSessionId) $('#sessionSubmit').textContent = isFilming ? 'Share filming session' : 'Share surf';
+  if (!state.editingSessionId) $('#sessionSubmit').textContent = 'Create session';
+  renderSessionPersonOptions();
 }
 
 function openSessionComposer(sessionId = null) {
@@ -3349,7 +3358,7 @@ async function createSession(event) {
   const submit = $('#sessionForm button[type="submit"]'); submit.disabled = true;
   try {
     await joinLocation(state.currentRegion, false);
-    if ($('#sessionPersonInput').value.trim()) addSessionPerson();
+    if (!$('#sessionOtherPersonRow').classList.contains('hidden') && $('#sessionPersonInput').value.trim()) addSessionPerson();
     const spot = await ensureSpot($('#sessionSpot').value, $('#sessionLocation').value, state.currentRegion.id);
     const later = $('[data-when="later"]').classList.contains('active');
     const surfTime = later ? $('#sessionTime').value : null;
@@ -4564,11 +4573,11 @@ async function sharePlanSurfInvite(event) {
     const url = new URL('./', location.href); url.search = ''; url.hash = '';
     url.searchParams.set('invite', invite.code); url.searchParams.set('open', 'plan-surf');
     if (invite.region?.id) url.searchParams.set('region', invite.region.id);
-    const text = `Yo ${name} — use this Sodium invite to post the surf you’re planning. Add the spot, time, surfers, and whether you want clips. You’ll get the organizer credit.`;
+    const text = `Yo ${name} — join this session on Sodium. Add the spot, time, surfers, and whether you want clips. If you initiated it, you’ll receive the organizer credit.`;
     closeSheet();
     let file = null;
     try { file = await taskGuideFile(PLAN_SURF_PATH, 'SODIUM_Plan_A_Surf_One_Pager_V2.png'); } catch (_error) { /* Link remains available. */ }
-    await shareSodiumContent({ title:'Plan a surf on Sodium', text, url:url.href, file, copiedMessage:`Planning invite for ${name} copied.` });
+    await shareSodiumContent({ title:'Join a session on Sodium', text, url:url.href, file, copiedMessage:`Session invite for ${name} copied.` });
   } catch (error) { if (error?.name !== 'AbortError') toast(readableError(error), 6000); }
 }
 
@@ -4878,7 +4887,6 @@ document.addEventListener('click', async event => {
   const removePostCustomTagNode = event.target.closest('[data-remove-post-custom-tag]');
   const togglePostTagsNode = event.target.closest('[data-toggle-post-tags]');
   const removeSessionPersonNode = event.target.closest('[data-remove-session-person]');
-  const sessionMemberNode = event.target.closest('[data-session-member]');
   const likeNode = event.target.closest('[data-like]');
   const whenNode = event.target.closest('[data-when]');
   const sessionRoleNode = event.target.closest('[data-session-role]');
@@ -4998,11 +5006,7 @@ document.addEventListener('click', async event => {
   if (removeSessionPersonNode) {
     state.sessionPeople.splice(Number(removeSessionPersonNode.dataset.removeSessionPerson), 1);
     renderSessionPeopleChips();
-  }
-  if (sessionMemberNode) {
-    const person = state.people.find(item => item.id === sessionMemberNode.dataset.sessionMember);
-    if (person) addSessionPerson(person.name);
-    $('#sessionPersonInput').focus();
+    renderSessionPersonOptions();
   }
   if (regionNode) {
     const region = state.regions.find(item => item.id === regionNode.dataset.region);
@@ -5336,13 +5340,11 @@ function fillKnownSpotLocation(spotInput, locationInput) {
 
 $('#sessionSpot').addEventListener('change', () => fillKnownSpotLocation($('#sessionSpot'), $('#sessionLocation')));
 $('#postSpot').addEventListener('change', () => fillKnownSpotLocation($('#postSpot'), $('#postLocation')));
-$('#sessionPersonInput').addEventListener('input', event => renderSessionMemberSuggestions(event.target.value));
-$('#sessionPersonInput').addEventListener('keydown', event => {
-  if (event.key !== 'Enter') return;
-  event.preventDefault();
-  const firstMatch = $('#sessionMemberSuggestions [data-session-member]');
-  if (firstMatch) firstMatch.click();
-  else addSessionPerson();
+$('#sessionPersonSelect').addEventListener('change', event => {
+  const value = event.target.value;
+  if (value === 'other') { showOtherSessionPerson(true); return; }
+  showOtherSessionPerson(false);
+  if (value) addSessionMember(value);
 });
 ['sessionTime', 'eventDate', 'eventStartClock', 'eventEndClock'].forEach(id => {
   const refreshChoice = () => {

@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=96-inbox-actions">
+  <link rel="stylesheet" href="./styles.css?v=97-session-members">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -71,7 +71,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.96</small>
+    <small class="boot-credit">Saltyview Productions · v1.97</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -325,10 +325,10 @@
         <label>Spot name<input id="sessionSpot" maxlength="120" required placeholder="Surf spot name" list="spotsList"><datalist id="spotsList"></datalist></label>
         <label>General location<input id="sessionLocation" maxlength="160" required placeholder="City, beach, or general area" list="locationsList"><datalist id="locationsList"></datalist><small>The broader map area—not a secret pin or exact takeoff spot.</small></label>
         <label>When<div class="session-when-row"><button type="button" class="now-choice active" data-when="now">Now</button><span id="sessionDateChoice" class="date-choice compact" data-when="later"><svg><use href="#i-calendar"/></svg><span><small>Date &amp; time</small><strong id="sessionTimeDisplay">Choose date and time</strong></span><input id="sessionTime" type="datetime-local" aria-label="Session date and time"></span></div></label>
-        <label><span id="sessionPeopleLabel">Surfing with</span> <small>optional · choose a Sodium member or type any name</small><div id="sessionPeopleChips" class="person-chips"></div><div class="add-person-row"><input id="sessionPersonInput" maxlength="100" placeholder="Search members or add a name" autocomplete="off"><button type="button" data-action="add-session-person">Add</button></div><div id="sessionMemberSuggestions" class="member-suggestions" aria-label="Matching Sodium members"></div></label>
+        <label><span id="sessionPeopleLabel">Surfing with</span> <small>optional · choose a community member or Other</small><div id="sessionPeopleChips" class="person-chips"></div><select id="sessionPersonSelect" aria-label="Choose a community member"></select><div id="sessionOtherPersonRow" class="add-person-row hidden"><input id="sessionPersonInput" maxlength="100" placeholder="Type their name" autocomplete="name"><button type="button" data-action="add-session-person">Add</button></div></label>
         <label>Note <small>optional</small><textarea id="sessionNote" maxlength="500" placeholder="Anything the crew should know?"></textarea></label>
-        <button id="sessionSubmit" class="primary" type="submit">Share session</button>
-        <button id="sessionPlanInvite" class="secondary-button" type="button" data-action="open-plan-invite">Invite someone to plan this surf</button>
+        <button id="sessionSubmit" class="primary" type="submit">Create session</button>
+        <button id="sessionPlanInvite" class="secondary-button" type="button" data-action="open-plan-invite">Invite someone to session</button>
         <button id="sessionCancel" class="danger-button hidden" type="button" data-action="cancel-session"><svg><use href="#i-close"/></svg>Cancel session</button>
         <p id="sessionCancelNote" class="session-cancel-note hidden">Removes this session for everyone. Cancelled sessions award no Stokens.</p>
       </form>
@@ -336,14 +336,14 @@
 
     <section id="planInviteSheet" class="sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
-      <h2>Invite someone to plan a surf</h2><p>Send them straight into Sodium’s session form. They initiate it, choose the crew, and receive the organizer credit.</p>
-      <form id="planInviteForm"><label>First name<input id="planInviteName" maxlength="80" required placeholder="Their first name"></label><button class="primary" type="submit">Share planning invite</button></form>
+      <h2>Invite someone to session</h2><p>Community members can be added from the dropdown. If they are not on Sodium yet, send this invite so they can join and add their session.</p>
+      <form id="planInviteForm"><label>First name<input id="planInviteName" maxlength="80" required placeholder="Their first name"></label><button class="primary" type="submit">Share session invite</button></form>
     </section>
 
     <section id="shareInviteSheet" class="sheet share-invite-sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2>What are you inviting them to do?</h2><p>Choose the situation that matches. Sodium creates the right invite and includes its one-page instructions.</p>
-      <div class="share-invite-choices"><button data-action="share-invite"><svg><use href="#i-user"/></svg><span><b>Invite them to join Sodium</b><small>A simple community invite when you are not sharing a specific surf or clip delivery.</small></span></button><button data-action="show-invite-qr"><svg><use href="#i-qr"/></svg><span><b>Invite with a QR code</b><small>Put a one-person invite on your screen for a friend to scan.</small></span></button><button data-action="open-plan-invite"><svg><use href="#i-surf"/></svg><span><b>Invite them to plan a surf</b><small>They add their surf plan and receive organizer credit.</small></span></button><button data-action="open-session-claim-list"><svg><use href="#i-check"/></svg><span><b>Invite them to claim a surf</b><small>You already entered their session. They join Sodium and take over the organizer credit.</small></span></button><button data-action="open-pending-clip-delivery"><svg><use href="#i-folder"/></svg><span><b>Send clips + invite to Sodium</b><small>Create their clip delivery, then send the invite with clip instructions.</small></span></button><button class="open-clip-outbox" data-action="open-clip-outbox"><svg><use href="#i-send"/></svg><span><b>Open clip outbox</b><small>See every delivery you already sent, then reopen, edit, or share it again.</small></span></button></div>
+      <div class="share-invite-choices"><button data-action="share-invite"><svg><use href="#i-user"/></svg><span><b>Invite them to join Sodium</b><small>A simple community invite when you are not sharing a specific surf or clip delivery.</small></span></button><button data-action="show-invite-qr"><svg><use href="#i-qr"/></svg><span><b>Invite with a QR code</b><small>Put a one-person invite on your screen for a friend to scan.</small></span></button><button data-action="open-plan-invite"><svg><use href="#i-surf"/></svg><span><b>Invite someone to session</b><small>They join Sodium, add the session details, and receive organizer credit when appropriate.</small></span></button><button data-action="open-session-claim-list"><svg><use href="#i-check"/></svg><span><b>Invite them to claim a surf</b><small>You already entered their session. They join Sodium and take over the organizer credit.</small></span></button><button data-action="open-pending-clip-delivery"><svg><use href="#i-folder"/></svg><span><b>Send clips + invite to Sodium</b><small>Create their clip delivery, then send the invite with clip instructions.</small></span></button><button class="open-clip-outbox" data-action="open-clip-outbox"><svg><use href="#i-send"/></svg><span><b>Open clip outbox</b><small>See every delivery you already sent, then reopen, edit, or share it again.</small></span></button></div>
       <div id="sessionClaimList" class="session-claim-list hidden"></div>
     </section>
 
@@ -546,9 +546,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.96</span>
-    <h3>Inbox actions are easier to find.</h3>
-    <ul><li>The Messages tab has a floating blue send button.</li><li>The Clips tab has a floating amber video-camera button.</li><li>Sent deliveries identify “Clips of…” whenever the footage is of someone else.</li></ul>
+    <span>NEW IN V1.97</span>
+    <h3>Adding surfers is simpler.</h3>
+    <ul><li>Choose anyone already in the community from one dropdown.</li><li>Choose Other to type the name of someone who has not joined yet.</li><li>Session buttons now use clearer, consistent wording.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -563,6 +563,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
-  <script src="./app.js?v=96-inbox-actions" defer></script>
+  <script src="./app.js?v=97-session-members" defer></script>
 </body>
 </html>
