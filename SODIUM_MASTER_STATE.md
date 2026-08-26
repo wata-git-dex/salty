@@ -6,7 +6,7 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.106.
+- Current release: v1.107.
 - This release adds private, text-only Session chats for the organizer and linked members of each surf. Session chats appear beside DMs in Inbox and reuse Sodium reactions, message editing/deletion, unread state, realtime updates, and message notifications.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
@@ -156,3 +156,5 @@ Version 1.105 is a full release-integrity pass. The service worker now bypasses 
 The v1.105 session-date hotfix keeps “Now” as a live-session shortcut only. Once a session is finished or archived, every reference uses its recorded surf/start/end timestamp instead of continuing to display “Now.”
 
 Version 1.106 adds session-based crew messaging. Every eligible surf can have one canonical thread shared by its linked crew, available both from the session card and from Inbox. RLS derives access from the session author, linked initiator/featured surfer, and `session_rsvps`; typed nonmember names do not receive chat access. Session messages are text-only, realtime, editable/deletable by their author, reaction-enabled, unread-aware, and covered by the existing Messages notification preference.
+
+Version 1.107 makes the member boundary visible. Typed nonmember names remain safely listed on the surf, but the session chat identifies only linked Sodium members as chat participants and explicitly marks unlinked names as listed guests. Guests receive no messages, notifications, or access until they join Sodium and the session.

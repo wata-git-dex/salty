@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.106';
+const APP_VERSION = '1.107';
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
 const CONSENT_VERSION = '1.0';
@@ -1453,6 +1453,24 @@ function sessionChatParticipantIds(session) {
   ].filter(Boolean));
 }
 
+function sessionChatMemberNames(session) {
+  const names = [
+    session?.author_profile?.name,
+    session?.initiator_profile?.name,
+    session?.featured_surfer_user ? memberById(session.featured_surfer_user)?.name : null,
+    ...(session?.session_rsvps || []).map(rsvp => rsvp.profile?.name || memberById(rsvp.user_id)?.name),
+  ].filter(Boolean);
+  return names.filter((name, index) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
+}
+
+function sessionListedGuestNames(session) {
+  const linked = new Set(sessionChatMemberNames(session).map(name => name.toLowerCase()));
+  return [...(session?.participant_names || []), !session?.initiator_user ? session?.initiator_name : null]
+    .filter(Boolean)
+    .filter(name => !linked.has(name.toLowerCase()))
+    .filter((name, index, names) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
+}
+
 function canAccessSessionChat(session) {
   return Boolean(state.profile?.id && sessionChatParticipantIds(session).has(state.profile.id));
 }
@@ -1505,7 +1523,7 @@ function renderSessionChatThreads() {
     const profile = message?.author_profile || memberById(message?.author) || { name:'Crew member' };
     const preview = message ? `${message.author === state.profile.id ? 'You: ' : `${profile.name}: `}${message.body}` : 'The crew chat is ready.';
     const status = isPastSession(session) ? 'Finished' : session.when_label === 'Now' ? 'In the water' : 'Planned';
-    return `<button class="session-chat-thread ${unread ? 'unread' : ''}" data-session-chat="${session.id}"><span class="session-chat-thread-icon"><svg><use href="#i-surf"/></svg></span><span><b>${esc(sessionChatLabel(session))}</b><p>${esc(preview)}</p><small>${esc(status)} · ${sessionChatParticipantIds(session).size} crew</small></span>${unread ? `<i>${unread > 9 ? '9+' : unread}</i>` : '<svg class="thread-chevron"><use href="#i-chevron"/></svg>'}</button>`;
+    return `<button class="session-chat-thread ${unread ? 'unread' : ''}" data-session-chat="${session.id}"><span class="session-chat-thread-icon"><svg><use href="#i-surf"/></svg></span><span><b>${esc(sessionChatLabel(session))}</b><p>${esc(preview)}</p><small>${esc(status)} · ${sessionChatParticipantIds(session).size} in chat</small></span>${unread ? `<i>${unread > 9 ? '9+' : unread}</i>` : '<svg class="thread-chevron"><use href="#i-chevron"/></svg>'}</button>`;
   }).join('');
 }
 
@@ -1616,8 +1634,10 @@ function renderSessionChatSummary() {
   const rsvps = session.session_rsvps || [];
   const surfers = [session.author_role === 'surf' ? session.author_profile?.name : null, ...(session.participant_names || []), session.featured_surfer_name, ...rsvps.filter(item => item.role === 'surf').map(item => item.profile?.name)].filter(Boolean);
   const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...rsvps.filter(item => item.role === 'film').map(item => item.profile?.name)].filter(Boolean);
+  const chatMembers = sessionChatMemberNames(session);
+  const listedGuests = sessionListedGuestNames(session);
   const parts = scheduleParts(session.surf_time || session.created_at);
-  target.innerHTML = `<div><span>SESSION CHAT</span><h2>${esc(session.spot?.name || 'Surf session')}</h2><p><svg><use href="#i-calendar"/></svg>${esc(parts.date)} · ${esc(parts.time)}${session.spot?.general_location ? ` <b>·</b> <svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}` : ''}</p></div><div class="session-chat-crew"><span><b>Surfers</b>${esc(surfers.join(', ') || 'Open')}</span><span><b>Filmers</b>${esc(filmers.join(', ') || 'Open')}</span></div>`;
+  target.innerHTML = `<div><span>SESSION CHAT</span><h2>${esc(session.spot?.name || 'Surf session')}</h2><p><svg><use href="#i-calendar"/></svg>${esc(parts.date)} · ${esc(parts.time)}${session.spot?.general_location ? ` <b>·</b> <svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}` : ''}</p></div><div class="session-chat-crew"><span><b>Surfers</b>${esc(surfers.join(', ') || 'Open')}</span><span><b>Filmers</b>${esc(filmers.join(', ') || 'Open')}</span></div><div class="session-chat-access"><span><svg><use href="#i-chat"/></svg><b>In this chat</b>${esc(chatMembers.join(', ') || 'Just you')}</span>${listedGuests.length ? `<span class="listed-only"><svg><use href="#i-person"/></svg><b>Listed on the surf</b>${esc(listedGuests.join(', '))}<small>Not in this chat until they join Sodium and this session.</small></span>` : ''}</div>`;
 }
 
 async function loadSessionChatConversation() {
@@ -3690,7 +3710,8 @@ function renderSessions() {
     const actions = pastSession || mine ? '' : `${surfAction}${filmAction}`;
     const mapUrl = spotMapUrl(session.spot);
     const location = session.spot?.general_location ? `<a class="spot-location" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}</a>` : '';
-    const surferNames = surfers.length ? surfers.map(name => `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
+    const listedGuests = new Set(sessionListedGuestNames(session).map(name => name.toLowerCase()));
+    const surferNames = surfers.length ? surfers.map(name => listedGuests.has(name.toLowerCase()) ? `<b class="session-listed-guest" title="Listed on this surf · not in the session chat">${esc(name)}<small>listed</small></b>` : `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
     const filmerNames = filmers.length ? filmers.map(name => `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
     const filmerRow = (session.wants_filmer || filmers.length)
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
