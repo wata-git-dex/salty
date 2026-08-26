@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check app.js && node --test functions/test/*.test.mjs",
+    "check": "node --check app.js && node --check sw.js && node --test functions/test/*.test.mjs",
     "cf-types": "wrangler types"
   },
   "devDependencies": {

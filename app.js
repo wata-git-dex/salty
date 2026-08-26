@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.104';
+const APP_VERSION = '1.105';
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
 const CONSENT_VERSION = '1.0';
@@ -1759,7 +1759,6 @@ async function openMessageReactionPicker(kind, messageId) {
   state.emojiPickerMode = 'reaction';
   state.reactingMessageKind = kind;
   state.reactingMessageId = messageId;
-  $('#messageReactionForm')?.reset();
   renderQuickReactionPicks();
   await loadCustomMessageReactions();
   renderCustomReactionPicks();
@@ -1800,22 +1799,11 @@ function insertCaptionEmoji(reactionId) {
 function closeMessageReactionPicker() {
   state.reactingMessageKind = '';
   state.reactingMessageId = '';
-  $('#messageReactionForm')?.reset();
   $('#messageReactionTitle').textContent = 'Give some stoke';
   $('#messageReactionTitle').nextElementSibling.textContent = 'Reactions use Sodium icons. Type regular emojis normally inside your message.';
   $('#messageReactionQuickPicks').classList.remove('hidden');
   state.emojiPickerMode = 'reaction';
   closeSheet();
-}
-
-async function submitMessageReaction(event) {
-  event.preventDefault();
-  const emoji = $('#messageReactionEmoji').value.trim();
-  if (!isSingleEmoji(emoji)) { toast('Choose one emoji from your phone keyboard.'); return; }
-  const kind = state.reactingMessageKind;
-  const id = state.reactingMessageId;
-  closeMessageReactionPicker();
-  await toggleMessageReaction(kind, id, emoji);
 }
 
 function openMessageEditor(kind, messageId) {
@@ -5218,7 +5206,6 @@ document.addEventListener('click', async event => {
   const revealMessageReactionsNode = event.target.closest('[data-reveal-message-reactions]');
   const messageReactionNode = event.target.closest('[data-message-reaction]');
   const addMessageReactionNode = event.target.closest('[data-add-message-reaction]');
-  const pickMessageEmojiNode = event.target.closest('[data-pick-message-emoji]');
   const customReactionCategoryNode = event.target.closest('[data-custom-reaction-category]');
   const pickCustomReactionNode = event.target.closest('[data-pick-custom-reaction]');
   const captionEmojiCategoryNode = event.target.closest('[data-caption-emoji-category]');
@@ -5281,10 +5268,6 @@ document.addEventListener('click', async event => {
     const reaction = pickCustomReactionNode.dataset.pickCustomReaction;
     closeMessageReactionPicker();
     await toggleMessageReaction(kind, id, reaction); return;
-  }
-  if (pickMessageEmojiNode) {
-    $('#messageReactionEmoji').value = pickMessageEmojiNode.dataset.pickMessageEmoji;
-    $('#messageReactionForm').requestSubmit(); return;
   }
   if (roomMentionNode) { insertRoomMention(roomMentionNode.dataset.roomMention); return; }
   if (!event.target.closest('#roomMessageForm')) $('#roomMentionSuggestions')?.classList.add('hidden');
@@ -5587,7 +5570,6 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
   else if (event.target.id === 'messageEditForm') await saveMessageEdit(event);
-  else if (event.target.id === 'messageReactionForm') await submitMessageReaction(event);
   else if (event.target.id === 'quickReactionSettingsForm') await saveQuickReactionSettings(event);
   else if (event.target.id === 'clipDeliveryForm') await saveClipDelivery(event);
   else if (event.target.id === 'planInviteForm') await sharePlanSurfInvite(event);

@@ -1,12 +1,12 @@
 # Sodium Community App — Master Project State
 
-Updated: August 25, 2026
+Updated: August 26, 2026
 
 This file consolidates decisions and implementation state from the Sodium Community App and surf-feature brainstorming threads. The current repository remains the implementation source of truth; this document explains the product intent behind it.
 
 ## Release state
 
-- Current release: v1.104.
+- Current release: v1.105.
 - This release adds the supplied 90-piece Sodium emoji pack to Community Chat and DMs. Members type normal phone emojis inside messages; tapping a message reveals branded Sodium reactions, and `+` opens Sodium Core, Surf Lore, and Chat Essentials.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
@@ -148,3 +148,5 @@ Version 1.103 adds the 90-piece Sodium emoji pack to message reactions. Members 
 Version 1.104 repairs the Stoke composer: people can be tagged as members or typed names, posts can link to a session, saved drafts reopen from Stoke, media-type changes clear stale upload errors, captions support Sodium emoji artwork, and large clips use the supported `tus-js-client` resumable upload path instead of the hand-built retry loop.
 
 The v1.104 production hotfix allows the browser to connect to Cloudflare's direct Stream upload endpoint, which the original content security policy accidentally blocked. It also removes the duplicate draft browser from inside the composer, keeps draft access on the Stoke page, reduces resumable chunks to 5 MiB for mobile connections, and corrects the visible five-minute clip limit.
+
+Version 1.105 is a full release-integrity pass. The service worker now bypasses every `/api/` request so private or changing API responses are never stored in the offline shell, and failed asset requests can no longer be replaced with the app HTML. Static regression checks now cover duplicate IDs, form routing, user-facing action routing, JavaScript-to-HTML selector integrity, cached asset presence, and release-version alignment.

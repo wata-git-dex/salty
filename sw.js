@@ -1,6 +1,6 @@
-const CACHE = 'sodium-shell-v104-stoke-hotfix';
+const CACHE = 'sodium-shell-v105-release-audit';
 const GUIDE_PAGES = Array.from({ length:4 }, (_, index) => `./docs/guide-v14/page-${String(index + 1).padStart(2, '0')}.jpg`);
-const SHELL = ['./', './index.html', './styles.css?v=104-stoke-hotfix', './app.js?v=104-stoke-hotfix', './privacy.html', './vendor/qrcode.min.js?v=1.0.0', './vendor/tus.min.js?v=4.3.1', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './icon-pink.svg', './assets/emojis/emoji-manifest.csv', './docs/SODIUM_Quick_Start_Guide_V14.pdf', './docs/SODIUM_Master_Instruction_Manual_V2.pdf', './docs/SODIUM_App_Overview_One_Pager_V10.png', './docs/SODIUM_Setup_One_Pager_V3.png', './docs/SODIUM_Plan_A_Surf_One_Pager_V2.png', './docs/SODIUM_Get_Your_Clips_One_Pager_V2.png', ...GUIDE_PAGES];
+const SHELL = ['./', './index.html', './styles.css?v=105-release-audit', './app.js?v=105-release-audit', './privacy.html', './vendor/qrcode.min.js?v=1.0.0', './vendor/tus.min.js?v=4.3.1', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png', './icon-ink.svg', './icon-amber.svg', './icon-foam.svg', './icon-ocean.svg', './icon-pink.svg', './assets/emojis/emoji-manifest.csv', './docs/SODIUM_Quick_Start_Guide_V14.pdf', './docs/SODIUM_Master_Instruction_Manual_V2.pdf', './docs/SODIUM_App_Overview_One_Pager_V10.png', './docs/SODIUM_Setup_One_Pager_V3.png', './docs/SODIUM_Plan_A_Surf_One_Pager_V2.png', './docs/SODIUM_Get_Your_Clips_One_Pager_V2.png', ...GUIDE_PAGES];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -11,20 +11,31 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET' || new URL(event.request.url).origin !== location.origin) return;
+  const url = new URL(event.request.url);
+  if (event.request.method !== 'GET' || url.origin !== location.origin) return;
+
+  // API responses can be private and must always come from the network. Caching
+  // them can leak stale member data across sign-ins and can turn an API failure
+  // into the cached HTML shell, which then fails while the app expects JSON.
+  if (url.pathname.startsWith('/api/')) return;
+
   if (event.request.mode === 'navigate') {
     event.respondWith(fetch(event.request).then(response => {
-      const copy = response.clone();
-      caches.open(CACHE).then(cache => cache.put('./index.html', copy));
+      if (response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put('./index.html', copy));
+      }
       return response;
     }).catch(() => caches.match('./index.html')));
     return;
   }
   event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
-    const copy = response.clone();
-    caches.open(CACHE).then(cache => cache.put(event.request, copy));
+    if (response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE).then(cache => cache.put(event.request, copy));
+    }
     return response;
-  }).catch(() => caches.match('./index.html'))));
+  })));
 });
 
 self.addEventListener('push', event => {
