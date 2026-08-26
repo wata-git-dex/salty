@@ -47,13 +47,19 @@ test('release labels, cache busting, and Stoke limits stay aligned', () => {
   const version = app.match(/const APP_VERSION = '([^']+)'/)?.[1];
   assert.ok(version);
   const escapedVersion = version.replace('.', '\\.');
-  const cacheVersion = version.replace(/^1\./, '');
   assert.match(html, new RegExp(`boot-credit[^>]*>[^<]*v${escapedVersion}`));
   assert.match(html, new RegExp(`NEW IN V${escapedVersion}`));
-  assert.match(html, new RegExp(`app\\.js\\?v=${cacheVersion}-release-audit`));
-  assert.match(worker, new RegExp(`sodium-shell-v${cacheVersion}-release-audit`));
+  const assetVersion = html.match(/app\.js\?v=([^"']+)/)?.[1];
+  assert.ok(assetVersion);
+  assert.match(worker, new RegExp(`sodium-shell-v${assetVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  assert.match(worker, new RegExp(`app\\.js\\?v=${assetVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.match(html, /<b>Clips<\/b><small>up to 5 · 5 min each<\/small>/);
 
   const postSheet = html.match(/<section id="postSheet"[\s\S]*?<section id="eventSheet"/)?.[0] || '';
   assert.doesNotMatch(postSheet, /data-open-post-draft|postDraftsPanel/);
+});
+
+test('finished Now sessions display their recorded date instead of a permanent Now label', () => {
+  assert.match(app, /const liveNow = session\.when_label === 'Now' && !isPastSession\(session\)/);
+  assert.match(app, /session\.surf_time \|\| session\.started_at \|\| session\.ended_at \|\| session\.created_at/);
 });

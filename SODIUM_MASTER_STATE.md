@@ -150,3 +150,5 @@ Version 1.104 repairs the Stoke composer: people can be tagged as members or typ
 The v1.104 production hotfix allows the browser to connect to Cloudflare's direct Stream upload endpoint, which the original content security policy accidentally blocked. It also removes the duplicate draft browser from inside the composer, keeps draft access on the Stoke page, reduces resumable chunks to 5 MiB for mobile connections, and corrects the visible five-minute clip limit.
 
 Version 1.105 is a full release-integrity pass. The service worker now bypasses every `/api/` request so private or changing API responses are never stored in the offline shell, and failed asset requests can no longer be replaced with the app HTML. Static regression checks now cover duplicate IDs, form routing, user-facing action routing, JavaScript-to-HTML selector integrity, cached asset presence, and release-version alignment.
+
+The v1.105 session-date hotfix keeps “Now” as a live-session shortcut only. Once a session is finished or archived, every reference uses its recorded surf/start/end timestamp instead of continuing to display “Now.”

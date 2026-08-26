@@ -3252,8 +3252,10 @@ function addEventToCalendar(eventId) {
 }
 
 function sessionWhen(session) {
-  if (session.when_label === 'Now' || !session.surf_time) return 'out in the water';
-  const date = new Date(session.surf_time);
+  const liveNow = session.when_label === 'Now' && !isPastSession(session);
+  if (liveNow) return 'out in the water';
+  const date = new Date(session.surf_time || session.started_at || session.ended_at || session.created_at || 0);
+  if (!Number.isFinite(date.getTime()) || date.getTime() <= 0) return 'Date and time unavailable';
   const options = { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' };
   if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
   return new Intl.DateTimeFormat([], options).format(date);
