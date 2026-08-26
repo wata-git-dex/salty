@@ -77,3 +77,14 @@ test('session chat stays tied to the surf crew across UI, RLS, and realtime', ()
   assert.match(sessionChatMigration, /rsvp\.user_id = auth\.uid\(\)/);
   assert.match(sessionChatMigration, /alter publication supabase_realtime add table public\.session_messages/);
 });
+
+test('large Stream uploads recover stale sessions and tolerate mobile interruptions', () => {
+  assert.match(app, /const STREAM_UPLOAD_SESSION_TTL = 6 \* 60 \* 60 \* 1000/);
+  assert.match(app, /const STREAM_UPLOAD_RETRY_DELAYS = Object\.freeze/);
+  assert.match(app, /status === 412/);
+  assert.match(app, /status === 425/);
+  assert.match(app, /staleUpload = \[401, 403, 404, 410\]/);
+  assert.match(app, /starting a fresh upload automatically/);
+  assert.match(app, /navigator\.wakeLock\.request\('screen'\)/);
+  assert.match(app, /chunkSize:5 \* 1024 \* 1024/);
+});

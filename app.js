@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.107';
+const APP_VERSION = '1.108';
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
 const CONSENT_VERSION = '1.0';
@@ -45,7 +45,14 @@ const POST_DRAFT_DB_NAME = 'sodium-post-drafts';
 const POST_DRAFT_STORE = 'drafts';
 const POST_DRAFT_TTL = 30 * 24 * 60 * 60 * 1000;
 const STREAM_UPLOAD_SESSION_KEY = 'sodium:stream-upload-sessions';
-const STREAM_UPLOAD_SESSION_TTL = 24 * 60 * 60 * 1000;
+// Direct Stream upload URLs are intentionally short-lived. Keeping one longer
+// than the active editing window can make a restored draft repeatedly target a
+// dead endpoint, so old checkpoints are replaced rather than retried forever.
+const STREAM_UPLOAD_SESSION_TTL = 6 * 60 * 60 * 1000;
+const STREAM_UPLOAD_RETRY_DELAYS = Object.freeze([
+  0, 1000, 3000, 5000, 10000, 20000, 30000,
+  60000, 60000, 60000, 60000, 60000, 60000,
+]);
 const CLIP_INBOX_SEEN_KEY = 'sodium:clip-inbox-seen';
 const NOTIFICATION_DEFAULTS = Object.freeze({
   master_enabled: true,
@@ -4239,71 +4246,131 @@ function clearStreamUploadSession(fingerprint) {
   } catch (_error) { /* Nothing else to clean up. */ }
 }
 
+function validStreamUploadUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && (url.hostname === 'videodelivery.net' || url.hostname.endsWith('.videodelivery.net') || url.hostname.endsWith('.cloudflarestream.com'));
+  } catch (_error) { return false; }
+}
+
+function tusErrorStatus(error) {
+  return Number(error?.originalResponse?.getStatus?.() || error?.status || 0);
+}
+
+function tusErrorDetail(error) {
+  const status = tusErrorStatus(error);
+  const body = String(error?.originalResponse?.getBody?.() || '').trim().slice(0, 180);
+  if (status) return `Cloudflare upload error ${status}${body ? `: ${body}` : ''}`;
+  if (!navigator.onLine) return 'The phone is offline.';
+  return 'The connection stopped before Cloudflare received the next chunk.';
+}
+
+async function keepUploadAwake() {
+  if (!navigator.wakeLock?.request || document.visibilityState !== 'visible') return null;
+  try { return await navigator.wakeLock.request('screen'); }
+  catch (_error) { return null; }
+}
+
+async function createStreamUpload(file, fingerprint, statusCallback) {
+  statusCallback('Preparing a fresh secure upload…');
+  const created = await streamRequest('/upload', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body:JSON.stringify({ filename:file.name, size:file.size }),
+  });
+  if (!validStreamUploadUrl(created.uploadUrl) || !created.uid) throw new Error('Cloudflare returned an invalid upload address. Try again in a moment.');
+  saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:0 });
+  return created;
+}
+
+async function runTusStreamUpload(file, created, saved, fingerprint, progressCallback, statusCallback) {
+  const duration = await videoDuration(file);
+  const startedAt = Date.now();
+  const startingOffset = Number(saved?.offset) || 0;
+  let lastBytes = startingOffset;
+  const wakeLock = await keepUploadAwake();
+  try {
+    return await new Promise((resolve, reject) => {
+      const upload = new tus.Upload(file, {
+        uploadUrl:created.uploadUrl,
+        // Cloudflare requires at least 5 MiB. The minimum is intentional here:
+        // a dropped phone connection only has to repeat one small chunk.
+        chunkSize:5 * 1024 * 1024,
+        retryDelays:[...STREAM_UPLOAD_RETRY_DELAYS],
+        removeFingerprintOnSuccess:true,
+        onShouldRetry(error, attempt, options) {
+          const status = tusErrorStatus(error);
+          const retryable = !status || status === 408 || status === 409 || status === 412 || status === 423 || status === 425 || status === 429 || status >= 500;
+          if (!retryable || attempt >= options.retryDelays.length) return false;
+          const wait = options.retryDelays[Math.min(attempt, options.retryDelays.length - 1)] || 0;
+          statusCallback(`${navigator.onLine ? 'Connection interrupted' : 'Phone offline'}—retrying automatically${wait >= 1000 ? ` in ${formatUploadTime(wait / 1000)}` : ''}…`);
+          return true;
+        },
+        onError(error) {
+          console.error('Cloudflare Stream upload stopped:', error);
+          state.activePostUpload = null;
+          saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:lastBytes });
+          const stopped = new Error(tusErrorDetail(error));
+          stopped.uploadStatus = tusErrorStatus(error);
+          stopped.staleUpload = [401, 403, 404, 410].includes(stopped.uploadStatus);
+          stopped.recoverableUpload = !stopped.staleUpload;
+          stopped.cause = error;
+          reject(stopped);
+        },
+        onProgress(bytesUploaded, bytesTotal) {
+          lastBytes = bytesUploaded;
+          saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:bytesUploaded });
+          const fraction = bytesTotal ? bytesUploaded / bytesTotal : 0;
+          progressCallback(fraction);
+          const elapsed = Math.max(1, (Date.now() - startedAt) / 1000);
+          const speed = Math.max(1, bytesUploaded - startingOffset) / elapsed;
+          const remaining = speed > 0 ? (bytesTotal - bytesUploaded) / speed : 0;
+          const eta = remaining >= 2 ? ` · about ${formatUploadTime(remaining)} left` : '';
+          statusCallback(`Uploading · ${Math.round(fraction * 100)}%${eta}`);
+        },
+        onSuccess() {
+          state.activePostUpload = null;
+          saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:file.size, duration, complete:true });
+          statusCallback('Upload complete—Cloudflare is processing the clip…');
+          resolve({ uid:created.uid, duration, fingerprint });
+        },
+      });
+      state.activePostUpload = upload;
+      statusCallback(startingOffset ? 'Checking the saved upload and resuming…' : 'Starting resumable upload…');
+      upload.start();
+    });
+  } finally {
+    try { await wakeLock?.release(); }
+    catch (_error) { /* The browser may already have released it. */ }
+  }
+}
+
 async function uploadStreamClip(file, progressCallback = () => {}, statusCallback = () => {}) {
   const fingerprint = streamUploadFingerprint(file);
-  const saved = readStreamUploadSessions()[fingerprint];
+  let saved = readStreamUploadSessions()[fingerprint];
   if (saved?.complete && saved.uid) {
     progressCallback(1);
     statusCallback('Recovered the completed clip. Finishing the post…');
     return { uid:saved.uid, duration:saved.duration, fingerprint };
   }
-  let created = saved?.uploadUrl && saved?.uid ? saved : null;
-  if (!created) {
-    statusCallback('Preparing a secure resumable upload…');
-    created = await streamRequest('/upload', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body:JSON.stringify({ filename:file.name, size:file.size }),
-    });
-    saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:0 });
-  }
+  let created = saved?.uploadUrl && saved?.uid && validStreamUploadUrl(saved.uploadUrl) ? saved : null;
   if (!globalThis.tus?.Upload) throw new Error('The resumable uploader did not load. Close and reopen Sodium, then try again.');
-  const duration = await videoDuration(file);
-  const startedAt = Date.now();
-  let lastBytes = Number(saved?.offset) || 0;
-  return await new Promise((resolve, reject) => {
-    const upload = new tus.Upload(file, {
-      uploadUrl:created.uploadUrl,
-      // Cloudflare's 5 MiB minimum keeps each retry as small as possible on mobile connections.
-      chunkSize:5 * 1024 * 1024,
-      retryDelays:[0, 1000, 3000, 5000, 10000, 20000],
-      removeFingerprintOnSuccess:true,
-      onShouldRetry(error, attempt, options) {
-        if (attempt >= options.retryDelays.length) return false;
-        const status = error?.originalResponse?.getStatus?.() || 0;
-        return !status || status === 408 || status === 409 || status === 423 || status === 429 || status >= 500;
-      },
-      onError(error) {
-        console.error('Cloudflare Stream upload paused:', error);
-        state.activePostUpload = null;
-        saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:lastBytes });
-        const paused = new Error('Upload paused because the connection dropped. Your progress is saved.');
-        paused.recoverableUpload = true;
-        paused.cause = error;
-        reject(paused);
-      },
-      onProgress(bytesUploaded, bytesTotal) {
-        lastBytes = bytesUploaded;
-        saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:bytesUploaded });
-        const fraction = bytesTotal ? bytesUploaded / bytesTotal : 0;
-        progressCallback(fraction);
-        const elapsed = Math.max(1, (Date.now() - startedAt) / 1000);
-        const speed = Math.max(1, bytesUploaded - (Number(saved?.offset) || 0)) / elapsed;
-        const remaining = speed > 0 ? (bytesTotal - bytesUploaded) / speed : 0;
-        const eta = remaining >= 2 ? ` · about ${formatUploadTime(remaining)} left` : '';
-        statusCallback(`Uploading · ${Math.round(fraction * 100)}%${eta}`);
-      },
-      onSuccess() {
-        state.activePostUpload = null;
-        saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:file.size, duration, complete:true });
-        statusCallback('Upload complete—Cloudflare is processing the clip…');
-        resolve({ uid:created.uid, duration, fingerprint });
-      },
-    });
-    state.activePostUpload = upload;
-    statusCallback(saved?.offset ? 'Resuming saved upload…' : 'Starting resumable upload…');
-    upload.start();
-  });
+  if (!created) {
+    clearStreamUploadSession(fingerprint);
+    saved = null;
+    created = await createStreamUpload(file, fingerprint, statusCallback);
+  }
+  try {
+    return await runTusStreamUpload(file, created, saved, fingerprint, progressCallback, statusCallback);
+  } catch (error) {
+    if (!error?.staleUpload) throw error;
+    // Drafts can outlive Cloudflare's direct-upload URL. Replace that URL once
+    // automatically; the member should never have to understand this detail.
+    clearStreamUploadSession(fingerprint);
+    statusCallback('The saved upload expired—starting a fresh upload automatically…');
+    created = await createStreamUpload(file, fingerprint, statusCallback);
+    return await runTusStreamUpload(file, created, null, fingerprint, progressCallback, statusCallback);
+  }
 }
 
 function formatUploadTime(seconds) {
