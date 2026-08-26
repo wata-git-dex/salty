@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sodium-gradient" x1="0" y1="1" x2="1" y2="0">
+      <stop stop-color="#54ABEC"/>
+      <stop offset="1" stop-color="#F6A23C"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="#0A141C"/>
+  <path d="M213.333 661.333c0-192 149.334-341.333 341.334-341.333C704 320 810.667 416 810.667 554.667c0 106.666-85.334 192-202.667 192-85.333 0-149.333-53.334-149.333-138.667 0-64 42.666-117.333 106.666-117.333 42.667 0 74.667 21.333 74.667 64" fill="none" stroke="url(#sodium-gradient)" stroke-width="80" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732">
+  <defs>
+    <linearGradient id="sodium-gradient" x1="0" y1="1" x2="1" y2="0">
+      <stop stop-color="#54ABEC"/>
+      <stop offset="1" stop-color="#F6A23C"/>
+    </linearGradient>
+  </defs>
+  <rect width="2732" height="2732" fill="#02070B"/>
+  <rect x="1056" y="1056" width="620" height="620" rx="142" fill="#0A141C" stroke="#324859" stroke-width="7"/>
+  <g transform="translate(1056 1056) scale(6.458333)">
+    <path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#sodium-gradient)" stroke-width="7.5" stroke-linecap="round"/>
+  </g>
+</svg>

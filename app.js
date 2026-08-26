@@ -192,7 +192,8 @@ function applyIconTheme(theme = 'ink', announce = false) {
   $('#appThemeColor').content = THEME_COLORS[chosen];
   $('#appFavicon').href = iconPath;
   $('#appTouchIcon').href = './icon-180.png';
-  $('#appManifest').href = './manifest.webmanifest';
+  const manifest = $('#appManifest');
+  if (manifest) manifest.href = './manifest.webmanifest';
   $$('[data-app-icon]').forEach(icon => { icon.src = iconPath; });
   $$('[data-icon-theme]').forEach(button => {
     const active = button.dataset.iconTheme === chosen;

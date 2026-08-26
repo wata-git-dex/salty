@@ -22,6 +22,7 @@ const files = [
   'icon-foam.svg',
   'icon-ocean.svg',
   'icon-pink.svg',
+  'native/startup-diagnostics.js',
   'docs/SODIUM_Quick_Start_Guide_V14.pdf',
   'docs/SODIUM_Master_Instruction_Manual_V2.pdf',
   'docs/SODIUM_App_Overview_One_Pager_V10.png',
@@ -54,7 +55,8 @@ for (const directory of directories) {
 const html = (await readFile(resolve(root, 'index.html'), 'utf8'))
   .replace("connect-src 'self'", "connect-src 'self' https://community.saltyviewfinder.com")
   .replace('<link id="appManifest" rel="manifest" href="./manifest.webmanifest">', '')
-  .replace(/<meta name="apple-mobile-web-app-[^>]+>\n?/g, '');
+  .replace(/<meta name="apple-mobile-web-app-[^>]+>\n?/g, '')
+  .replace('</body>', '  <script src="./native/startup-diagnostics.js"></script>\n</body>');
 await writeFile(resolve(output, 'index.html'), html);
 
 console.log(`Prepared Sodium native web bundle in ${output}`);
