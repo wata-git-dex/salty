@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=93-resumable-uploads">
+  <link rel="stylesheet" href="./styles.css?v=94-clip-inbox">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -62,6 +62,8 @@
       <symbol id="i-bug" viewBox="0 0 24 24"><path d="M8 7h8a2 2 0 0 1 2 2v5a6 6 0 0 1-12 0V9a2 2 0 0 1 2-2Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2M3 10h3M18 10h3M3 16h4M17 16h4M12 10v8"/></symbol>
       <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9v11h16V9M3 9l2-6h14l2 6"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M9 20v-6h6v6"/></symbol>
       <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M8 13h8M13 10l3 3-3 3"/></symbol>
+      <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 5h16l2 10v4H2v-4L4 5Z"/><path d="M2 15h6l2 3h4l2-3h6"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M6.1 8.4A7 7 0 0 1 18.6 7L20 12M4 12l1.4 5A7 7 0 0 0 17.9 15.6"/></symbol>
       <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM18 18h3v3h-3zM19 13h2M13 19v2"/></symbol>
     </defs>
   </svg>
@@ -69,7 +71,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.93</small>
+    <small class="boot-credit">Saltyview Productions · v1.94</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -184,7 +186,7 @@
       <header class="topbar">
         <div class="toprow">
           <div class="brand-row"><div class="brand"><img data-app-icon src="./icon-ink.svg" alt=""><h1>sodium</h1></div></div>
-          <div class="top-actions"><span id="streakBadge" class="streak" aria-label="Active streak"><svg><use href="#i-wave"/></svg><b>0</b></span><button class="icon-button inbox-button" data-action="open-dms" aria-label="Direct messages"><svg><use href="#i-chat"/></svg><b id="dmUnreadBadge" class="unread-badge hidden">0</b></button><button class="icon-button menu-button" data-action="open-drawer" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button></div>
+          <div class="top-actions"><span id="streakBadge" class="streak" aria-label="Active streak"><svg><use href="#i-wave"/></svg><b>0</b></span><button class="icon-button inbox-button" data-action="open-inbox" aria-label="Personal inbox: messages and clip deliveries"><svg><use href="#i-inbox"/></svg><b id="dmUnreadBadge" class="unread-badge hidden">0</b></button><button class="icon-button menu-button" data-action="open-drawer" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button></div>
         </div>
         <div id="appPreviewBanner" class="app-preview-banner hidden">App preview · sample data · nothing saves</div>
         <div id="installNudge" class="install-nudge hidden">
@@ -544,9 +546,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.93</span>
-    <h3>Clip uploads can recover.</h3>
-    <ul><li>Large clips now resume from a saved checkpoint after weak Wi-Fi.</li><li>Upload progress includes a live time estimate.</li><li>Keep Sodium open while a clip uploads; playback is still handled by Cloudflare Stream.</li></ul>
+    <span>NEW IN V1.94</span>
+    <h3>Your clips have their own Inbox.</h3>
+    <ul><li>The top Inbox holds personal messages and clip deliveries; bottom Chat stays the California community room.</li><li>New and ready clips add a badge and open directly to the delivery.</li><li>Connected Drive folders update automatically, with a manual refresh whenever you want it.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -561,6 +563,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
-  <script src="./app.js?v=93-resumable-uploads" defer></script>
+  <script src="./app.js?v=94-clip-inbox" defer></script>
 </body>
 </html>

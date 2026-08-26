@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.93';
+const APP_VERSION = '1.94';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -45,6 +45,7 @@ const POST_DRAFT_TTL = 30 * 24 * 60 * 60 * 1000;
 const STREAM_UPLOAD_SESSION_KEY = 'sodium:stream-upload-sessions';
 const STREAM_UPLOAD_SESSION_TTL = 24 * 60 * 60 * 1000;
 const STREAM_RETRY_DELAYS = Object.freeze([0, 1000, 2500, 5000, 10000, 20000, 30000, 45000, 60000]);
+const CLIP_INBOX_SEEN_KEY = 'sodium:clip-inbox-seen';
 const NOTIFICATION_DEFAULTS = Object.freeze({
   master_enabled: true,
   new_sessions: true,
@@ -78,7 +79,7 @@ const state = {
   postMemberTags: [], postCustomTags: [], qrInviteUrl: '', qrInviteRegionName: '',
   nonprofitLogoUrls: {}, editingNonprofitId: null, drawerScrollY: 0,
   googleDriveConnected: false, googleDriveChecked: false, googleDriveSyncTimer: null,
-  driveConnectResult: '',
+  driveConnectResult: '', driveReconnectWarned: false,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1371,10 +1372,48 @@ async function loadDmInbox() {
 }
 
 function updateUnreadBadge() {
-  const count = state.dmMessages.filter(message => message.recipient === state.profile.id && !message.read_at).length;
+  const dmCount = state.dmMessages.filter(message => message.recipient === state.profile.id && !message.read_at).length;
+  const count = dmCount + unseenIncomingClipCount();
   const badge = $('#dmUnreadBadge');
   badge.textContent = count > 99 ? '99+' : String(count);
   badge.classList.toggle('hidden', count === 0);
+}
+
+function clipInboxSeenAt() {
+  try { return localStorage.getItem(`${CLIP_INBOX_SEEN_KEY}:${state.profile?.id || 'member'}`) || ''; }
+  catch (_error) { return ''; }
+}
+
+function unseenIncomingClipCount() {
+  if (!state.profile) return 0;
+  const seenAt = clipInboxSeenAt();
+  return state.clipDeliveries.filter(delivery => {
+    if (delivery.recipient !== state.profile.id || delivery.status === 'cancelled') return false;
+    return !seenAt || new Date(delivery.updated_at || delivery.created_at).getTime() > new Date(seenAt).getTime();
+  }).length;
+}
+
+function markClipInboxSeen() {
+  if (!state.profile) return;
+  const latest = state.clipDeliveries
+    .filter(delivery => delivery.recipient === state.profile.id)
+    .map(delivery => delivery.updated_at || delivery.created_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || new Date().toISOString();
+  try { localStorage.setItem(`${CLIP_INBOX_SEEN_KEY}:${state.profile.id}`, latest); }
+  catch (_error) { /* The badge can safely return next time when storage is unavailable. */ }
+  updateUnreadBadge();
+}
+
+function openPersonalInbox() {
+  if (unseenIncomingClipCount()) {
+    state.inboxTab = 'clips';
+    state.clipBox = 'received';
+  } else state.inboxTab = 'messages';
+  setView('dms');
+  if (state.inboxTab === 'clips') markClipInboxSeen();
+  renderInboxTabs();
 }
 
 function renderDmInbox() {
@@ -1480,7 +1519,11 @@ async function googleDriveRequest(path, options = {}, authenticated = true) {
   if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
   const response = await fetch(`/api/google-drive/${path}`, { ...options, headers });
   const payload = response.headers.get('content-type')?.includes('application/json') ? await response.json() : {};
-  if (!response.ok) throw new Error(payload.error || 'Google Drive is unavailable. Paste the folder link instead.');
+  if (!response.ok) {
+    const error = new Error(payload.error || 'Google Drive is unavailable. Paste the folder link instead.');
+    error.status = response.status;
+    throw error;
+  }
   return payload;
 }
 
@@ -1495,7 +1538,7 @@ function renderGoogleDriveCard() {
   $('#clipDriveDisconnect').classList.toggle('hidden', !state.googleDriveConnected);
   $('#clipDriveHeading').textContent = folderId ? (folderName || 'Google Drive folder selected') : 'Pick a folder without copying its link';
   $('#clipDriveStatus').textContent = folderId
-    ? 'Sodium counts completed video uploads while this delivery is open.'
+    ? 'Sodium checks completed video uploads in the background and alerts the recipient when every clip is ready.'
     : state.googleDriveConnected ? 'Connected. Choose only the folder for this delivery.' : 'Manual links always remain available.';
   const automatic = Boolean(folderId);
   $('.clip-count-fields').classList.toggle('google-tracked', automatic);
@@ -1521,6 +1564,9 @@ async function loadGoogleDriveStatus(force = false) {
 
 async function connectGoogleDrive() {
   try {
+    state.googleDriveConnected = false;
+    state.googleDriveChecked = false;
+    state.driveReconnectWarned = false;
     const result = await googleDriveRequest('connect', { method:'POST' });
     if (!result.authorizationUrl) throw new Error('Google Drive did not provide a connection page.');
     location.href = result.authorizationUrl;
@@ -1627,12 +1673,20 @@ async function syncGoogleDriveDelivery(delivery) {
     return true;
   } catch (error) {
     console.warn('Google Drive clip count deferred:', error.message);
+    if (error.status === 409 && delivery.sender === state.profile?.id) {
+      state.googleDriveConnected = false;
+      state.googleDriveChecked = true;
+      if (!state.driveReconnectWarned) {
+        state.driveReconnectWarned = true;
+        toast('Google Drive needs to be reconnected. Your existing delivery and folder link are safe.', 7000);
+      }
+    }
     return false;
   }
 }
 
 async function syncMemberGoogleDriveDeliveries() {
-  if (!state.profile || state.preview || document.visibilityState === 'hidden' || !['dms', 'dm'].includes(state.view)) return;
+  if (!state.profile || state.preview || document.visibilityState === 'hidden') return;
   const deliveries = state.clipDeliveries.filter(item => item.tracking_mode === 'google_drive' && item.google_folder_id && item.status !== 'cancelled');
   if (!deliveries.length) return;
   const changed = (await Promise.all(deliveries.map(syncGoogleDriveDelivery))).some(Boolean);
@@ -1737,7 +1791,10 @@ function clipDeliveryMarkup(delivery) {
       ? `<button class="clip-open clip-share-again" data-share-clip-delivery="${delivery.id}"><svg><use href="#i-share"/></svg>Share delivery again</button>`
       : `<button class="clip-open" data-invite-clip-claim="${delivery.id}">Invite to Sodium + send clips</button><button class="clip-edit guest-instructions" data-share-guest-clips="${delivery.id}" title="Account optional">Private clip link · account optional</button>`)
     : '';
-  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><details class="clip-card-details"><summary><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-summary-meta"><span>${esc(formatCount(delivery.expected_count))} clips · ${esc(clipSessionLabel(delivery))}</span><svg><use href="#i-back"/></svg></div></summary><div class="clip-delivery-expanded"><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${shareAction}${edit}</div></div></details></article>`;
+  const refresh = delivery.tracking_mode === 'google_drive' && !cancelled
+    ? `<button class="clip-open clip-refresh" data-refresh-drive-delivery="${delivery.id}"><svg><use href="#i-refresh"/></svg>Refresh Drive count</button>`
+    : '';
+  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><details class="clip-card-details"><summary><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-summary-meta"><span>${esc(formatCount(delivery.expected_count))} clips · ${esc(clipSessionLabel(delivery))}</span><svg><use href="#i-back"/></svg></div></summary><div class="clip-delivery-expanded"><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${refresh}${shareAction}${edit}</div></div></details></article>`;
 }
 
 function renderInboxTabs() {
@@ -1771,12 +1828,13 @@ function renderClipDeliveries() {
   target.innerHTML = deliveries.length
     ? deliveries.map(clipDeliveryMarkup).join('')
     : `<div class="empty clip-empty"><span>${state.clipBox === 'sent' ? 'OUTBOX' : 'RECEIVED'}</span><h2>${state.clipBox === 'sent' ? 'No clips sent yet' : 'No clips received yet'}</h2><p>${state.clipBox === 'sent' ? 'Every delivery you create will stay here so you can edit, reopen, or share it again.' : 'Clip deliveries sent to you will appear here.'}</p></div>`;
-  const incomingUploading = allDeliveries.filter(item => item.recipient === state.profile.id && item.status === 'uploading').length;
+  const incomingUploading = unseenIncomingClipCount();
   const badge = $('#clipReadyBadge');
   if (badge) {
     badge.textContent = incomingUploading > 99 ? '99+' : String(incomingUploading);
     badge.classList.toggle('hidden', incomingUploading === 0);
   }
+  updateUnreadBadge();
   renderDmClipDeliveries();
   renderInboxTabs();
 }
@@ -1794,6 +1852,7 @@ function renderDmClipDeliveries() {
 
 async function loadClipDeliveries() {
   if (!state.profile || state.preview) return;
+  const previous = new Map(state.clipDeliveries.map(delivery => [delivery.id, delivery]));
   const result = await db.from('clip_deliveries')
     .select('*,sender_profile:profiles!clip_deliveries_sender_fkey(id,name,nickname,avatar_path),recipient_profile:profiles!clip_deliveries_recipient_fkey(id,name,nickname,avatar_path),session:sessions!clip_deliveries_session_id_fkey(id,surf_time,when_label,status,spot:spots(name,general_location))')
     .or(`sender.eq.${state.profile.id},recipient.eq.${state.profile.id}`)
@@ -1805,7 +1864,42 @@ async function loadClipDeliveries() {
     return;
   }
   state.clipDeliveries = result.data || [];
+  const newlyReady = state.clipDeliveries.find(delivery => delivery.recipient === state.profile.id
+    && delivery.status === 'ready' && previous.get(delivery.id)?.status === 'uploading');
   renderClipDeliveries();
+  if (newlyReady) showClipReadyAlert(newlyReady);
+}
+
+function showClipReadyAlert(delivery) {
+  let card = $('#clipReadyAlert');
+  if (!card) {
+    card = document.createElement('aside');
+    card.id = 'clipReadyAlert';
+    card.className = 'clip-ready-alert';
+    card.setAttribute('role', 'alertdialog');
+    card.setAttribute('aria-live', 'assertive');
+    document.body.appendChild(card);
+  }
+  const sender = delivery.sender_profile?.name || 'Your filmer';
+  card.dataset.deliveryId = delivery.id;
+  card.innerHTML = `<button class="clip-ready-alert-close" data-action="close-ready-clips" aria-label="Close"><svg><use href="#i-close"/></svg></button><span>CLIPS READY</span><h3>${esc(sender)} finished your delivery.</h3><p>${esc(formatCount(delivery.expected_count))} clips are ready to open.</p><button data-action="open-ready-clips"><svg><use href="#i-folder"/></svg>Open clips</button>`;
+  card.classList.add('show');
+}
+
+function closeClipReadyAlert() {
+  $('#clipReadyAlert')?.classList.remove('show');
+}
+
+function openReadyClips() {
+  const card = $('#clipReadyAlert');
+  state.pendingDeliveryId = card?.dataset.deliveryId || '';
+  closeClipReadyAlert();
+  state.inboxTab = 'clips';
+  state.clipBox = 'received';
+  setView('dms');
+  markClipInboxSeen();
+  renderClipDeliveries();
+  requestAnimationFrame(revealSharedDelivery);
 }
 
 function updateClipProgressPreview() {
@@ -1827,7 +1921,7 @@ function updateClipProviderHint() {
   const provider = clipProviderFromUrl($('#clipFolderUrl').value);
   const hint = $('#clipProviderHint');
   if ($('#clipGoogleFolderId').value) {
-    hint.textContent = 'Selected with Google Drive · completed video files count automatically while the delivery is viewed.';
+    hint.textContent = 'Selected with Google Drive · completed video files count automatically, even after you close Sodium.';
     hint.classList.add('clip-auto-count-note');
     return;
   }
@@ -4815,6 +4909,7 @@ document.addEventListener('click', async event => {
   const clipBoxNode = event.target.closest('[data-clip-box]');
   const editClipDeliveryNode = event.target.closest('[data-edit-clip-delivery]');
   const sessionClipsNode = event.target.closest('[data-session-clips]');
+  const refreshDriveDeliveryNode = event.target.closest('[data-refresh-drive-delivery]');
   if (carouselDirectionNode) {
     const carousel = carouselDirectionNode.closest('[data-post-carousel]');
     const direction = Number(carouselDirectionNode.dataset.carouselDirection || 0);
@@ -4824,7 +4919,21 @@ document.addEventListener('click', async event => {
   }
   if (inboxTabNode) {
     state.inboxTab = inboxTabNode.dataset.inboxTab;
+    if (state.inboxTab === 'clips') markClipInboxSeen();
     renderInboxTabs();
+  }
+  if (refreshDriveDeliveryNode) {
+    const delivery = state.clipDeliveries.find(item => item.id === refreshDriveDeliveryNode.dataset.refreshDriveDelivery);
+    if (!delivery) return;
+    refreshDriveDeliveryNode.disabled = true;
+    try {
+      const changed = await syncGoogleDriveDelivery(delivery);
+      if (!changed) throw new Error('Drive did not return a new count yet. Try again after the current upload finishes.');
+      renderClipDeliveries();
+      toast(`Drive count refreshed: ${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}.`);
+    } catch (error) { toast(readableError(error), 6000); }
+    finally { refreshDriveDeliveryNode.disabled = false; }
+    return;
   }
   if (clipBoxNode) {
     state.clipBox = clipBoxNode.dataset.clipBox;
@@ -4989,7 +5098,10 @@ document.addEventListener('click', async event => {
     'open-master-guide': () => { closeDrawer(); openMasterGuide(); },
     'close-guide': closeGuide,
     'go-surfing': () => setView('surfing'),
+    'open-inbox': openPersonalInbox,
     'open-dms': () => setView('dms'),
+    'open-ready-clips': openReadyClips,
+    'close-ready-clips': closeClipReadyAlert,
     'open-clip-delivery': () => openClipDeliveryComposer(),
     'connect-google-drive': connectGoogleDrive,
     'pick-google-folder': pickGoogleDriveFolder,

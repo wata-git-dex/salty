@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "sodium-clip-sync",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-08-25",
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "vars": {
+    "SYNC_ENDPOINT": "https://community.saltyviewfinder.com/api/google-drive/sync-all"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

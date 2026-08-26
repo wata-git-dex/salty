@@ -54,6 +54,8 @@ Before release v1.86, run `supabase/nonprofit-events-weekly-recap-v1-migration.s
 
 Before release v1.87, run `supabase/profile-activity-stats-v1-migration.sql` once. It records the real start time when a member taps **Start surf**, keeps scheduled times separate from active time, and expands profile stats into Community, Surf, and Film + photo views. Older sessions retain all existing counts; a duration is only backfilled when the old timestamps safely describe a manually started session, so auto-archived plans cannot inflate time totals.
 
+Release v1.94 separates the top personal Inbox (DMs and clip deliveries) from the regional Community Chat. The `sodium-clip-sync` scheduled Worker checks connected Google Drive deliveries every minute through the protected Pages endpoint; when the completed-video count reaches the promised total, the existing database trigger queues the recipient's **Your clips are ready** push notification.
+
 On iPhone, Web Push requires iOS 16.4 or later and the installed Home Screen app. Each member opens **Settings → Enable notifications on this device**, accepts Apple's prompt, and can then enable or disable new surfs, Stoke, DMs, events, surf updates, and Community Chat individually. Community Chat is off by default.
 
 ## Stoke media limits
