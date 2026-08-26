@@ -166,6 +166,8 @@ html[data-theme="amber"] .surf-section-label>span{color:#fff9ea;text-shadow:0 1p
 html[data-theme="amber"] .surf-section-label .live{color:#0b5d3b}
 html[data-theme="amber"] .surf-calendar-button{border-color:#075b91;background:#0d73b6;color:#fff}
 html[data-theme="amber"] .fab{background:linear-gradient(180deg,#2d9cdc,#0d73b6);color:#fff;box-shadow:0 12px 28px #075b9166}
+html[data-theme] .fab.message-fab{background:linear-gradient(180deg,#65bcf4,#298fd4);box-shadow:0 12px 30px -7px #298fd4aa;color:#06131d}
+html[data-theme] .fab.clip-fab{background:linear-gradient(180deg,#ffc060,var(--sodium));box-shadow:0 12px 30px -7px #f6a23caa;color:#07121b}
 html[data-theme="pink"] .consent-copy p,html[data-theme="pink"] .session-note,html[data-theme="pink"] .comment,html[data-theme="pink"] .about-copy p,html[data-theme="pink"] .install-steps,html[data-theme="pink"] .copy-card ol,html[data-theme="pink"] .event-description,html[data-theme="pink"] .perk-card>p,html[data-theme="pink"] .points-guide span,html[data-theme="pink"] .streak-guide p,html[data-theme="pink"] .points-unlocks p{color:#5d3548}
 html[data-theme="pink"] .post-overlay,html[data-theme="pink"] .post-author,html[data-theme="pink"] .credit{color:#fff8fb}
 html[data-theme="pink"] .post-overlay{background:linear-gradient(transparent,#260c18ee)}

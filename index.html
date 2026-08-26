@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=95-simple-delivery">
+  <link rel="stylesheet" href="./styles.css?v=96-inbox-actions">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -71,7 +71,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.95</small>
+    <small class="boot-credit">Saltyview Productions · v1.96</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -245,7 +245,7 @@
         <div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><div><h2>Inbox</h2><small>Messages and clip deliveries</small></div></div>
         <div class="inbox-tabs" role="tablist" aria-label="Inbox sections"><button class="active" data-inbox-tab="messages" role="tab" aria-selected="true"><svg><use href="#i-chat"/></svg>Messages</button><button data-inbox-tab="clips" role="tab" aria-selected="false"><svg><use href="#i-folder"/></svg>Clips <b id="clipReadyBadge" class="hidden">0</b></button></div>
         <section id="dmInboxMessages" class="inbox-panel active"><div id="dmThreads" class="dm-threads"></div><div class="section-label"><span>Start a message</span></div><div id="dmPeople" class="members-list dm-people"></div></section>
-        <section id="dmInboxClips" class="inbox-panel"><div class="clip-inbox-intro"><span>CLIP DELIVERIES</span><h3>Your clip outbox</h3><p>Every delivery stays here. Reopen it, edit it, open the folder, or share it again.</p></div><div class="clip-box-tabs" role="tablist" aria-label="Clip delivery folders"><button class="active" data-clip-box="sent" role="tab" aria-selected="true">Sent <b id="clipSentCount">0</b></button><button data-clip-box="received" role="tab" aria-selected="false">Received <b id="clipReceivedCount">0</b></button></div><div id="clipDeliveries" class="clip-deliveries"></div><button class="add-content clip-add-button" data-action="open-clip-delivery"><svg><use href="#i-plus"/></svg>Send clips</button></section>
+        <section id="dmInboxClips" class="inbox-panel"><div class="clip-inbox-intro"><span>CLIP DELIVERIES</span><h3>Your clip outbox</h3><p>Every delivery stays here. Reopen it, edit it, open the folder, or share it again.</p></div><div class="clip-box-tabs" role="tablist" aria-label="Clip delivery folders"><button class="active" data-clip-box="sent" role="tab" aria-selected="true">Sent <b id="clipSentCount">0</b></button><button data-clip-box="received" role="tab" aria-selected="false">Received <b id="clipReceivedCount">0</b></button></div><div id="clipDeliveries" class="clip-deliveries"></div></section>
       </div>
       <div id="view-dm" class="app-view sub-view chat-view dm-view"><div class="dm-header"><button data-action="open-dms" aria-label="Back to inbox"><svg><use href="#i-back"/></svg></button><div id="dmPerson"></div><button class="dm-send-clips" data-action="open-clip-delivery" aria-label="Send clips"><svg><use href="#i-folder"/></svg><span>Clips</span></button></div><div id="dmClipDeliveries" class="dm-clip-deliveries"></div><div id="dmMessages" class="message-list" aria-live="polite"></div><form id="dmMessageForm" class="message-composer text-only"><div><textarea id="dmMessageBody" maxlength="2000" rows="1" required placeholder="Write a message…"></textarea><small>Text only</small></div><button type="submit" aria-label="Send message"><svg><use href="#i-send"/></svg></button></form></div>
       <div id="view-clubs" class="app-view sub-view">
@@ -546,9 +546,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.95</span>
-    <h3>Clip delivery is simpler.</h3>
-    <ul><li>Paste the shareable Drive, Dropbox, or iCloud folder link—no Google account connection required.</li><li>When the upload finishes, open the sent delivery and tap Mark all clips ready.</li><li>The recipient gets the Clips Inbox badge and ready notification.</li></ul>
+    <span>NEW IN V1.96</span>
+    <h3>Inbox actions are easier to find.</h3>
+    <ul><li>The Messages tab has a floating blue send button.</li><li>The Clips tab has a floating amber video-camera button.</li><li>Sent deliveries identify “Clips of…” whenever the footage is of someone else.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -563,6 +563,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
-  <script src="./app.js?v=95-simple-delivery" defer></script>
+  <script src="./app.js?v=96-inbox-actions" defer></script>
 </body>
 </html>

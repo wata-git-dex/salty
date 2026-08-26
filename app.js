@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.95';
+const APP_VERSION = '1.96';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -1142,6 +1142,29 @@ function renderChrome() {
   renderDmPeople();
 }
 
+function updateCreateFab(view = state.view) {
+  const createOptions = {
+    surfing: { action:'open-session', label:'New session', icon:'i-plus', tone:'' },
+    feed: { action:'open-post', label:'Add photo or clip', icon:'i-plus', tone:'' },
+    events: { action:'open-event', label:'Add event', icon:'i-plus', tone:'' },
+    dms: state.inboxTab === 'clips'
+      ? { action:'open-clip-delivery', label:'Send clips', icon:'i-camera', tone:'clip-fab' }
+      : { action:'start-message', label:'Start a message', icon:'i-send', tone:'message-fab' },
+  };
+  const createOption = createOptions[view];
+  const createFab = $('#createFab');
+  createFab.classList.toggle('hidden', !createOption);
+  createFab.classList.remove('clip-fab', 'message-fab');
+  if (!createOption) return;
+  createFab.classList.toggle(createOption.tone, Boolean(createOption.tone));
+  createFab.dataset.action = createOption.action;
+  createFab.dataset.createView = view;
+  createFab.setAttribute('aria-label', createOption.label);
+  createFab.title = createOption.label;
+  $('use', createFab).setAttribute('href', `#${createOption.icon}`);
+  $('span', createFab).textContent = createOption.label;
+}
+
 function setView(view) {
   if (view === 'beta-feedback' && !state.profile?.is_admin) {
     toast('Only Sodium admins can view beta feedback.');
@@ -1152,21 +1175,7 @@ function setView(view) {
   $$('.app-view').forEach(node => node.classList.toggle('active', node.id === `view-${view}`));
   $$('.primary-nav button,.bottom-nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
   const coreView = navItems.some(item => item[0] === view);
-  const createOptions = {
-    surfing: { action:'open-session', label:'New session' },
-    feed: { action:'open-post', label:'Add photo or clip' },
-    events: { action:'open-event', label:'Add event' },
-  };
-  const createOption = createOptions[view];
-  const createFab = $('#createFab');
-  createFab.classList.toggle('hidden', !createOption);
-  if (createOption) {
-    createFab.dataset.action = createOption.action;
-    createFab.dataset.createView = view;
-    createFab.setAttribute('aria-label', createOption.label);
-    createFab.title = createOption.label;
-    $('span', createFab).textContent = createOption.label;
-  }
+  updateCreateFab(view);
   $('#locationPill').classList.toggle('hidden', view !== 'surfing');
   if (!coreView) $$('.primary-nav button,.bottom-nav button').forEach(button => button.classList.remove('active'));
   closeDrawer();
@@ -1315,7 +1324,7 @@ function renderRoomMessages() {
 
 async function sendRoomMessage(event) {
   event.preventDefault();
-  const form = event.currentTarget;
+  const form = event.target.closest('form');
   const body = $('#roomMessageBody').value.trim();
   const file = $('#roomPhoto').files[0];
   if (!body && !file) { toast('Write a message or choose a photo.'); return; }
@@ -1416,6 +1425,17 @@ function openPersonalInbox() {
   renderInboxTabs();
 }
 
+function startInboxMessage() {
+  state.inboxTab = 'messages';
+  renderInboxTabs();
+  updateCreateFab('dms');
+  const people = $('#dmPeople');
+  const first = people?.querySelector('[data-dm-member]');
+  if (!first) { toast('Everyone is already in your message list. Open their conversation above.'); return; }
+  people.scrollIntoView({ behavior:'smooth', block:'center' });
+  first.focus({ preventScroll:true });
+}
+
 function renderDmInbox() {
   const target = $('#dmThreads');
   if (!target) return;
@@ -1485,11 +1505,12 @@ async function sendDmMessage(event) {
   if (!state.activeDmMember) return;
   const body = $('#dmMessageBody').value.trim();
   if (!body) return;
-  const submit = $('button[type="submit"]', event.currentTarget); submit.disabled = true;
+  const form = event.target.closest('form');
+  const submit = $('button[type="submit"]', form); submit.disabled = true;
   try {
     const result = await db.from('dm_messages').insert({ sender:state.profile.id, recipient:state.activeDmMember.id, body });
     if (result.error) throw result.error;
-    event.currentTarget.reset();
+    form.reset();
     await loadDmConversation();
   } catch (error) { toast(readableError(error), 5000); }
   finally { submit.disabled = false; }
@@ -1749,6 +1770,13 @@ function clipSubjectNames(delivery) {
   return names.length ? names.join(', ') : (delivery?.recipient_profile?.name || 'the surfer');
 }
 
+function clipSubjectsMatchRecipient(delivery) {
+  const names = Array.isArray(delivery?.subject_names) ? delivery.subject_names.filter(Boolean) : [];
+  const recipient = delivery?.recipient_profile?.name || delivery?.recipient_name || '';
+  const first = value => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ')[0];
+  return names.length === 1 && first(names[0]) && first(names[0]) === first(recipient);
+}
+
 function clipShareCopy(delivery, recipientName) {
   const fullName = String(recipientName || 'dude').trim();
   const greeting = fullName.split(/\s+/)[0] || 'dude';
@@ -1784,6 +1812,7 @@ function clipDeliveryMarkup(delivery) {
   const cancelled = delivery.status === 'cancelled';
   const percent = ready ? 100 : clipDeliveryPercent(delivery);
   const progress = `${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}`;
+  const subjectPreview = mine && !clipSubjectsMatchRecipient(delivery) ? `Clips of ${clipSubjectNames(delivery)} · ` : '';
   const date = messageTime(delivery.ready_at || delivery.updated_at || delivery.created_at);
   const edit = mine && !cancelled ? `<button class="clip-edit" data-edit-clip-delivery="${delivery.id}" aria-label="Edit clip delivery"><svg><use href="#i-edit"/></svg></button>` : '';
   const shareAction = mine
@@ -1794,7 +1823,7 @@ function clipDeliveryMarkup(delivery) {
   const refresh = delivery.tracking_mode === 'google_drive' && !cancelled
     ? `<button class="clip-open clip-refresh" data-refresh-drive-delivery="${delivery.id}"><svg><use href="#i-refresh"/></svg>Refresh Drive count</button>`
     : '';
-  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><details class="clip-card-details"><summary><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-summary-meta"><span>${esc(formatCount(delivery.expected_count))} clips · ${esc(clipSessionLabel(delivery))}</span><svg><use href="#i-back"/></svg></div></summary><div class="clip-delivery-expanded"><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${refresh}${shareAction}${edit}</div></div></details></article>`;
+  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><details class="clip-card-details"><summary><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-summary-meta"><span>${esc(subjectPreview)}${esc(formatCount(delivery.expected_count))} clips · ${esc(clipSessionLabel(delivery))}</span><svg><use href="#i-back"/></svg></div></summary><div class="clip-delivery-expanded"><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${refresh}${shareAction}${edit}</div></div></details></article>`;
 }
 
 function renderInboxTabs() {
@@ -4920,6 +4949,7 @@ document.addEventListener('click', async event => {
     state.inboxTab = inboxTabNode.dataset.inboxTab;
     if (state.inboxTab === 'clips') markClipInboxSeen();
     renderInboxTabs();
+    updateCreateFab('dms');
   }
   if (refreshDriveDeliveryNode) {
     const delivery = state.clipDeliveries.find(item => item.id === refreshDriveDeliveryNode.dataset.refreshDriveDelivery);
@@ -5101,6 +5131,7 @@ document.addEventListener('click', async event => {
     'open-dms': () => setView('dms'),
     'open-ready-clips': openReadyClips,
     'close-ready-clips': closeClipReadyAlert,
+    'start-message': startInboxMessage,
     'open-clip-delivery': () => openClipDeliveryComposer(),
     'connect-google-drive': connectGoogleDrive,
     'pick-google-folder': pickGoogleDriveFolder,
