@@ -160,7 +160,7 @@ create table public.message_reactions (
   room_message_id uuid references public.room_messages(id) on delete cascade,
   dm_message_id uuid references public.dm_messages(id) on delete cascade,
   user_id uuid references public.profiles(id) on delete cascade not null,
-  emoji text not null check (emoji in ('🌊', '🔥', '😂', '❤️')),
+  emoji text not null check (emoji = btrim(emoji) and char_length(emoji) between 1 and 32),
   created_at timestamptz not null default now(),
   check ((room_message_id is not null)::int + (dm_message_id is not null)::int = 1)
 );

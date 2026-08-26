@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.99';
+const APP_VERSION = '1.100';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -81,6 +81,7 @@ const state = {
   googleDriveConnected: false, googleDriveChecked: false, googleDriveSyncTimer: null,
   driveConnectResult: '', driveReconnectWarned: false,
   editingMessageKind: '', editingMessageId: '', editingMessageHasAttachment: false,
+  reactingMessageKind: '', reactingMessageId: '',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1573,6 +1574,13 @@ async function sendDmMessage(event) {
 
 const MESSAGE_REACTION_OPTIONS = Object.freeze(['🌊', '🔥', '😂', '❤️']);
 
+function isSingleEmoji(value) {
+  const emoji = String(value || '').trim();
+  if (!emoji) return false;
+  const segments = [...new Intl.Segmenter(undefined, { granularity:'grapheme' }).segment(emoji)];
+  return segments.length === 1 && (/\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Presentation}/u.test(emoji) || /\uFE0F|\u20E3/u.test(emoji));
+}
+
 async function loadMessageReactions(kind, messageIds) {
   const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
   state.messageReactions = state.messageReactions.filter(reaction => !reaction[key]);
@@ -1585,15 +1593,16 @@ async function loadMessageReactions(kind, messageIds) {
 function messageReactionsMarkup(kind, messageId) {
   const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
   const reactions = state.messageReactions.filter(reaction => reaction[key] === messageId);
-  const counts = Object.fromEntries(MESSAGE_REACTION_OPTIONS.map(emoji => [emoji, reactions.filter(reaction => reaction.emoji === emoji).length]));
-  return `<div class="message-reactions" aria-label="Message reactions">${MESSAGE_REACTION_OPTIONS.map(emoji => {
+  const emojis = [...new Set([...MESSAGE_REACTION_OPTIONS, ...reactions.map(reaction => reaction.emoji)])];
+  const counts = Object.fromEntries(emojis.map(emoji => [emoji, reactions.filter(reaction => reaction.emoji === emoji).length]));
+  return `<div class="message-reactions" aria-label="Message reactions">${emojis.map(emoji => {
     const mine = reactions.some(reaction => reaction.emoji === emoji && reaction.user_id === state.profile.id);
     return `<button class="${mine ? 'active' : ''}" data-message-reaction="${kind}:${messageId}:${emoji}" aria-label="React ${emoji}"><span>${emoji}</span>${counts[emoji] ? `<b>${counts[emoji]}</b>` : ''}</button>`;
-  }).join('')}</div>`;
+  }).join('')}<button class="message-reaction-add" data-add-message-reaction="${kind}:${messageId}" aria-label="Choose another emoji"><span>＋</span></button></div>`;
 }
 
 async function toggleMessageReaction(kind, messageId, emoji) {
-  if (!MESSAGE_REACTION_OPTIONS.includes(emoji)) return;
+  if (!isSingleEmoji(emoji)) { toast('Choose one emoji from your phone keyboard.'); return; }
   const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
   const existing = state.messageReactions.find(reaction => reaction[key] === messageId && reaction.user_id === state.profile.id && reaction.emoji === emoji);
   const result = existing
@@ -1601,6 +1610,31 @@ async function toggleMessageReaction(kind, messageId, emoji) {
     : await db.from('message_reactions').insert({ [key]:messageId, user_id:state.profile.id, emoji });
   if (result.error) { toast(readableError(result.error), 5000); return; }
   if (kind === 'room') await loadRoomMessages(); else await loadDmConversation();
+}
+
+function openMessageReactionPicker(kind, messageId) {
+  state.reactingMessageKind = kind;
+  state.reactingMessageId = messageId;
+  $('#messageReactionForm').reset();
+  openSheet('messageReactionSheet');
+  setTimeout(() => $('#messageReactionEmoji').focus({ preventScroll:true }), 80);
+}
+
+function closeMessageReactionPicker() {
+  state.reactingMessageKind = '';
+  state.reactingMessageId = '';
+  $('#messageReactionForm')?.reset();
+  closeSheet();
+}
+
+async function submitMessageReaction(event) {
+  event.preventDefault();
+  const emoji = $('#messageReactionEmoji').value.trim();
+  if (!isSingleEmoji(emoji)) { toast('Choose one emoji from your phone keyboard.'); return; }
+  const kind = state.reactingMessageKind;
+  const id = state.reactingMessageId;
+  closeMessageReactionPicker();
+  await toggleMessageReaction(kind, id, emoji);
 }
 
 function openMessageEditor(kind, messageId) {
@@ -5009,6 +5043,8 @@ document.addEventListener('click', async event => {
   const roomMentionNode = event.target.closest('[data-room-mention]');
   const editMessageNode = event.target.closest('[data-edit-message]');
   const messageReactionNode = event.target.closest('[data-message-reaction]');
+  const addMessageReactionNode = event.target.closest('[data-add-message-reaction]');
+  const pickMessageEmojiNode = event.target.closest('[data-pick-message-emoji]');
   const profileStatTabNode = event.target.closest('[data-profile-stat-tab]');
   const carouselDirectionNode = event.target.closest('[data-carousel-direction]');
   const viewNode = event.target.closest('[data-view]');
@@ -5043,6 +5079,14 @@ document.addEventListener('click', async event => {
   if (messageReactionNode) {
     const [kind, id, emoji] = messageReactionNode.dataset.messageReaction.split(':');
     await toggleMessageReaction(kind, id, emoji); return;
+  }
+  if (addMessageReactionNode) {
+    const [kind, id] = addMessageReactionNode.dataset.addMessageReaction.split(':');
+    openMessageReactionPicker(kind, id); return;
+  }
+  if (pickMessageEmojiNode) {
+    $('#messageReactionEmoji').value = pickMessageEmojiNode.dataset.pickMessageEmoji;
+    $('#messageReactionForm').requestSubmit(); return;
   }
   if (roomMentionNode) { insertRoomMention(roomMentionNode.dataset.roomMention); return; }
   if (!event.target.closest('#roomMessageForm')) $('#roomMentionSuggestions')?.classList.add('hidden');
@@ -5283,6 +5327,7 @@ document.addEventListener('click', async event => {
     'close-sheet': closeSheet,
     'close-message-edit': closeMessageEditor,
     'delete-message': deleteEditedMessage,
+    'close-message-reaction': closeMessageReactionPicker,
     'open-guide': () => { closeDrawer(); openGuide(); },
     'open-master-guide': () => { closeDrawer(); openMasterGuide(); },
     'close-guide': closeGuide,
@@ -5338,6 +5383,7 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
   else if (event.target.id === 'messageEditForm') await saveMessageEdit(event);
+  else if (event.target.id === 'messageReactionForm') await submitMessageReaction(event);
   else if (event.target.id === 'clipDeliveryForm') await saveClipDelivery(event);
   else if (event.target.id === 'planInviteForm') await sharePlanSurfInvite(event);
   else if (event.target.id === 'locationForm') await saveLocation(event);
