@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.100';
+const APP_VERSION = '1.101';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -57,6 +57,7 @@ const NOTIFICATION_DEFAULTS = Object.freeze({
   clip_deliveries: true,
   new_members: true,
 });
+const DEFAULT_MESSAGE_REACTIONS = Object.freeze(['🌊', '🔥', '😂', '❤️']);
 
 const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
@@ -82,6 +83,7 @@ const state = {
   driveConnectResult: '', driveReconnectWarned: false,
   editingMessageKind: '', editingMessageId: '', editingMessageHasAttachment: false,
   reactingMessageKind: '', reactingMessageId: '',
+  quickMessageReactions: [...DEFAULT_MESSAGE_REACTIONS],
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -151,6 +153,16 @@ function ensureThemeOptions() {
   button.setAttribute('aria-label', 'Use Pink theme');
   button.innerHTML = '<img src="./icon-pink.svg" alt=""><span>Pink</span>';
   options.append(button);
+}
+
+function ensureQuickReactionSettings() {
+  if ($('#quickReactionSettingsForm')) return;
+  const themeCard = $('.icon-settings');
+  if (!themeCard) return;
+  const card = document.createElement('div');
+  card.className = 'copy-card quick-reaction-settings';
+  card.innerHTML = `<span>CHAT</span><h3>Your quick reactions</h3><p>Choose the four emojis that appear under every message. The + button always opens the full emoji keyboard.</p><form id="quickReactionSettingsForm"><div class="quick-reaction-inputs">${[0,1,2,3].map(index => `<label><small>${index + 1}</small><input type="text" maxlength="32" autocomplete="off" data-quick-reaction-slot="${index}" aria-label="Quick reaction ${index + 1}"></label>`).join('')}</div><button class="secondary-button" type="submit">Save quick reactions</button></form><small class="quick-reaction-note">Use four different emojis from your phone keyboard. Your choices follow your Sodium account.</small>`;
+  themeCard.before(card);
 }
 
 function applyIconTheme(theme = 'ink', announce = false) {
@@ -318,7 +330,7 @@ function runPreview() {
   const regionId = '22222222-2222-4222-8222-222222222222';
   state.preview = true;
   state.session = { user: { id: userId } };
-  state.profile = { id: userId, name: 'Cyrus V.', nickname: 'Cy', phone: '(949) 555-0142', home_region: regionId, sponsors: ['Sodium', 'Salty Viewfinder'], social_url:'https://instagram.com/', avatar_path:null, onboarding_complete:true, is_admin:true };
+  state.profile = { id: userId, name: 'Cyrus V.', nickname: 'Cy', phone: '(949) 555-0142', home_region: regionId, sponsors: ['Sodium', 'Salty Viewfinder'], social_url:'https://instagram.com/', avatar_path:null, onboarding_complete:true, is_admin:true, quick_reactions:[...DEFAULT_MESSAGE_REACTIONS] };
   state.regions = [{ id: regionId, name: 'California' }, { id: 'fr', name: 'France' }, { id: 'de', name: 'Germany' }, { id: 'ut', name: 'Utah' }];
   state.regionMemberships = [{ user_id:userId, region_id:regionId, is_home:true, notifications_enabled:true }];
   state.currentRegion = state.regions[0];
@@ -631,6 +643,7 @@ async function enterCommunity() {
   localStorage.removeItem('salty:invite');
 
   state.profile = profile;
+  state.quickMessageReactions = normalizeQuickReactions(profile.quick_reactions);
   if (!profile.onboarding_complete) {
     await showProfileSetup();
     return;
@@ -1208,7 +1221,7 @@ function setView(view) {
   // a long-running home-screen session never depends on an expired raw URL.
   if (!state.preview && view === 'feed') loadPosts();
   if (!state.preview && view === 'marketplace') loadListings();
-  if (view === 'settings') renderNotificationSettings();
+  if (view === 'settings') { renderNotificationSettings(); renderQuickReactionSettings(); }
   if (!state.preview && view === 'beta-feedback') loadIssueReports();
 }
 
@@ -1572,13 +1585,57 @@ async function sendDmMessage(event) {
   finally { submit.disabled = false; }
 }
 
-const MESSAGE_REACTION_OPTIONS = Object.freeze(['🌊', '🔥', '😂', '❤️']);
-
 function isSingleEmoji(value) {
   const emoji = String(value || '').trim();
   if (!emoji) return false;
   const segments = [...new Intl.Segmenter(undefined, { granularity:'grapheme' }).segment(emoji)];
   return segments.length === 1 && (/\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Presentation}/u.test(emoji) || /\uFE0F|\u20E3/u.test(emoji));
+}
+
+function normalizeQuickReactions(value) {
+  const reactions = Array.isArray(value) ? value.map(item => String(item || '').trim()) : [];
+  return reactions.length === 4 && new Set(reactions).size === 4 && reactions.every(isSingleEmoji)
+    ? reactions
+    : [...DEFAULT_MESSAGE_REACTIONS];
+}
+
+function renderQuickReactionPicks() {
+  const container = $('#messageReactionQuickPicks');
+  if (!container) return;
+  container.innerHTML = state.quickMessageReactions.map(emoji => `<button type="button" data-pick-message-emoji="${esc(emoji)}" aria-label="React ${esc(emoji)}">${esc(emoji)}</button>`).join('');
+}
+
+function renderQuickReactionSettings() {
+  ensureQuickReactionSettings();
+  const form = $('#quickReactionSettingsForm');
+  if (!form) return;
+  normalizeQuickReactions(state.profile?.quick_reactions || state.quickMessageReactions).forEach((emoji, index) => {
+    const input = $(`[data-quick-reaction-slot="${index}"]`, form);
+    if (input) input.value = emoji;
+  });
+}
+
+async function saveQuickReactionSettings(event) {
+  event.preventDefault();
+  const form = event.target;
+  const reactions = $$('[data-quick-reaction-slot]', form).map(input => input.value.trim());
+  if (!reactions.every(isSingleEmoji)) { toast('Choose one phone emoji for each quick-reaction slot.'); return; }
+  if (new Set(reactions).size !== 4) { toast('Choose four different quick reactions.'); return; }
+  const submit = $('button[type="submit"]', form);
+  submit.disabled = true;
+  try {
+    if (!state.preview) {
+      const result = await db.from('profiles').update({ quick_reactions:reactions }).eq('id', state.profile.id);
+      if (result.error) throw result.error;
+    }
+    state.quickMessageReactions = reactions;
+    state.profile.quick_reactions = reactions;
+    renderQuickReactionPicks();
+    renderRoomMessages();
+    if (state.activeDmMember) renderDmConversation();
+    toast('Quick reactions saved.');
+  } catch (error) { toast(readableError(error), 5000); }
+  finally { submit.disabled = false; }
 }
 
 async function loadMessageReactions(kind, messageIds) {
@@ -1593,7 +1650,7 @@ async function loadMessageReactions(kind, messageIds) {
 function messageReactionsMarkup(kind, messageId) {
   const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
   const reactions = state.messageReactions.filter(reaction => reaction[key] === messageId);
-  const emojis = [...new Set([...MESSAGE_REACTION_OPTIONS, ...reactions.map(reaction => reaction.emoji)])];
+  const emojis = [...new Set([...state.quickMessageReactions, ...reactions.map(reaction => reaction.emoji)])];
   const counts = Object.fromEntries(emojis.map(emoji => [emoji, reactions.filter(reaction => reaction.emoji === emoji).length]));
   return `<div class="message-reactions" aria-label="Message reactions">${emojis.map(emoji => {
     const mine = reactions.some(reaction => reaction.emoji === emoji && reaction.user_id === state.profile.id);
@@ -1616,6 +1673,7 @@ function openMessageReactionPicker(kind, messageId) {
   state.reactingMessageKind = kind;
   state.reactingMessageId = messageId;
   $('#messageReactionForm').reset();
+  renderQuickReactionPicks();
   openSheet('messageReactionSheet');
   setTimeout(() => $('#messageReactionEmoji').focus({ preventScroll:true }), 80);
 }
@@ -5367,6 +5425,10 @@ document.addEventListener('keydown', event => {
 });
 
 document.addEventListener('submit', async event => {
+  if (state.preview && event.target.id === 'quickReactionSettingsForm') {
+    await saveQuickReactionSettings(event);
+    return;
+  }
   if (state.preview) {
     event.preventDefault();
     toast('Preview only — nothing saves here.');
@@ -5384,6 +5446,7 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
   else if (event.target.id === 'messageEditForm') await saveMessageEdit(event);
   else if (event.target.id === 'messageReactionForm') await submitMessageReaction(event);
+  else if (event.target.id === 'quickReactionSettingsForm') await saveQuickReactionSettings(event);
   else if (event.target.id === 'clipDeliveryForm') await saveClipDelivery(event);
   else if (event.target.id === 'planInviteForm') await sharePlanSurfInvite(event);
   else if (event.target.id === 'locationForm') await saveLocation(event);

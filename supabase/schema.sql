@@ -21,6 +21,8 @@ create table public.profiles (
   sponsors text[] not null default '{}',
   social_url text,
   avatar_path text,
+  quick_reactions text[] not null default array['🌊','🔥','😂','❤️']::text[]
+    check (cardinality(quick_reactions) = 4 and array_position(quick_reactions, null) is null),
   onboarding_complete boolean not null default false,
   is_admin boolean not null default false,
   created_at timestamptz not null default now()
@@ -852,7 +854,7 @@ revoke all privileges on all tables in schema public from anon, authenticated;
 alter default privileges in schema public revoke all on tables from anon, authenticated;
 grant select on public.regions to authenticated;
 grant select (id, name, nickname, home_region, sponsors, social_url, avatar_path, onboarding_complete, created_at) on public.profiles to authenticated;
-grant update (name, nickname, phone, home_region, sponsors, social_url, avatar_path, onboarding_complete) on public.profiles to authenticated;
+grant update (name, nickname, phone, home_region, sponsors, social_url, avatar_path, quick_reactions, onboarding_complete) on public.profiles to authenticated;
 grant select, insert, update, delete on public.spots, public.brands, public.sessions, public.session_rsvps, public.posts, public.post_comments, public.room_messages, public.nonprofit_organizations, public.events, public.rewards, public.notification_preferences, public.push_subscriptions, public.beta_issue_reports to authenticated;
 grant select, insert, delete on public.post_tags, public.post_likes, public.event_rsvps, public.mutes, public.message_reactions to authenticated;
 grant select, insert, update, delete on public.dm_messages to authenticated;

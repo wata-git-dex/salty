@@ -6,8 +6,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.100.
-- This release gives Community Chat and DMs sender profile photos, distinct sender colors, owner-only message editing/deletion, and reactions using any single emoji from the member's phone keyboard. DM reactions remain visible only to the two conversation participants; Community Chat reactions remain member-only.
+- Current release: v1.101.
+- This release lets each member choose four account-synced quick message reactions in Settings while retaining the full phone-emoji picker. DM reactions remain visible only to the two conversation participants; Community Chat reactions remain member-only.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -94,7 +94,7 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - Community Chat supports text, photos, full-name `@` mentions, sender profile photos, and distinct sender colors.
 - DMs remain text-only and private to the two participants.
 - A sender can edit or delete only their own messages in either chat surface.
-- Message reactions accept any single emoji from the member's phone keyboard. Wave, fire, laugh, and heart remain quick picks; custom emoji reactions display and count normally.
+- Message reactions accept any single emoji from the member's phone keyboard. Each member chooses four quick picks in Settings; those choices follow their Sodium account across devices. Custom emoji reactions display and count normally.
 
 ## Clip deliveries
 
