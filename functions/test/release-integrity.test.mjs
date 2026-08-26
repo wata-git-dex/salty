@@ -9,6 +9,7 @@ const read = file => readFileSync(resolve(root, file), 'utf8');
 const html = read('index.html');
 const app = read('app.js');
 const worker = read('sw.js');
+const sessionChatMigration = read('supabase/session-chat-v1-migration.sql');
 
 test('HTML IDs are unique and hard JavaScript selectors resolve', () => {
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
@@ -62,4 +63,17 @@ test('release labels, cache busting, and Stoke limits stay aligned', () => {
 test('finished Now sessions display their recorded date instead of a permanent Now label', () => {
   assert.match(app, /const liveNow = session\.when_label === 'Now' && !isPastSession\(session\)/);
   assert.match(app, /session\.surf_time \|\| session\.started_at \|\| session\.ended_at \|\| session\.created_at/);
+});
+
+test('session chat stays tied to the surf crew across UI, RLS, and realtime', () => {
+  assert.match(html, /id="view-session-chat"/);
+  assert.match(html, /id="sessionChatThreads"/);
+  assert.match(app, /function sessionChatParticipantIds/);
+  assert.match(app, /data-session-chat=/);
+  assert.match(app, /table: 'session_messages'/);
+  assert.match(sessionChatMigration, /create table if not exists public\.session_messages/);
+  assert.match(sessionChatMigration, /public\.is_session_chat_member\(session_id\)/);
+  assert.match(sessionChatMigration, /session\.author = auth\.uid\(\)/);
+  assert.match(sessionChatMigration, /rsvp\.user_id = auth\.uid\(\)/);
+  assert.match(sessionChatMigration, /alter publication supabase_realtime add table public\.session_messages/);
 });

@@ -48,6 +48,8 @@ create table public.brands (
 create table public.sessions (
   id uuid primary key default gen_random_uuid(),
   author uuid references public.profiles(id) on delete cascade not null,
+  initiator_user uuid references public.profiles(id) on delete set null,
+  initiator_name text,
   spot_id uuid references public.spots(id),
   region_id uuid references public.regions(id) not null,
   when_label text,
@@ -157,17 +159,36 @@ create table public.dm_messages (
       or (attachment_path is not null and attachment_type is not null and attachment_size is not null))
 );
 
+create table public.session_messages (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid references public.sessions(id) on delete cascade not null,
+  author uuid references public.profiles(id) on delete cascade not null,
+  body text not null check (char_length(trim(body)) between 1 and 2000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index session_messages_session_created_idx on public.session_messages(session_id, created_at);
+
+create table public.session_message_reads (
+  session_id uuid references public.sessions(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  last_read_at timestamptz not null default now(),
+  primary key (session_id, user_id)
+);
+
 create table public.message_reactions (
   id uuid primary key default gen_random_uuid(),
   room_message_id uuid references public.room_messages(id) on delete cascade,
   dm_message_id uuid references public.dm_messages(id) on delete cascade,
+  session_message_id uuid references public.session_messages(id) on delete cascade,
   user_id uuid references public.profiles(id) on delete cascade not null,
   emoji text not null check (emoji = btrim(emoji) and char_length(emoji) between 1 and 32),
   created_at timestamptz not null default now(),
-  check ((room_message_id is not null)::int + (dm_message_id is not null)::int = 1)
+  check ((room_message_id is not null)::int + (dm_message_id is not null)::int + (session_message_id is not null)::int = 1)
 );
 create unique index message_reactions_room_unique on public.message_reactions (room_message_id, user_id, emoji) where room_message_id is not null;
 create unique index message_reactions_dm_unique on public.message_reactions (dm_message_id, user_id, emoji) where dm_message_id is not null;
+create unique index message_reactions_session_unique on public.message_reactions (session_message_id, user_id, emoji) where session_message_id is not null;
 
 create table public.nonprofit_organizations (
   id uuid primary key default gen_random_uuid(),
@@ -381,6 +402,20 @@ as $$ select exists (select 1 from public.profiles where id = uid) $$;
 create or replace function public.is_admin(uid uuid default auth.uid())
 returns boolean language sql stable security definer set search_path = public
 as $$ select exists (select 1 from public.profiles where id = uid and is_admin) $$;
+
+create or replace function public.is_session_chat_member(target_session uuid)
+returns boolean language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.sessions session
+    where session.id = target_session and (
+      session.author = auth.uid()
+      or session.initiator_user = auth.uid()
+      or session.featured_surfer_user = auth.uid()
+      or exists (select 1 from public.session_rsvps rsvp where rsvp.session_id = session.id and rsvp.user_id = auth.uid())
+    )
+  )
+$$;
 
 create or replace function public.get_my_profile()
 returns public.profiles
@@ -622,6 +657,31 @@ as $$ declare sender_name text; begin
   return new;
 end $$;
 
+create or replace function public.touch_session_message_updated_at()
+returns trigger language plpgsql set search_path = public
+as $$ begin new.updated_at = now(); return new; end $$;
+
+create or replace function public.notify_new_session_message()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+declare crew_member record; sender_name text; place_name text; session_region uuid; notification_body text;
+begin
+  select name into sender_name from public.profiles where id = new.author;
+  select spot.name, session.region_id into place_name, session_region from public.sessions session left join public.spots spot on spot.id = session.spot_id where session.id = new.session_id;
+  notification_body := case when char_length(new.body) > 120 then left(new.body,117) || '…' else new.body end;
+  for crew_member in
+    select distinct member_id from (
+      select session.author as member_id from public.sessions session where session.id = new.session_id
+      union all select session.initiator_user from public.sessions session where session.id = new.session_id
+      union all select session.featured_surfer_user from public.sessions session where session.id = new.session_id
+      union all select rsvp.user_id from public.session_rsvps rsvp where rsvp.session_id = new.session_id
+    ) crew where member_id is not null and member_id <> new.author
+  loop
+    perform public.enqueue_notification(crew_member.member_id,'direct_message',coalesce(place_name,'Session chat'),coalesce(sender_name,'A friend') || ': ' || notification_body,'./?open=session-chat&session=' || new.session_id::text || '&region=' || session_region::text,new.id);
+  end loop;
+  return new;
+end $$;
+
 create or replace function public.notify_new_event() returns trigger language plpgsql security definer set search_path = public
 as $$ declare member record; begin
   for member in select id from public.profiles where onboarding_complete and home_region=new.region_id and id<>new.author loop
@@ -668,6 +728,8 @@ end $$;
 create trigger notify_new_session after insert on public.sessions for each row execute function public.notify_new_session();
 create trigger notify_new_stoke after insert on public.posts for each row execute function public.notify_new_stoke();
 create trigger notify_new_dm after insert on public.dm_messages for each row execute function public.notify_new_dm();
+create trigger touch_session_message_updated_at before update on public.session_messages for each row execute function public.touch_session_message_updated_at();
+create trigger notify_new_session_message after insert on public.session_messages for each row execute function public.notify_new_session_message();
 create trigger notify_new_event after insert on public.events for each row execute function public.notify_new_event();
 create trigger notify_new_room_message after insert on public.room_messages for each row execute function public.notify_new_room_message();
 create trigger notify_session_rsvp after insert or delete on public.session_rsvps for each row execute function public.notify_session_rsvp();
@@ -695,6 +757,8 @@ alter table public.post_likes enable row level security;
 alter table public.connections enable row level security;
 alter table public.room_messages enable row level security;
 alter table public.dm_messages enable row level security;
+alter table public.session_messages enable row level security;
+alter table public.session_message_reads enable row level security;
 alter table public.message_reactions enable row level security;
 alter table public.nonprofit_organizations enable row level security;
 alter table public.events enable row level security;
@@ -760,16 +824,23 @@ create policy dms_insert_sender on public.dm_messages for insert with check (
 );
 create policy dms_delete_sender on public.dm_messages for delete using (sender = auth.uid());
 create policy dms_update_sender on public.dm_messages for update using (sender = auth.uid()) with check (sender = auth.uid());
+create policy session_messages_read_crew on public.session_messages for select using (public.is_member() and public.is_session_chat_member(session_id));
+create policy session_messages_insert_crew on public.session_messages for insert with check (public.is_member() and author = auth.uid() and public.is_session_chat_member(session_id));
+create policy session_messages_update_own on public.session_messages for update using (author = auth.uid() and public.is_session_chat_member(session_id)) with check (author = auth.uid() and public.is_session_chat_member(session_id));
+create policy session_messages_delete_own on public.session_messages for delete using (author = auth.uid() and public.is_session_chat_member(session_id));
+create policy session_message_reads_own on public.session_message_reads for all using (user_id = auth.uid() and public.is_session_chat_member(session_id)) with check (user_id = auth.uid() and public.is_session_chat_member(session_id));
 create policy message_reactions_read on public.message_reactions for select using (
   public.is_member() and (
     (room_message_id is not null and exists (select 1 from public.room_messages message where message.id = room_message_id))
     or (dm_message_id is not null and exists (select 1 from public.dm_messages message where message.id = dm_message_id and auth.uid() in (message.sender, message.recipient)))
+    or (session_message_id is not null and exists (select 1 from public.session_messages message where message.id = session_message_id and public.is_session_chat_member(message.session_id)))
   )
 );
 create policy message_reactions_insert_own on public.message_reactions for insert with check (
   public.is_member() and user_id = auth.uid() and (
     (room_message_id is not null and exists (select 1 from public.room_messages message where message.id = room_message_id))
     or (dm_message_id is not null and exists (select 1 from public.dm_messages message where message.id = dm_message_id and auth.uid() in (message.sender, message.recipient)))
+    or (session_message_id is not null and exists (select 1 from public.session_messages message where message.id = session_message_id and public.is_session_chat_member(message.session_id)))
   )
 );
 create policy message_reactions_delete_own on public.message_reactions for delete using (user_id = auth.uid());
@@ -845,6 +916,7 @@ $hardening$;
 
 grant execute on function public.invite_is_valid(text) to anon, authenticated;
 grant execute on function public.is_member(uuid), public.is_admin(uuid) to authenticated;
+grant execute on function public.is_session_chat_member(uuid) to authenticated;
 grant execute on function public.get_my_profile() to authenticated;
 grant execute on function public.redeem_invite(text,text,text,text) to authenticated;
 grant execute on function public.create_invite(int) to authenticated;
@@ -855,7 +927,7 @@ alter default privileges in schema public revoke all on tables from anon, authen
 grant select on public.regions to authenticated;
 grant select (id, name, nickname, home_region, sponsors, social_url, avatar_path, onboarding_complete, created_at) on public.profiles to authenticated;
 grant update (name, nickname, phone, home_region, sponsors, social_url, avatar_path, quick_reactions, onboarding_complete) on public.profiles to authenticated;
-grant select, insert, update, delete on public.spots, public.brands, public.sessions, public.session_rsvps, public.posts, public.post_comments, public.room_messages, public.nonprofit_organizations, public.events, public.rewards, public.notification_preferences, public.push_subscriptions, public.beta_issue_reports to authenticated;
+grant select, insert, update, delete on public.spots, public.brands, public.sessions, public.session_rsvps, public.posts, public.post_comments, public.room_messages, public.session_messages, public.session_message_reads, public.nonprofit_organizations, public.events, public.rewards, public.notification_preferences, public.push_subscriptions, public.beta_issue_reports to authenticated;
 grant select, insert, delete on public.post_tags, public.post_likes, public.event_rsvps, public.mutes, public.message_reactions to authenticated;
 grant select, insert, update, delete on public.dm_messages to authenticated;
 grant select on public.connections, public.points_events, public.streaks, public.notification_queue to authenticated;
@@ -946,7 +1018,7 @@ create policy sodium_nonprofits_delete_admin on storage.objects for delete to au
 using (bucket_id = 'sodium-nonprofits' and public.is_admin());
 
 -- Realtime tables used by the later chat phase and live core/feed refreshes.
-alter publication supabase_realtime add table public.sessions, public.session_rsvps, public.posts, public.post_comments, public.post_likes, public.room_messages, public.dm_messages, public.nonprofit_organizations;
+alter publication supabase_realtime add table public.sessions, public.session_rsvps, public.posts, public.post_comments, public.post_likes, public.room_messages, public.dm_messages, public.session_messages, public.nonprofit_organizations;
 alter publication supabase_realtime add table public.message_reactions;
 
 -- Nightly stale-session safety net. Unschedule the legacy job if this script is adapted/re-run.

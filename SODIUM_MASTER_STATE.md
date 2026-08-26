@@ -6,8 +6,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.105.
-- This release adds the supplied 90-piece Sodium emoji pack to Community Chat and DMs. Members type normal phone emojis inside messages; tapping a message reveals branded Sodium reactions, and `+` opens Sodium Core, Surf Lore, and Chat Essentials.
+- Current release: v1.106.
+- This release adds private, text-only Session chats for the organizer and linked members of each surf. Session chats appear beside DMs in Inbox and reuse Sodium reactions, message editing/deletion, unread state, realtime updates, and message notifications.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -94,6 +94,8 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - Community Chat supports text, photos, full-name `@` mentions, sender profile photos, and distinct sender colors.
 - A member's own message bubble follows their selected Sodium theme instead of receiving a random speaker color; other senders retain distinct colors for quick scanning.
 - DMs remain text-only and private to the two participants.
+- Session chats remain text-only and private to the session organizer, linked initiator/featured surfer, and members who joined that surf. A session card exposes **Message crew**, the same thread appears under **Session chats** in Inbox, and finished-session threads remain available with the session history.
+- Community Chat stays location-wide, DMs stay one-to-one, and Session chat handles surf-specific coordination. Sodium does not add arbitrary free-form group chats at this stage.
 - A sender can edit or delete only their own messages in either chat surface.
 - Members can type any phone emoji normally inside message text. Message reactions are intentionally separate and use the packaged Sodium artwork; legacy phone-emoji reactions remain readable and removable.
 - Quick reactions appear directly below a message when it is tapped; existing reaction counts remain visible when the picker is closed.
@@ -152,3 +154,5 @@ The v1.104 production hotfix allows the browser to connect to Cloudflare's direc
 Version 1.105 is a full release-integrity pass. The service worker now bypasses every `/api/` request so private or changing API responses are never stored in the offline shell, and failed asset requests can no longer be replaced with the app HTML. Static regression checks now cover duplicate IDs, form routing, user-facing action routing, JavaScript-to-HTML selector integrity, cached asset presence, and release-version alignment.
 
 The v1.105 session-date hotfix keeps “Now” as a live-session shortcut only. Once a session is finished or archived, every reference uses its recorded surf/start/end timestamp instead of continuing to display “Now.”
+
+Version 1.106 adds session-based crew messaging. Every eligible surf can have one canonical thread shared by its linked crew, available both from the session card and from Inbox. RLS derives access from the session author, linked initiator/featured surfer, and `session_rsvps`; typed nonmember names do not receive chat access. Session messages are text-only, realtime, editable/deletable by their author, reaction-enabled, unread-aware, and covered by the existing Messages notification preference.

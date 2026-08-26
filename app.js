@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.105';
+const APP_VERSION = '1.106';
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
 const CONSENT_VERSION = '1.0';
@@ -69,7 +69,7 @@ const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
 const state = {
   session: null, profile: null, regions: [], spots: [], people: [], sessions: [], posts: [], events: [], nonprofits: [], perks: [], listings: [],
   regionMemberships: [],
-  roomMessages: [], dmMessages: [], dmThreads: [], messageReactions: [], clipDeliveries: [], chatPhotoUrls: {}, activeDmMember: null,
+  roomMessages: [], dmMessages: [], dmThreads: [], sessionMessages: [], sessionMessageReads: [], sessionChatThreads: [], messageReactions: [], clipDeliveries: [], chatPhotoUrls: {}, activeDmMember: null, activeSessionChat: null,
   currentRegion: null, eventRegion: null, chatRegion: null, view: 'surfing', pendingInvite: '', authMode: 'new', realtime: null,
   pendingInviteRegion: '',
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
@@ -370,6 +370,11 @@ async function runPreview() {
   ];
   state.dmMessages = [{ id:'dm-1', sender:'jonah', recipient:userId, body:'Want to hit Lowers Friday?', created_at:new Date(Date.now() - 35 * 60000).toISOString(), read_at:null }];
   state.dmThreads = [{ memberId:'jonah', message:state.dmMessages[0] }];
+  state.sessionMessages = [
+    { id:'session-message-1', session_id:'mine', author:'jonah', body:'I’ll bring the log. Meet by the north lot?', created_at:new Date(Date.now() - 18 * 60000).toISOString(), author_profile:state.people[1] },
+    { id:'session-message-2', session_id:'mine', author:userId, body:'Perfect. I’ll be there at 6:45.', created_at:new Date(Date.now() - 12 * 60000).toISOString(), author_profile:state.profile },
+  ];
+  state.sessionMessageReads = [{ session_id:'mine', user_id:userId, last_read_at:new Date(Date.now() - 30 * 60000).toISOString() }];
   state.clipDeliveries = [
     { id:'clips-guest', sender:userId, recipient:null, recipient_name:'Heston', subject_names:['Heston'], session_id:'live-mine', provider:'google_drive', folder_url:'https://drive.google.com/', expected_count:18, uploaded_count:4, tracking_mode:'manual', status:'uploading', note:'Today at C Street.', created_at:new Date(Date.now() - 20 * 60000).toISOString(), updated_at:new Date(Date.now() - 4 * 60000).toISOString(), sender_profile:state.profile, recipient_profile:null, session:state.previewSessions[0] },
     { id:'clips-heston', sender:userId, recipient:'jonah', subject_names:['Heston'], session_id:'past-surf', provider:'google_drive', folder_url:'https://drive.google.com/', expected_count:24, uploaded_count:7, tracking_mode:'manual', status:'uploading', note:'Raw clips from C Street.', created_at:new Date(Date.now() - 55 * 60000).toISOString(), updated_at:new Date(Date.now() - 12 * 60000).toISOString(), sender_profile:state.profile, recipient_profile:state.people[1], session:state.previewSessions[4] },
@@ -380,7 +385,7 @@ async function runPreview() {
     { id:'issue-2', reporter:'mateo', reporter_profile:{ id:'mateo', name:'Mateo' }, category:'suggestion', description:'Could the event card make the address easier to tap?', expected_behavior:null, screen:'Events', app_version:APP_VERSION, user_agent:'iPhone · Home Screen app', status:'reviewing', admin_notes:'Check the map target size.', created_at:new Date(Date.now() - 26 * 3600000).toISOString() },
   ];
   await loadCustomMessageReactions();
-  renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderWeeklyRecaps(); renderPerks(); renderMarketplace(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderClipDeliveries(); renderIssueReports(); showOnly('app');
+  buildSessionChatThreads(); renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderWeeklyRecaps(); renderPerks(); renderMarketplace(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderClipDeliveries(); renderIssueReports(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
 
@@ -710,6 +715,7 @@ async function loadApp() {
   await Promise.all([loadAvatarUrls(), loadNonprofitLogoUrls(), loadCustomMessageReactions()]);
   renderChrome();
   await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadListings(), loadRoomMessages(), loadDmInbox(), loadClipDeliveries(), loadNotificationPreferences()]);
+  await loadSessionChatInbox();
   await loadPostDrafts();
   await renderProfile();
   renderMembers();
@@ -1215,6 +1221,7 @@ function setView(view) {
   if (!state.preview && view === 'chat') loadRoomMessages();
   if (!state.preview && view === 'dms') {
     loadDmInbox();
+    loadSessionChatInbox();
     loadClipDeliveries().then(syncMemberGoogleDriveDeliveries);
   }
   if (view === 'dms') renderInboxTabs();
@@ -1233,6 +1240,7 @@ async function loadSessions() {
   if (result.error) { toast(readableError(result.error)); return; }
   state.sessions = result.data || [];
   renderSessions();
+  if (state.sessionMessages.length || state.preview) buildSessionChatThreads();
   if (state.view === 'calendar') renderCalendar();
 }
 
@@ -1279,7 +1287,12 @@ function revealSharedEvent() {
 }
 
 function revealSharedTarget() {
-  if (state.pendingOpen === 'plan-surf') {
+  if (state.pendingOpen === 'session-chat' && state.pendingSessionId) {
+    const sessionId = state.pendingSessionId;
+    state.pendingOpen = '';
+    state.pendingSessionId = '';
+    openSessionChat(sessionId);
+  } else if (state.pendingOpen === 'plan-surf') {
     state.pendingOpen = '';
     setView('surfing');
     openSessionComposer();
@@ -1431,6 +1444,71 @@ function renderDmPeople() {
   }).join('') || '<p class="dm-everyone">Everyone you have messaged is already in your inbox.</p>';
 }
 
+function sessionChatParticipantIds(session) {
+  return new Set([
+    session?.author,
+    session?.initiator_user,
+    session?.featured_surfer_user,
+    ...(session?.session_rsvps || []).map(rsvp => rsvp.user_id),
+  ].filter(Boolean));
+}
+
+function canAccessSessionChat(session) {
+  return Boolean(state.profile?.id && sessionChatParticipantIds(session).has(state.profile.id));
+}
+
+function sessionChatUnreadCount(sessionId) {
+  const readAt = state.sessionMessageReads.find(item => item.session_id === sessionId)?.last_read_at;
+  return state.sessionMessages.filter(message => message.session_id === sessionId && message.author !== state.profile.id && (!readAt || new Date(message.created_at) > new Date(readAt))).length;
+}
+
+function sessionChatLabel(session) {
+  const parts = scheduleParts(session.surf_time || session.created_at);
+  return `${session.spot?.name || 'Surf session'} · ${parts.date}`;
+}
+
+async function loadSessionChatInbox() {
+  if (state.preview) { buildSessionChatThreads(); return; }
+  const [messagesResult, readsResult] = await Promise.all([
+    db.from('session_messages').select('*,author_profile:profiles!session_messages_author_fkey(id,name,avatar_path)').order('created_at', { ascending:false }).limit(500),
+    db.from('session_message_reads').select('*').eq('user_id', state.profile.id),
+  ]);
+  if (messagesResult.error) { console.warn('Session chats unavailable:', messagesResult.error.message); return; }
+  if (readsResult.error) { console.warn('Session chat read state unavailable:', readsResult.error.message); return; }
+  state.sessionMessages = messagesResult.data || [];
+  state.sessionMessageReads = readsResult.data || [];
+  buildSessionChatThreads();
+}
+
+function buildSessionChatThreads() {
+  const sessions = state.sessions.filter(canAccessSessionChat);
+  state.sessionChatThreads = sessions.map(session => ({
+    session,
+    message:state.sessionMessages.filter(message => message.session_id === session.id).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null,
+    unread:sessionChatUnreadCount(session.id),
+  })).filter(thread => thread.message || sessionChatParticipantIds(thread.session).size > 1)
+    .sort((a, b) => new Date(b.message?.created_at || b.session.surf_time || b.session.created_at) - new Date(a.message?.created_at || a.session.surf_time || a.session.created_at));
+  renderSessionChatThreads();
+  if ($('#sessionsFeed')) renderSessions();
+  updateUnreadBadge();
+}
+
+function renderSessionChatThreads() {
+  const target = $('#sessionChatThreads');
+  if (!target) return;
+  if (!state.sessionChatThreads.length) {
+    target.innerHTML = '<div class="session-chat-empty"><p>Join a surf and its crew chat will show up here.</p></div>';
+    return;
+  }
+  target.innerHTML = state.sessionChatThreads.map(thread => {
+    const { session, message, unread } = thread;
+    const profile = message?.author_profile || memberById(message?.author) || { name:'Crew member' };
+    const preview = message ? `${message.author === state.profile.id ? 'You: ' : `${profile.name}: `}${message.body}` : 'The crew chat is ready.';
+    const status = isPastSession(session) ? 'Finished' : session.when_label === 'Now' ? 'In the water' : 'Planned';
+    return `<button class="session-chat-thread ${unread ? 'unread' : ''}" data-session-chat="${session.id}"><span class="session-chat-thread-icon"><svg><use href="#i-surf"/></svg></span><span><b>${esc(sessionChatLabel(session))}</b><p>${esc(preview)}</p><small>${esc(status)} · ${sessionChatParticipantIds(session).size} crew</small></span>${unread ? `<i>${unread > 9 ? '9+' : unread}</i>` : '<svg class="thread-chevron"><use href="#i-chevron"/></svg>'}</button>`;
+  }).join('');
+}
+
 async function loadDmInbox() {
   const userId = state.profile.id;
   const result = await db.from('dm_messages').select('*')
@@ -1448,7 +1526,8 @@ async function loadDmInbox() {
 
 function updateUnreadBadge() {
   const dmCount = state.dmMessages.filter(message => message.recipient === state.profile.id && !message.read_at).length;
-  const count = dmCount + unseenIncomingClipCount();
+  const sessionCount = state.sessions.reduce((total, session) => total + sessionChatUnreadCount(session.id), 0);
+  const count = dmCount + sessionCount + unseenIncomingClipCount();
   const badge = $('#dmUnreadBadge');
   badge.textContent = count > 99 ? '99+' : String(count);
   badge.classList.toggle('hidden', count === 0);
@@ -1518,6 +1597,77 @@ function renderDmInbox() {
     return `<button class="dm-thread ${unread ? 'unread' : ''}" data-dm-member="${thread.memberId}">${avatarMarkup(person)}<span><b>${esc(person.name)}</b><p>${esc(prefix + thread.message.body)}</p></span><time>${esc(messageTime(thread.message.created_at))}</time>${unread ? '<i></i>' : ''}</button>`;
   }).join('');
   renderDmPeople();
+}
+
+async function openSessionChat(sessionId) {
+  const session = state.sessions.find(item => item.id === sessionId);
+  if (!session || !canAccessSessionChat(session)) { toast('Join this surf before opening its crew chat.'); return; }
+  state.activeSessionChat = session;
+  setView('session-chat');
+  renderSessionChatSummary();
+  if (state.preview) { renderSessionChatConversation(); return; }
+  await loadSessionChatConversation();
+}
+
+function renderSessionChatSummary() {
+  const target = $('#sessionChatSummary');
+  const session = state.activeSessionChat;
+  if (!target || !session) return;
+  const rsvps = session.session_rsvps || [];
+  const surfers = [session.author_role === 'surf' ? session.author_profile?.name : null, ...(session.participant_names || []), session.featured_surfer_name, ...rsvps.filter(item => item.role === 'surf').map(item => item.profile?.name)].filter(Boolean);
+  const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...rsvps.filter(item => item.role === 'film').map(item => item.profile?.name)].filter(Boolean);
+  const parts = scheduleParts(session.surf_time || session.created_at);
+  target.innerHTML = `<div><span>SESSION CHAT</span><h2>${esc(session.spot?.name || 'Surf session')}</h2><p><svg><use href="#i-calendar"/></svg>${esc(parts.date)} · ${esc(parts.time)}${session.spot?.general_location ? ` <b>·</b> <svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}` : ''}</p></div><div class="session-chat-crew"><span><b>Surfers</b>${esc(surfers.join(', ') || 'Open')}</span><span><b>Filmers</b>${esc(filmers.join(', ') || 'Open')}</span></div>`;
+}
+
+async function loadSessionChatConversation() {
+  if (!state.activeSessionChat) return;
+  const sessionId = state.activeSessionChat.id;
+  const result = await db.from('session_messages').select('*,author_profile:profiles!session_messages_author_fkey(id,name,avatar_path)').eq('session_id', sessionId).order('created_at', { ascending:true }).limit(300);
+  if (result.error) { toast(readableError(result.error)); return; }
+  state.sessionMessages = state.sessionMessages.filter(message => message.session_id !== sessionId).concat(result.data || []);
+  await loadMessageReactions('session', (result.data || []).map(message => message.id));
+  await db.from('session_message_reads').upsert({ session_id:sessionId, user_id:state.profile.id, last_read_at:new Date().toISOString() }, { onConflict:'session_id,user_id' });
+  const existing = state.sessionMessageReads.find(item => item.session_id === sessionId);
+  if (existing) existing.last_read_at = new Date().toISOString();
+  else state.sessionMessageReads.push({ session_id:sessionId, user_id:state.profile.id, last_read_at:new Date().toISOString() });
+  renderSessionChatConversation();
+  buildSessionChatThreads();
+}
+
+function renderSessionChatConversation() {
+  const list = $('#sessionChatMessages');
+  const session = state.activeSessionChat;
+  if (!list || !session) return;
+  const messages = state.sessionMessages.filter(message => message.session_id === session.id).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  if (!messages.length) {
+    list.innerHTML = `<div class="empty chat-empty"><span>SESSION CHAT</span><h2>Message the crew</h2><p>Coordinate timing, parking, boards, or a change of plans without another group text.</p></div>`;
+    return;
+  }
+  list.innerHTML = messages.map(message => {
+    const own = message.author === state.profile.id;
+    const profile = message.author_profile || memberById(message.author) || (own ? state.profile : { id:message.author, name:'Crew member' });
+    const avatar = avatarMarkup(profile, 'message-avatar');
+    const stack = `<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time>${own ? `<button class="message-edit" data-edit-message="session:${message.id}" aria-label="Edit or delete this message"><svg><use href="#i-edit"/></svg></button>` : ''}</div><div class="message-bubble" data-reveal-message-reactions="session:${message.id}" role="button" tabindex="0" aria-label="Show reactions for this message" aria-expanded="false"><p>${messageBodyMarkup(message.body)}</p></div>${messageReactionsMarkup('session', message.id)}</div>`;
+    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.author)}">${own ? '' : avatar}${stack}${own ? avatar : ''}</article>`;
+  }).join('');
+  requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+}
+
+async function sendSessionChatMessage(event) {
+  event.preventDefault();
+  if (!state.activeSessionChat) return;
+  const body = $('#sessionChatBody').value.trim();
+  if (!body) return;
+  const form = event.target.closest('form');
+  const submit = $('button[type="submit"]', form); submit.disabled = true;
+  try {
+    const result = await db.from('session_messages').insert({ session_id:state.activeSessionChat.id, author:state.profile.id, body });
+    if (result.error) throw result.error;
+    form.reset();
+    await loadSessionChatConversation();
+  } catch (error) { toast(readableError(error), 5000); }
+  finally { submit.disabled = false; }
 }
 
 async function openDm(memberId) {
@@ -1700,13 +1850,14 @@ async function saveQuickReactionSettings(event) {
     renderQuickReactionPicks();
     renderRoomMessages();
     if (state.activeDmMember) renderDmConversation();
+    if (state.activeSessionChat) renderSessionChatConversation();
     toast('Quick reactions saved.');
   } catch (error) { toast(readableError(error), 5000); }
   finally { submit.disabled = false; }
 }
 
 async function loadMessageReactions(kind, messageIds) {
-  const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
+  const key = messageReactionKey(kind);
   state.messageReactions = state.messageReactions.filter(reaction => !reaction[key]);
   if (!messageIds.length) return;
   const result = await db.from('message_reactions').select('*').in(key, messageIds);
@@ -1715,7 +1866,7 @@ async function loadMessageReactions(kind, messageIds) {
 }
 
 function messageReactionsMarkup(kind, messageId) {
-  const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
+  const key = messageReactionKey(kind);
   const reactions = state.messageReactions.filter(reaction => reaction[key] === messageId);
   const emojis = [...new Set([...state.quickMessageReactions, ...reactions.map(reaction => reaction.emoji)])];
   const counts = Object.fromEntries(emojis.map(emoji => [emoji, reactions.filter(reaction => reaction.emoji === emoji).length]));
@@ -1740,19 +1891,25 @@ function toggleMessageReactionBar(trigger) {
 
 async function toggleMessageReaction(kind, messageId, emoji) {
   if (!isMessageReaction(emoji)) { toast('Choose a Sodium reaction or one emoji from your phone keyboard.'); return; }
-  const key = kind === 'room' ? 'room_message_id' : 'dm_message_id';
+  const key = messageReactionKey(kind);
   const existing = state.messageReactions.find(reaction => reaction[key] === messageId && reaction.user_id === state.profile.id && reaction.emoji === emoji);
   if (state.preview) {
     if (existing) state.messageReactions = state.messageReactions.filter(reaction => reaction.id !== existing.id);
     else state.messageReactions.push({ id:`preview-reaction-${Date.now()}`, [key]:messageId, user_id:state.profile.id, emoji });
-    if (kind === 'room') renderRoomMessages(); else renderDmConversation();
+    if (kind === 'room') renderRoomMessages(); else if (kind === 'session') renderSessionChatConversation(); else renderDmConversation();
     return;
   }
   const result = existing
     ? await db.from('message_reactions').delete().eq('id', existing.id).eq('user_id', state.profile.id)
     : await db.from('message_reactions').insert({ [key]:messageId, user_id:state.profile.id, emoji });
   if (result.error) { toast(readableError(result.error), 5000); return; }
-  if (kind === 'room') await loadRoomMessages(); else await loadDmConversation();
+  if (kind === 'room') await loadRoomMessages(); else if (kind === 'session') await loadSessionChatConversation(); else await loadDmConversation();
+}
+
+function messageReactionKey(kind) {
+  if (kind === 'room') return 'room_message_id';
+  if (kind === 'session') return 'session_message_id';
+  return 'dm_message_id';
 }
 
 async function openMessageReactionPicker(kind, messageId) {
@@ -1809,7 +1966,9 @@ function closeMessageReactionPicker() {
 function openMessageEditor(kind, messageId) {
   const message = kind === 'room'
     ? state.roomMessages.find(item => item.id === messageId && item.author === state.profile.id)
-    : state.dmMessages.find(item => item.id === messageId && item.sender === state.profile.id);
+    : kind === 'session'
+      ? state.sessionMessages.find(item => item.id === messageId && item.author === state.profile.id)
+      : state.dmMessages.find(item => item.id === messageId && item.sender === state.profile.id);
   if (!message) return;
   state.editingMessageKind = kind;
   state.editingMessageId = messageId;
@@ -1833,26 +1992,26 @@ async function saveMessageEdit(event) {
   const body = $('#messageEditBody').value.trim();
   if (!kind || !id) return;
   if (!body && !state.editingMessageHasAttachment) { toast('A text-only message cannot be empty.'); return; }
-  const table = kind === 'room' ? 'room_messages' : 'dm_messages';
-  const owner = kind === 'room' ? 'author' : 'sender';
+  const table = kind === 'room' ? 'room_messages' : kind === 'session' ? 'session_messages' : 'dm_messages';
+  const owner = kind === 'dm' ? 'sender' : 'author';
   const result = await db.from(table).update({ body:body || null }).eq('id', id).eq(owner, state.profile.id);
   if (result.error) { toast(readableError(result.error), 5000); return; }
   closeMessageEditor();
-  if (kind === 'room') await loadRoomMessages(); else await loadDmConversation();
+  if (kind === 'room') await loadRoomMessages(); else if (kind === 'session') await loadSessionChatConversation(); else await loadDmConversation();
   toast('Message updated.');
 }
 
 async function deleteEditedMessage() {
   const { editingMessageKind:kind, editingMessageId:id } = state;
   if (!kind || !id || !confirm('Delete this message for everyone?')) return;
-  const table = kind === 'room' ? 'room_messages' : 'dm_messages';
-  const owner = kind === 'room' ? 'author' : 'sender';
+  const table = kind === 'room' ? 'room_messages' : kind === 'session' ? 'session_messages' : 'dm_messages';
+  const owner = kind === 'dm' ? 'sender' : 'author';
   const message = kind === 'room' ? state.roomMessages.find(item => item.id === id) : null;
   const result = await db.from(table).delete().eq('id', id).eq(owner, state.profile.id);
   if (result.error) { toast(readableError(result.error), 5000); return; }
   if (message?.attachment_path) await db.storage.from(CONFIG.chatBucket).remove([message.attachment_path]);
   closeMessageEditor();
-  if (kind === 'room') await loadRoomMessages(); else await loadDmConversation();
+  if (kind === 'room') await loadRoomMessages(); else if (kind === 'session') await loadSessionChatConversation(); else await loadDmConversation();
   toast('Message deleted.');
 }
 
@@ -3536,6 +3695,9 @@ function renderSessions() {
     const filmerRow = (session.wants_filmer || filmers.length)
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
       : '';
+    const sessionChatUnread = sessionChatUnreadCount(session.id);
+    const showSessionChat = canAccessSessionChat(session) && (sessionChatParticipantIds(session).size > 1 || state.sessionMessages.some(message => message.session_id === session.id));
+    const sessionChat = showSessionChat ? `<button class="session-chat-action ${sessionChatUnread ? 'unread' : ''}" data-session-chat="${session.id}"><svg><use href="#i-chat"/></svg><span>Message crew</span>${sessionChatUnread ? `<b>${sessionChatUnread > 9 ? '9+' : sessionChatUnread}</b>` : '<i>›</i>'}</button>` : '';
     const initiator = session.initiator_profile || (session.initiator_user === session.author ? session.author_profile : null);
     const initiatorName = initiator?.name || session.initiator_name || session.author_profile?.name || 'Sodium member';
     const addedBy = session.author_profile?.name && session.author_profile.name !== initiatorName ? `<small>Added by ${esc(session.author_profile.name)}</small>` : '';
@@ -3545,7 +3707,7 @@ function renderSessions() {
       ? schedulePills(scheduleParts(session.surf_time || session.ended_at || session.created_at), 'session-schedule')
       : sessionSchedulePills(session);
     const timingClass = pastSession ? 'past-card' : (session.when_label === 'Now' ? 'live-session' : 'future-session');
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${actions ? `<div class="card-actions">${actions}</div>` : ''}${claimInvite}${sendClips}</article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${sessionChat}${actions ? `<div class="card-actions">${actions}</div>` : ''}${claimInvite}${sendClips}</article>`;
   };
   const activeMarkup = orderedSessions.length
     ? orderedSessions.map(session => renderSessionCard(session)).join('')
@@ -4767,8 +4929,13 @@ function subscribeRealtime() {
       if (state.activeDmMember && state.view === 'dm') await loadDmConversation();
       else await loadDmInbox();
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'session_messages' }, async payload => {
+      if (state.activeSessionChat && state.view === 'session-chat' && (!payload.new?.session_id || payload.new.session_id === state.activeSessionChat.id)) await loadSessionChatConversation();
+      else await loadSessionChatInbox();
+    })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, async () => {
       if (state.view === 'chat') await loadRoomMessages();
+      else if (state.activeSessionChat && state.view === 'session-chat') await loadSessionChatConversation();
       else if (state.activeDmMember && state.view === 'dm') await loadDmConversation();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'clip_deliveries' }, async () => await loadClipDeliveries())
@@ -5221,6 +5388,7 @@ document.addEventListener('click', async event => {
   const startNode = event.target.closest('[data-start-session]');
   const editSessionNode = event.target.closest('[data-edit-session]');
   const shareSessionNode = event.target.closest('[data-share-session]');
+  const sessionChatNode = event.target.closest('[data-session-chat]');
   const shareSessionMemberNode = event.target.closest('[data-share-session-member]');
   const shareEventNode = event.target.closest('[data-share-event]');
   const inviteSessionClaimNode = event.target.closest('[data-invite-session-claim]');
@@ -5310,6 +5478,7 @@ document.addEventListener('click', async event => {
     return;
   }
   if (shareSessionMemberNode) { await shareSessionToMember(shareSessionMemberNode.dataset.shareSessionMember); return; }
+  if (sessionChatNode) { await openSessionChat(sessionChatNode.dataset.sessionChat); return; }
   const eventRegionNode = event.target.closest('[data-event-region]');
   const eventFilterNode = event.target.closest('[data-event-filter]');
   const nonprofitToggleNode = event.target.closest('[data-nonprofit-toggle]');
@@ -5571,6 +5740,7 @@ document.addEventListener('submit', async event => {
   else if (event.target.id === 'listingForm') await saveListing(event);
   else if (event.target.id === 'roomMessageForm') await sendRoomMessage(event);
   else if (event.target.id === 'dmMessageForm') await sendDmMessage(event);
+  else if (event.target.id === 'sessionChatForm') await sendSessionChatMessage(event);
   else if (event.target.id === 'messageEditForm') await saveMessageEdit(event);
   else if (event.target.id === 'quickReactionSettingsForm') await saveQuickReactionSettings(event);
   else if (event.target.id === 'clipDeliveryForm') await saveClipDelivery(event);
