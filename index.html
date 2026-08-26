@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=97-session-members">
+  <link rel="stylesheet" href="./styles.css?v=98-chat-mentions">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -71,7 +71,7 @@
   <div id="boot" class="boot" aria-live="polite">
     <svg class="boot-mark" viewBox="0 0 96 96"><path d="M20 62c0-18 14-32 32-32 14 0 24 9 24 22 0 10-8 18-19 18-8 0-14-5-14-13 0-6 4-11 10-11 4 0 7 2 7 6" fill="none" stroke="url(#curl-gradient)" stroke-width="7.5" stroke-linecap="round"/></svg>
     <span>sodium</span>
-    <small class="boot-credit">Saltyview Productions · v1.97</small>
+    <small class="boot-credit">Saltyview Productions · v1.98</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -226,6 +226,7 @@
         <div id="chatRegions" class="event-regions chat-regions"></div>
         <div id="roomMessages" class="message-list" aria-live="polite"></div>
         <form id="roomMessageForm" class="message-composer">
+          <div id="roomMentionSuggestions" class="mention-suggestions hidden" aria-label="Tag a community member"></div>
           <label class="message-photo-button" aria-label="Add a photo"><input id="roomPhoto" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><svg><use href="#i-photo"/></svg></label>
           <div><textarea id="roomMessageBody" maxlength="2000" rows="1" placeholder="Message the crew…"></textarea><small id="roomPhotoName" class="hidden"></small></div>
           <button type="submit" aria-label="Send message"><svg><use href="#i-send"/></svg></button>
@@ -327,8 +328,7 @@
         <label>When<div class="session-when-row"><button type="button" class="now-choice active" data-when="now">Now</button><span id="sessionDateChoice" class="date-choice compact" data-when="later"><svg><use href="#i-calendar"/></svg><span><small>Date &amp; time</small><strong id="sessionTimeDisplay">Choose date and time</strong></span><input id="sessionTime" type="datetime-local" aria-label="Session date and time"></span></div></label>
         <label><span id="sessionPeopleLabel">Surfing with</span> <small>optional · choose a community member or Other</small><div id="sessionPeopleChips" class="person-chips"></div><select id="sessionPersonSelect" aria-label="Choose a community member"></select><div id="sessionOtherPersonRow" class="add-person-row hidden"><input id="sessionPersonInput" maxlength="100" placeholder="Type their name" autocomplete="name"><button type="button" data-action="add-session-person">Add</button></div></label>
         <label>Note <small>optional</small><textarea id="sessionNote" maxlength="500" placeholder="Anything the crew should know?"></textarea></label>
-        <button id="sessionSubmit" class="primary" type="submit">Create session</button>
-        <button id="sessionPlanInvite" class="secondary-button" type="button" data-action="open-plan-invite">Invite someone to session</button>
+        <div class="session-form-actions"><button id="sessionSubmit" class="primary" type="submit">Create session</button><button id="sessionPlanInvite" class="secondary-button" type="button" data-action="open-plan-invite">Invite someone to session</button></div>
         <button id="sessionCancel" class="danger-button hidden" type="button" data-action="cancel-session"><svg><use href="#i-close"/></svg>Cancel session</button>
         <p id="sessionCancelNote" class="session-cancel-note hidden">Removes this session for everyone. Cancelled sessions award no Stokens.</p>
       </form>
@@ -546,9 +546,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.97</span>
-    <h3>Adding surfers is simpler.</h3>
-    <ul><li>Choose anyone already in the community from one dropdown.</li><li>Choose Other to type the name of someone who has not joined yet.</li><li>Session buttons now use clearer, consistent wording.</li></ul>
+    <span>NEW IN V1.98</span>
+    <h3>Tag the crew in Community Chat.</h3>
+    <ul><li>Type @ in Community Chat to choose a community member.</li><li>Tagged names are highlighted so they are easy to spot.</li><li>Session form buttons now have cleaner spacing on phones.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -563,6 +563,6 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js" integrity="sha384-AkNSQdptcXlJ0/NBZc4qGk86cDVXcCevwoWgEKIpHOEfbvlXGLlIkimQtONt8KNf" crossorigin="anonymous"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
-  <script src="./app.js?v=97-session-members" defer></script>
+  <script src="./app.js?v=98-chat-mentions" defer></script>
 </body>
 </html>

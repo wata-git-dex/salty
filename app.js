@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.97';
+const APP_VERSION = '1.98';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -88,6 +88,22 @@ const esc = (value = '') => String(value).replace(/[&<>'"]/g, char => ({'&':'&am
 const messageBodyMarkup = (value = '') => esc(value)
   .replace(/https:\/\/community\.saltyviewfinder\.com\/[^\s<]+/g, url => `<a class="dm-shared-link" href="${url}" target="_self">Open shared surf</a>`)
   .replace(/\n/g, '<br>');
+const regexEscape = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function roomMessageBodyMarkup(value = '') {
+  const body = String(value || '');
+  const members = state.people.filter(person => person?.id && person?.name).sort((a, b) => b.name.length - a.name.length);
+  if (!members.length) return esc(body).replace(/\n/g, '<br>');
+  const pattern = new RegExp(`@(${members.map(person => regexEscape(person.name)).join('|')})(?=$|[\\s.,!?;:])`, 'giu');
+  let html = '';
+  let cursor = 0;
+  for (const match of body.matchAll(pattern)) {
+    const person = members.find(member => member.name.toLowerCase() === match[1].toLowerCase());
+    html += esc(body.slice(cursor, match.index));
+    html += `<span class="chat-mention" data-member="${esc(person?.id || '')}">@${esc(match[1])}</span>`;
+    cursor = match.index + match[0].length;
+  }
+  return (html + esc(body.slice(cursor))).replace(/\n/g, '<br>');
+}
 const initials = name => String(name || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 const formatCount = number => new Intl.NumberFormat().format(number || 0);
 const inviteFromUrl = () => new URLSearchParams(location.search).get('invite')?.trim() || '';
@@ -1317,9 +1333,40 @@ function renderRoomMessages() {
     const profile = memberById(message.author) || { id:message.author, name:'Sodium member' };
     const own = message.author === state.profile.id;
     const photo = state.chatPhotoUrls[message.id];
-    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.author)}">${own ? '' : avatarMarkup(profile, 'message-avatar')}<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time></div><div class="message-bubble">${photo ? `<img src="${esc(photo)}" alt="Photo shared by ${esc(profile.name)}">` : ''}${message.body ? `<p>${esc(message.body)}</p>` : ''}</div></div></article>`;
+    return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.author)}">${own ? '' : avatarMarkup(profile, 'message-avatar')}<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time></div><div class="message-bubble">${photo ? `<img src="${esc(photo)}" alt="Photo shared by ${esc(profile.name)}">` : ''}${message.body ? `<p>${roomMessageBodyMarkup(message.body)}</p>` : ''}</div></div></article>`;
   }).join('');
   requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
+}
+
+function roomMentionContext() {
+  const input = $('#roomMessageBody');
+  const caret = input.selectionStart ?? input.value.length;
+  const before = input.value.slice(0, caret);
+  const match = before.match(/(?:^|[\s(])@([^@\n]*)$/);
+  if (!match) return null;
+  return { start:before.lastIndexOf('@'), end:caret, query:match[1].trim().toLowerCase() };
+}
+
+function renderRoomMentionSuggestions() {
+  const target = $('#roomMentionSuggestions');
+  const context = roomMentionContext();
+  if (!context) { target.innerHTML = ''; target.classList.add('hidden'); return; }
+  const matches = state.people.filter(person => person.id !== state.profile.id
+    && (!context.query || person.name.toLowerCase().includes(context.query) || (person.nickname || '').toLowerCase().includes(context.query))).slice(0, 7);
+  target.innerHTML = matches.map(person => `<button type="button" data-room-mention="${person.id}"><i>${esc(initials(person.name))}</i><span><b>${esc(person.name)}</b><small>${person.nickname ? `“${esc(person.nickname)}” · ` : ''}Sodium member</small></span></button>`).join('');
+  target.classList.toggle('hidden', !matches.length);
+}
+
+function insertRoomMention(memberId) {
+  const person = state.people.find(item => item.id === memberId);
+  const input = $('#roomMessageBody');
+  const context = roomMentionContext();
+  if (!person || !context) return;
+  input.value = `${input.value.slice(0, context.start)}@${person.name} ${input.value.slice(context.end)}`;
+  const nextCaret = context.start + person.name.length + 2;
+  input.focus({ preventScroll:true });
+  input.setSelectionRange(nextCaret, nextCaret);
+  $('#roomMentionSuggestions').classList.add('hidden');
 }
 
 async function sendRoomMessage(event) {
@@ -1346,7 +1393,7 @@ async function sendRoomMessage(event) {
       attachment_name:file?.name || null, attachment_size:file?.size || null,
     });
     if (result.error) throw result.error;
-    form.reset(); $('#roomPhotoName').textContent = ''; $('#roomPhotoName').classList.add('hidden');
+    form.reset(); $('#roomPhotoName').textContent = ''; $('#roomPhotoName').classList.add('hidden'); $('#roomMentionSuggestions').classList.add('hidden');
     await loadRoomMessages();
   } catch (error) {
     if (attachmentPath) await db.storage.from(CONFIG.chatBucket).remove([attachmentPath]);
@@ -4865,6 +4912,7 @@ async function shareInvite({ includeGuide = false, includeOverview = false, incl
 
 document.addEventListener('click', async event => {
   const actionNode = event.target.closest('[data-action]');
+  const roomMentionNode = event.target.closest('[data-room-mention]');
   const profileStatTabNode = event.target.closest('[data-profile-stat-tab]');
   const carouselDirectionNode = event.target.closest('[data-carousel-direction]');
   const viewNode = event.target.closest('[data-view]');
@@ -4892,6 +4940,8 @@ document.addEventListener('click', async event => {
   const sessionRoleNode = event.target.closest('[data-session-role]');
   const memberNode = event.target.closest('[data-member]');
   const iconThemeNode = event.target.closest('[data-icon-theme]');
+  if (roomMentionNode) { insertRoomMention(roomMentionNode.dataset.roomMention); return; }
+  if (!event.target.closest('#roomMessageForm')) $('#roomMentionSuggestions')?.classList.add('hidden');
   if (profileStatTabNode) {
     const deck = profileStatTabNode.closest('.profile-stat-deck');
     const selected = profileStatTabNode.dataset.profileStatTab;
@@ -5340,6 +5390,10 @@ function fillKnownSpotLocation(spotInput, locationInput) {
 
 $('#sessionSpot').addEventListener('change', () => fillKnownSpotLocation($('#sessionSpot'), $('#sessionLocation')));
 $('#postSpot').addEventListener('change', () => fillKnownSpotLocation($('#postSpot'), $('#postLocation')));
+$('#roomMessageBody').addEventListener('input', renderRoomMentionSuggestions);
+$('#roomMessageBody').addEventListener('keydown', event => {
+  if (event.key === 'Escape') $('#roomMentionSuggestions').classList.add('hidden');
+});
 $('#sessionPersonSelect').addEventListener('change', event => {
   const value = event.target.value;
   if (value === 'other') { showOtherSessionPerson(true); return; }
