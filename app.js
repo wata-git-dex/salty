@@ -56,6 +56,9 @@ const NATIVE_APP_LINKS = NATIVE_APP && globalThis.Capacitor?.registerPlugin
 const NATIVE_BROWSER = NATIVE_APP && globalThis.Capacitor?.registerPlugin
   ? globalThis.Capacitor.registerPlugin('Browser')
   : null;
+const NATIVE_AUTH = NATIVE_APP && globalThis.Capacitor?.registerPlugin
+  ? globalThis.Capacitor.registerPlugin('SodiumAuth')
+  : null;
 // Direct Stream upload URLs are intentionally short-lived. Keeping one longer
 // than the active editing window can make a restored draft repeatedly target a
 // dead endpoint, so old checkpoints are replaced rather than retried forever.
@@ -578,7 +581,11 @@ async function signInWithGoogle() {
     toast(readableError(error), 6000);
   } else if (NATIVE_APP && data?.url) {
     try {
-      if (typeof NATIVE_BROWSER?.open === 'function') {
+      if (typeof NATIVE_AUTH?.authenticate === 'function') {
+        const result = await NATIVE_AUTH.authenticate({ url:data.url, callbackScheme:'sodium' });
+        if (!result?.url) throw new Error('Google did not return a Sodium sign-in.');
+        await handleNativeAuthUrl({ url:result.url });
+      } else if (typeof NATIVE_BROWSER?.open === 'function') {
         await NATIVE_BROWSER.open({ url:data.url, presentationStyle:'popover' });
       } else {
         location.assign(data.url);

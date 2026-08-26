@@ -17,7 +17,7 @@ This file consolidates decisions and implementation state from the Sodium Commun
 - Sodium now has a committed Capacitor iOS project using bundle ID `com.saltyviewfinder.sodium`; the existing HTML/CSS/JavaScript interface remains the product UI rather than being redesigned.
 - Native builds package a curated local web bundle and route protected Stream/Drive API requests to `https://community.saltyviewfinder.com`. Cloudflare API middleware explicitly permits the Capacitor origin without relaxing browser origins generally.
 - The first native media bridge uses the iOS Photos picker and AVFoundation to create network-optimized 1080p MP4 copies before the existing resumable Cloudflare Stream upload. Originals remain untouched. The PWA keeps its original-file resumable fallback.
-- Native Google authentication is designed to return through `sodium://auth`; this redirect still requires production Supabase allowlist verification before device testing.
+- Native Google authentication returns through `sodium://auth`, which was added to the production Supabase redirect allowlist on August 26, 2026. The iOS build uses `ASWebAuthenticationSession` to capture that callback inside Sodium rather than leaving members in Google or a browser tab. Real-device completion and persistence testing remains required before TestFlight release.
 - Push, Browser, App Links, Share, Haptics, Splash Screen, and Status Bar Capacitor packages are installed. Native APNs registration and server delivery still require Apple signing/capability configuration after Xcode is ready.
 - Do not represent the native build as beta-ready until the Swift media bridge compiles in Xcode and real-device auth, compression, upload, background/interruption, notifications, and deep links pass testing.
 

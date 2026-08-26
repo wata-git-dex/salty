@@ -3,6 +3,53 @@ import Capacitor
 import PhotosUI
 import UniformTypeIdentifiers
 import AVFoundation
+import AuthenticationServices
+
+@objc(SodiumAuthPlugin)
+public class SodiumAuthPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPresentationContextProviding {
+    public let identifier = "SodiumAuthPlugin"
+    public let jsName = "SodiumAuth"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise)
+    ]
+
+    private var authenticationSession: ASWebAuthenticationSession?
+
+    @objc func authenticate(_ call: CAPPluginCall) {
+        guard let rawURL = call.getString("url"), let url = URL(string: rawURL) else {
+            call.reject("Sodium received an invalid Google sign-in address.")
+            return
+        }
+        let callbackScheme = call.getString("callbackScheme") ?? "sodium"
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.authenticationSession?.cancel()
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: callbackScheme) { [weak self] callbackURL, error in
+                self?.authenticationSession = nil
+                if let callbackURL {
+                    call.resolve(["url": callbackURL.absoluteString])
+                    return
+                }
+                if let authError = error as? ASWebAuthenticationSessionError, authError.code == .canceledLogin {
+                    call.reject("Google sign-in was cancelled.")
+                } else {
+                    call.reject(error?.localizedDescription ?? "Google could not return to Sodium.")
+                }
+            }
+            session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = false
+            self.authenticationSession = session
+            if !session.start() {
+                self.authenticationSession = nil
+                call.reject("Sodium could not open Google sign-in.")
+            }
+        }
+    }
+
+    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        bridge?.viewController?.view.window ?? UIWindow()
+    }
+}
 
 @objc(SodiumMediaPlugin)
 public class SodiumMediaPlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewControllerDelegate {
@@ -163,6 +210,7 @@ public class SodiumMediaPlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewControl
 
 public class SodiumBridgeViewController: CAPBridgeViewController {
     public override func capacitorDidLoad() {
+        bridge?.registerPluginInstance(SodiumAuthPlugin())
         bridge?.registerPluginInstance(SodiumMediaPlugin())
     }
 }
