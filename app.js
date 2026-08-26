@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.101';
+const APP_VERSION = '1.102';
 const CONSENT_VERSION = '1.0';
 const GUIDE_PATH = './docs/SODIUM_Quick_Start_Guide_V14.pdf';
 const MASTER_GUIDE_PATH = './docs/SODIUM_Master_Instruction_Manual_V2.pdf';
@@ -1350,7 +1350,7 @@ function renderRoomMessages() {
     const own = message.author === state.profile.id;
     const photo = state.chatPhotoUrls[message.id];
     const avatar = avatarMarkup(profile, 'message-avatar');
-    const stack = `<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time>${own ? `<button class="message-edit" data-edit-message="room:${message.id}" aria-label="Edit or delete this message"><svg><use href="#i-edit"/></svg></button>` : ''}</div><div class="message-bubble">${photo ? `<img src="${esc(photo)}" alt="Photo shared by ${esc(profile.name)}">` : ''}${message.body ? `<p>${roomMessageBodyMarkup(message.body)}</p>` : ''}</div>${messageReactionsMarkup('room', message.id)}</div>`;
+    const stack = `<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time>${own ? `<button class="message-edit" data-edit-message="room:${message.id}" aria-label="Edit or delete this message"><svg><use href="#i-edit"/></svg></button>` : ''}</div><div class="message-bubble" data-reveal-message-reactions="room:${message.id}" role="button" tabindex="0" aria-label="Show reactions for this message" aria-expanded="false">${photo ? `<img src="${esc(photo)}" alt="Photo shared by ${esc(profile.name)}">` : ''}${message.body ? `<p>${roomMessageBodyMarkup(message.body)}</p>` : ''}</div>${messageReactionsMarkup('room', message.id)}</div>`;
     return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.author)}">${own ? '' : avatar}${stack}${own ? avatar : ''}</article>`;
   }).join('');
   requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
@@ -1563,7 +1563,7 @@ function renderDmConversation() {
     const own = message.sender === mine;
     const profile = own ? state.profile : state.activeDmMember;
     const avatar = avatarMarkup(profile, 'message-avatar');
-    const stack = `<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time>${own ? `<button class="message-edit" data-edit-message="dm:${message.id}" aria-label="Edit or delete this message"><svg><use href="#i-edit"/></svg></button>` : ''}</div><div class="message-bubble"><p>${messageBodyMarkup(message.body)}</p></div>${messageReactionsMarkup('dm', message.id)}</div>`;
+    const stack = `<div class="message-stack"><div class="message-meta"><b>${own ? 'You' : esc(profile.name)}</b><time>${esc(messageTime(message.created_at))}</time>${own ? `<button class="message-edit" data-edit-message="dm:${message.id}" aria-label="Edit or delete this message"><svg><use href="#i-edit"/></svg></button>` : ''}</div><div class="message-bubble" data-reveal-message-reactions="dm:${message.id}" role="button" tabindex="0" aria-label="Show reactions for this message" aria-expanded="false"><p>${messageBodyMarkup(message.body)}</p></div>${messageReactionsMarkup('dm', message.id)}</div>`;
     return `<article class="message-row ${own ? 'own' : ''}" style="--speaker-hue:${speakerHue(message.sender)}">${own ? '' : avatar}${stack}${own ? avatar : ''}</article>`;
   }).join('');
   requestAnimationFrame(() => { list.scrollTop = list.scrollHeight; });
@@ -1652,10 +1652,22 @@ function messageReactionsMarkup(kind, messageId) {
   const reactions = state.messageReactions.filter(reaction => reaction[key] === messageId);
   const emojis = [...new Set([...state.quickMessageReactions, ...reactions.map(reaction => reaction.emoji)])];
   const counts = Object.fromEntries(emojis.map(emoji => [emoji, reactions.filter(reaction => reaction.emoji === emoji).length]));
-  return `<div class="message-reactions" aria-label="Message reactions">${emojis.map(emoji => {
+  return `<div class="message-reactions ${reactions.length ? 'has-reactions' : ''}" data-message-reaction-bar="${kind}:${messageId}" aria-label="Message reactions">${emojis.map(emoji => {
     const mine = reactions.some(reaction => reaction.emoji === emoji && reaction.user_id === state.profile.id);
-    return `<button class="${mine ? 'active' : ''}" data-message-reaction="${kind}:${messageId}:${emoji}" aria-label="React ${emoji}"><span>${emoji}</span>${counts[emoji] ? `<b>${counts[emoji]}</b>` : ''}</button>`;
+    return `<button class="${mine ? 'active ' : ''}${counts[emoji] ? 'has-count' : 'quick-only'}" data-message-reaction="${kind}:${messageId}:${emoji}" aria-label="React ${emoji}"><span>${emoji}</span>${counts[emoji] ? `<b>${counts[emoji]}</b>` : ''}</button>`;
   }).join('')}<button class="message-reaction-add" data-add-message-reaction="${kind}:${messageId}" aria-label="Choose another emoji"><span>＋</span></button></div>`;
+}
+
+function toggleMessageReactionBar(trigger) {
+  const bar = trigger.closest('.message-stack')?.querySelector('.message-reactions');
+  if (!bar) return;
+  const opening = !bar.classList.contains('open');
+  $$('.message-reactions.open').forEach(other => {
+    other.classList.remove('open');
+    other.closest('.message-stack')?.querySelector('[data-reveal-message-reactions]')?.setAttribute('aria-expanded', 'false');
+  });
+  bar.classList.toggle('open', opening);
+  trigger.setAttribute('aria-expanded', String(opening));
 }
 
 async function toggleMessageReaction(kind, messageId, emoji) {
@@ -5100,6 +5112,7 @@ document.addEventListener('click', async event => {
   const actionNode = event.target.closest('[data-action]');
   const roomMentionNode = event.target.closest('[data-room-mention]');
   const editMessageNode = event.target.closest('[data-edit-message]');
+  const revealMessageReactionsNode = event.target.closest('[data-reveal-message-reactions]');
   const messageReactionNode = event.target.closest('[data-message-reaction]');
   const addMessageReactionNode = event.target.closest('[data-add-message-reaction]');
   const pickMessageEmojiNode = event.target.closest('[data-pick-message-emoji]');
@@ -5133,6 +5146,9 @@ document.addEventListener('click', async event => {
   if (editMessageNode) {
     const [kind, id] = editMessageNode.dataset.editMessage.split(':');
     openMessageEditor(kind, id); return;
+  }
+  if (revealMessageReactionsNode) {
+    toggleMessageReactionBar(revealMessageReactionsNode); return;
   }
   if (messageReactionNode) {
     const [kind, id, emoji] = messageReactionNode.dataset.messageReaction.split(':');
@@ -5419,6 +5435,8 @@ document.addEventListener('click', async event => {
 });
 
 document.addEventListener('keydown', event => {
+  const reactionTrigger = event.target.closest?.('[data-reveal-message-reactions]');
+  if (reactionTrigger && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); toggleMessageReactionBar(reactionTrigger); return; }
   if (event.key === 'Enter' && event.target.id === 'postMemberTagInput') { event.preventDefault(); addPostMemberTag(); return; }
   if (event.key === 'Enter' && event.target.id === 'postCustomTagInput') { event.preventDefault(); addPostCustomTag(); return; }
   if (event.key === 'Escape' && !$('#guideViewer').classList.contains('hidden')) closeGuide();
