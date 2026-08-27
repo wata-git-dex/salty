@@ -9,6 +9,7 @@ const read = file => readFileSync(resolve(root, file), 'utf8');
 const html = read('index.html');
 const app = read('app.js');
 const worker = read('sw.js');
+const xcodeProject = read('ios/App/App.xcodeproj/project.pbxproj');
 const sessionChatMigration = read('supabase/session-chat-v1-migration.sql');
 const apiMiddleware = read('functions/api/_middleware.js');
 
@@ -51,6 +52,11 @@ test('release labels, cache busting, and Stoke limits stay aligned', () => {
   const escapedVersion = version.replace('.', '\\.');
   assert.match(html, new RegExp(`boot-credit[^>]*>[^<]*v${escapedVersion}`));
   assert.match(html, new RegExp(`NEW IN V${escapedVersion}`));
+  const nativeVersions = [...xcodeProject.matchAll(/MARKETING_VERSION = ([^;]+);/g)].map(match => match[1]);
+  assert.ok(nativeVersions.length >= 2);
+  assert.deepEqual([...new Set(nativeVersions)], [version]);
+  const nativeBuilds = [...xcodeProject.matchAll(/CURRENT_PROJECT_VERSION = (\d+);/g)].map(match => Number(match[1]));
+  assert.ok(nativeBuilds.length >= 2 && nativeBuilds.every(build => build > 1));
   const assetVersion = html.match(/app\.js\?v=([^"']+)/)?.[1];
   assert.ok(assetVersion);
   assert.match(worker, new RegExp(`sodium-shell-v${assetVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
