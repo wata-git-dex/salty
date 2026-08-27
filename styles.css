@@ -443,3 +443,32 @@ html[data-theme="foam"] .session-chat-thread,html[data-theme="foam"] .session-ch
 
 /* v1.90: positive-only Stoke reactions. */
 .post-foot button svg{width:18px;height:18px}.post-foot button b{min-width:1ch;font-size:11px}.post-foot button.liked{color:var(--hail)}.post-foot button.liked svg{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--hail) 55%,transparent))}
+
+/* v1.119: final mobile density and action-hierarchy pass. */
+.section-label{padding:16px 16px 6px}
+.session-card,.post-card{margin:7px 12px}
+.session-card{padding:13px 14px}
+.session-card-heading{gap:8px}
+.session-card-heading>strong{padding-top:3px;font-size:21px}
+.session-card-tools,.event-card-tools{gap:5px}
+.session-card-tools .session-edit-icon,.session-card-tools .session-share-icon,.session-card-tools .session-state-icon,.session-card-tools .session-clips-icon,.event-card-tools .event-edit,.event-card-tools .event-share{width:36px;height:36px;border-radius:11px}
+.schedule-pills{margin-top:8px}
+.session-starter{margin-bottom:9px}
+.session-note{margin-bottom:9px;line-height:1.4}
+.session-crew{gap:6px;margin-bottom:10px}
+.session-crew-row{min-height:54px;gap:6px;padding:8px}
+.session-chat-action{min-height:42px;padding:9px 11px}
+.card-actions{gap:7px}.small-action{min-height:42px;padding:9px 10px}
+.event-card{margin:8px 12px;padding:13px;border-radius:18px}
+.empty,.phase-card{margin:20px 14px;padding:25px 18px;border-radius:18px}
+.empty h2,.phase-card h2{margin-top:8px}.empty p,.phase-card p{line-height:1.45}
+.past-items{margin:14px 12px 17px}.past-items>summary{padding:12px 13px}
+.hint{padding:8px 28px 15px}
+.fab{right:16px;bottom:calc(90px + env(safe-area-inset-bottom));width:54px;height:54px}
+.active-session-dock{left:16px;right:82px;bottom:calc(92px + env(safe-area-inset-bottom));min-height:48px;gap:6px;padding:5px 6px;border-radius:16px}
+.active-session-open{gap:7px}.active-session-open b{font-size:12px}.active-session-open small{font-size:9px}.active-session-finish{min-height:34px;padding:0 10px}
+.app-shell:has(.active-session-dock:not(.hidden)) .app-view.active{padding-bottom:calc(142px + env(safe-area-inset-bottom))}
+#appPreviewBanner:not(.hidden)+.install-nudge{display:none}
+@media(max-width:390px){.section-label{padding-left:14px;padding-right:14px}.session-card-heading>strong{font-size:20px}.session-card-tools .session-edit-icon,.session-card-tools .session-share-icon,.session-card-tools .session-state-icon,.session-card-tools .session-clips-icon,.event-card-tools .event-edit,.event-card-tools .event-share{width:35px;height:35px}.session-crew-row{min-height:52px}.empty,.phase-card{margin-left:12px;margin-right:12px}}
+@media(min-width:700px){.active-session-dock{left:calc(50% - var(--content)/2 + 16px);right:calc(50% - var(--content)/2 + 82px)}}
+@media(min-width:700px) and (orientation:landscape),(min-width:1024px){.active-session-dock{left:calc(50% - 196px);right:calc(50% - 196px);bottom:40px}.app-shell:has(.active-session-dock:not(.hidden)) .app-view.active{padding-bottom:82px}}

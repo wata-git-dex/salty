@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.118';
+const APP_VERSION = '1.119';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -1476,7 +1476,11 @@ function renderActiveSessionDock() {
   const dock = $('#activeSessionDock');
   if (!dock) return;
   const session = activeSessionForCurrentMember();
-  const show = Boolean(session && state.view !== 'welcome');
+  // The Sessions screen already shows the complete live card, while chat
+  // surfaces need an unobstructed composer. Keep the compact return shortcut
+  // only on destinations where it adds context instead of duplicating UI.
+  const dockExcludedViews = new Set(['welcome', 'surfing', 'chat', 'dm', 'dms', 'session-chat']);
+  const show = Boolean(session && !dockExcludedViews.has(state.view));
   dock.classList.toggle('hidden', !show);
   if (!show) { dock.innerHTML = ''; return; }
   const mine = session.author === state.profile.id;
