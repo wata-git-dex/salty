@@ -27,6 +27,7 @@ const CONFIG = Object.freeze({
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
 const APP_VERSION = '1.108';
+const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
 const CONSENT_VERSION = '1.0';
@@ -39,26 +40,52 @@ const GET_CLIPS_PATH = './docs/SODIUM_Get_Your_Clips_One_Pager_V2.png';
 const CLIP_COUNT_NOTE = 'Clip totals may include waves, B-roll, wipeouts, and other footage from the session.';
 const GUIDE_PAGE_COUNT = 4;
 const PENDING_AUTH_KEY = 'salty:pending-auth';
+const NATIVE_AUTH_CONTEXT_KEY = 'sodium:native-auth-context';
 const INSTALL_DISMISSED_KEY = 'salty:install-dismissed';
 const WHATS_NEW_SEEN_KEY = 'salty:whats-new-seen';
 const POST_DRAFT_DB_NAME = 'sodium-post-drafts';
 const POST_DRAFT_STORE = 'drafts';
 const POST_DRAFT_TTL = 30 * 24 * 60 * 60 * 1000;
 const STREAM_UPLOAD_SESSION_KEY = 'sodium:stream-upload-sessions';
-const NATIVE_APP = Boolean(globalThis.Capacitor?.isNativePlatform?.());
+// Capacitor's bridge can finish injecting a fraction after the document begins
+// evaluating on a cold iPhone launch. The bundled app's private URL scheme is
+// therefore the stable native signal; relying only on the bridge caused OAuth
+// callbacks to arrive at SceneDelegate while JavaScript had no listener.
+const NATIVE_APP = location.protocol === 'capacitor:' || Boolean(globalThis.Capacitor?.isNativePlatform?.());
+document.documentElement.classList.toggle('native-app', NATIVE_APP);
 const API_ORIGIN = NATIVE_APP ? 'https://community.saltyviewfinder.com' : '';
-const NATIVE_MEDIA = NATIVE_APP && globalThis.Capacitor?.registerPlugin
-  ? globalThis.Capacitor.registerPlugin('SodiumMedia')
-  : null;
-const NATIVE_APP_LINKS = NATIVE_APP && globalThis.Capacitor?.registerPlugin
-  ? globalThis.Capacitor.registerPlugin('App')
-  : null;
-const NATIVE_BROWSER = NATIVE_APP && globalThis.Capacitor?.registerPlugin
-  ? globalThis.Capacitor.registerPlugin('Browser')
-  : null;
-const NATIVE_AUTH = NATIVE_APP && globalThis.Capacitor?.registerPlugin
-  ? globalThis.Capacitor.registerPlugin('SodiumAuth')
-  : null;
+let NATIVE_MEDIA = null;
+let NATIVE_APP_LINKS = null;
+let NATIVE_BROWSER = null;
+let NATIVE_AUTH = null;
+
+async function hydrateNativePlugins() {
+  if (!NATIVE_APP) return false;
+  // On a cold iPhone launch the document can begin evaluating just before the
+  // Capacitor bridge is injected. Registering only at module evaluation time
+  // left the Google button with no native auth handler and it stayed on
+  // “Opening Google…”. Resolve plugins immediately before they are used.
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const plugins = globalThis.Capacitor?.Plugins;
+    if (plugins) {
+      NATIVE_MEDIA ||= plugins.SodiumMedia || null;
+      NATIVE_APP_LINKS ||= plugins.App || null;
+      NATIVE_BROWSER ||= plugins.Browser || null;
+      NATIVE_AUTH ||= plugins.SodiumAuth || null;
+      if (NATIVE_APP_LINKS && NATIVE_AUTH) return true;
+    }
+    const registerPlugin = globalThis.Capacitor?.registerPlugin;
+    if (typeof registerPlugin === 'function') {
+      NATIVE_MEDIA ||= registerPlugin('SodiumMedia');
+      NATIVE_APP_LINKS ||= registerPlugin('App');
+      NATIVE_BROWSER ||= registerPlugin('Browser');
+      NATIVE_AUTH ||= registerPlugin('SodiumAuth');
+      if (NATIVE_APP_LINKS && NATIVE_AUTH) return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  return false;
+}
 // Direct Stream upload URLs are intentionally short-lived. Keeping one longer
 // than the active editing window can make a restored draft repeatedly target a
 // dead endpoint, so old checkpoints are replaced rather than retried forever.
@@ -84,7 +111,15 @@ const CUSTOM_REACTION_MANIFEST = './assets/emojis/emoji-manifest.csv';
 const CUSTOM_REACTION_CATEGORIES = Object.freeze(['Sodium Core', 'Surf Lore', 'Chat Essentials']);
 
 const db = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: !NATIVE_APP,
+    // Native OAuth should return a short-lived authorization code, not expose
+    // access and refresh tokens in a URL. The verifier remains in this app's
+    // persistent WebView storage so a cold-launch callback can finish safely.
+    flowType: NATIVE_APP ? 'pkce' : 'implicit',
+  },
 });
 
 const state = {
@@ -109,6 +144,7 @@ const state = {
   reactingMessageKind: '', reactingMessageId: '',
   quickMessageReactions: [...DEFAULT_MESSAGE_REACTIONS],
   customMessageReactions: [], customReactionCategory: CUSTOM_REACTION_CATEGORIES[0], emojiPickerMode: 'reaction', activePostUpload: null,
+  nativeRefreshPending: false,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -499,15 +535,7 @@ async function sendMagicLink(event) {
     }
   }
 
-  const redirect = NATIVE_APP ? new URL('sodium://auth') : new URL('./', location.href);
-  redirect.searchParams.set('auth', 'callback');
-  if (isNew) redirect.searchParams.set('invite', state.pendingInvite);
-  if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
-  if (state.pendingSessionRegion) redirect.searchParams.set('region', state.pendingSessionRegion);
-  if (state.pendingEventId) redirect.searchParams.set('event', state.pendingEventId);
-  if (state.pendingDeliveryId) redirect.searchParams.set('delivery', state.pendingDeliveryId);
-  if (state.pendingEventRegion) redirect.searchParams.set('region', state.pendingEventRegion);
-  if (state.pendingOpen) redirect.searchParams.set('open', state.pendingOpen);
+  const redirect = authRedirectUrl('callback', isNew);
   const { error } = await db.auth.signInWithOtp({
     email,
     options: {
@@ -545,6 +573,13 @@ async function signInWithGoogle() {
   button.disabled = true;
   button.textContent = 'Opening Google…';
 
+  if (NATIVE_APP && !await hydrateNativePlugins()) {
+    button.disabled = false;
+    button.innerHTML = originalLabel;
+    toast('Sodium could not start the secure sign-in. Close and reopen the app, then try once.', 6000);
+    return;
+  }
+
   if (isNew) {
     const { data: valid, error: inviteError } = await db.rpc('invite_is_valid', { invite_code: state.pendingInvite });
     if (inviteError || !valid) {
@@ -555,19 +590,7 @@ async function signInWithGoogle() {
     }
   }
 
-  const redirect = NATIVE_APP ? new URL('sodium://auth') : new URL('./', location.href);
-  if (!NATIVE_APP) {
-    redirect.search = '';
-    redirect.hash = '';
-  }
-  redirect.searchParams.set('auth', 'google');
-  if (isNew) redirect.searchParams.set('invite', state.pendingInvite);
-  if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
-  if (state.pendingSessionRegion) redirect.searchParams.set('region', state.pendingSessionRegion);
-  if (state.pendingEventId) redirect.searchParams.set('event', state.pendingEventId);
-  if (state.pendingDeliveryId) redirect.searchParams.set('delivery', state.pendingDeliveryId);
-  if (state.pendingEventRegion) redirect.searchParams.set('region', state.pendingEventRegion);
-  if (state.pendingOpen) redirect.searchParams.set('open', state.pendingOpen);
+  const redirect = authRedirectUrl('google', isNew);
   const { data, error } = await db.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: redirect.href, skipBrowserRedirect:NATIVE_APP },
@@ -605,17 +628,79 @@ function resetGoogleAuthButton() {
   button.innerHTML = '<span class="oauth-g" aria-hidden="true">G</span><span>Continue with Google</span>';
 }
 
+function authRedirectUrl(authKind, isNew) {
+  if (NATIVE_APP) {
+    localStorage.setItem(NATIVE_AUTH_CONTEXT_KEY, JSON.stringify({
+      authKind,
+      invite:isNew ? state.pendingInvite : '',
+      session:state.pendingSessionId,
+      sessionRegion:state.pendingSessionRegion,
+      event:state.pendingEventId,
+      eventRegion:state.pendingEventRegion,
+      delivery:state.pendingDeliveryId,
+      open:state.pendingOpen,
+      savedAt:Date.now(),
+    }));
+    // Keep this byte-for-byte identical to the production Supabase allowlist.
+    // Context stays in app storage rather than making the callback URL vary.
+    return new URL('sodium://auth');
+  }
+  const redirect = new URL('./', location.href);
+  redirect.search = '';
+  redirect.hash = '';
+  redirect.searchParams.set('auth', authKind);
+  if (isNew) redirect.searchParams.set('invite', state.pendingInvite);
+  if (state.pendingSessionId) redirect.searchParams.set('session', state.pendingSessionId);
+  if (state.pendingSessionRegion) redirect.searchParams.set('region', state.pendingSessionRegion);
+  if (state.pendingEventId) redirect.searchParams.set('event', state.pendingEventId);
+  if (state.pendingDeliveryId) redirect.searchParams.set('delivery', state.pendingDeliveryId);
+  if (state.pendingEventRegion) redirect.searchParams.set('region', state.pendingEventRegion);
+  if (state.pendingOpen) redirect.searchParams.set('open', state.pendingOpen);
+  return redirect;
+}
+
+function restoreNativeAuthContext() {
+  let context = null;
+  try { context = JSON.parse(localStorage.getItem(NATIVE_AUTH_CONTEXT_KEY) || 'null'); }
+  catch (_error) { /* Ignore damaged local context. */ }
+  if (!context || Date.now() - Number(context.savedAt || 0) > 30 * 60 * 1000) {
+    localStorage.removeItem(NATIVE_AUTH_CONTEXT_KEY);
+    return;
+  }
+  if (context.invite) {
+    state.pendingInvite = context.invite;
+    localStorage.setItem('salty:invite', context.invite);
+  }
+  state.pendingSessionId = context.session || state.pendingSessionId;
+  state.pendingSessionRegion = context.sessionRegion || state.pendingSessionRegion;
+  state.pendingEventId = context.event || state.pendingEventId;
+  state.pendingEventRegion = context.eventRegion || state.pendingEventRegion;
+  state.pendingDeliveryId = context.delivery || state.pendingDeliveryId;
+  state.pendingOpen = context.open || state.pendingOpen;
+}
+
 async function handleNativeAuthUrl(event) {
-  if (!NATIVE_APP || !event?.url) return;
+  if (!NATIVE_APP || !event?.url) return false;
   let url;
   try { url = new URL(event.url); }
-  catch (_error) { return; }
-  if (url.protocol !== 'sodium:' || url.hostname !== 'auth') return;
+  catch (_error) { return false; }
+  if (url.protocol !== 'sodium:' || url.hostname !== 'auth') return false;
+  if (state.nativeAuthProcessing) return true;
+  state.nativeAuthProcessing = true;
+  restoreNativeAuthContext();
 
   const params = url.searchParams;
   const fragment = new URLSearchParams(url.hash.replace(/^#/, ''));
-  const accessToken = fragment.get('access_token');
-  const refreshToken = fragment.get('refresh_token');
+  const callbackValue = key => params.get(key) || fragment.get(key) || '';
+  const accessToken = callbackValue('access_token');
+  const refreshToken = callbackValue('refresh_token');
+  const authorizationCode = callbackValue('code');
+  const callbackError = callbackValue('error_description') || callbackValue('error');
+  console.info('[SodiumAuth] Native callback received', {
+    hasCode:Boolean(authorizationCode),
+    hasTokenPair:Boolean(accessToken && refreshToken),
+    hasError:Boolean(callbackError),
+  });
   if (params.get('invite')) {
     state.pendingInvite = params.get('invite');
     localStorage.setItem('salty:invite', state.pendingInvite);
@@ -628,18 +713,44 @@ async function handleNativeAuthUrl(event) {
 
   try { await NATIVE_BROWSER?.close(); }
   catch (_error) { /* The browser may already be closed. */ }
-  if (!accessToken || !refreshToken) {
-    toast('Google did not return a complete Sodium sign-in. Try again.', 6000);
-    return;
+  if (callbackError) {
+    resetGoogleAuthButton();
+    toast(callbackError, 6000);
+    state.nativeAuthProcessing = false;
+    openAuth(state.pendingInvite ? 'new' : 'existing', true);
+    return true;
   }
-  const { data, error } = await db.auth.setSession({ access_token:accessToken, refresh_token:refreshToken });
+  let data;
+  let error;
+  if (authorizationCode) {
+    ({ data, error } = await db.auth.exchangeCodeForSession(authorizationCode));
+  } else if (accessToken && refreshToken) {
+    ({ data, error } = await db.auth.setSession({ access_token:accessToken, refresh_token:refreshToken }));
+  } else {
+    resetGoogleAuthButton();
+    toast('Sodium did not receive a complete sign-in. Close Google and try once more.', 6000);
+    state.nativeAuthProcessing = false;
+    openAuth(state.pendingInvite ? 'new' : 'existing', true);
+    return true;
+  }
   if (error || !data.session) {
-    toast(readableError(error || new Error('Google sign-in did not create a session.')), 6000);
-    return;
+    console.error('[SodiumAuth] Session exchange failed', error);
+    resetGoogleAuthButton();
+    openAuth(state.pendingInvite ? 'new' : 'existing', true);
+    const message = readableError(error || new Error('Google sign-in did not create a session.'));
+    $('#authMessage').textContent = `${message} Tap Continue with Google once to start a fresh sign-in.`;
+    $('#authMessage').classList.remove('hidden');
+    toast(message, 6000);
+    state.nativeAuthProcessing = false;
+    return true;
   }
   state.session = data.session;
+  console.info('[SodiumAuth] Session stored; entering community');
+  localStorage.removeItem(NATIVE_AUTH_CONTEXT_KEY);
   clearPendingAuth();
   await finishAuthentication();
+  state.nativeAuthProcessing = false;
+  return true;
 }
 
 async function verifyEmailCode() {
@@ -798,6 +909,10 @@ async function loadApp() {
   state.chatRegion = state.currentRegion;
   await Promise.all([loadAvatarUrls(), loadNonprofitLogoUrls(), loadCustomMessageReactions()]);
   renderChrome();
+  // The native shell is already authenticated at this point. Reveal the real
+  // app chrome while the screen data finishes loading instead of holding a
+  // returning member on the launch diagnostic for every network request.
+  if (NATIVE_APP) showOnly('app');
   await Promise.all([loadSessions(), loadPosts(), loadEvents(), loadPerks(), loadListings(), loadRoomMessages(), loadDmInbox(), loadClipDeliveries(), loadNotificationPreferences()]);
   await loadSessionChatInbox();
   await loadPostDrafts();
@@ -822,6 +937,11 @@ function cleanAuthUrl() {
 }
 
 function offerInstallAfterAuth() {
+  if (NATIVE_APP) {
+    $('#installSettingsRow').classList.add('hidden');
+    $('#installNudge').classList.add('hidden');
+    return;
+  }
   const installed = isStandalone();
   $('#installSettingsRow').classList.toggle('hidden', installed);
   $('#installNudge').classList.toggle('hidden', installed || Boolean(localStorage.getItem(INSTALL_DISMISSED_KEY)));
@@ -1030,6 +1150,10 @@ async function sendTestNotification() {
 }
 
 function showInstallInstructions() {
+  if (NATIVE_APP) {
+    toast('Sodium is already installed as an iPhone app.');
+    return;
+  }
   if (isStandalone()) {
     toast('Sodium is already installed on this phone.');
     return;
@@ -1224,7 +1348,7 @@ function avatarMarkup(profile, className = 'avatar') {
 }
 
 const navItems = [
-  ['surfing', 'i-surf', 'Sessions'], ['feed', 'i-wave', 'Stoke'], ['chat', 'i-chat', 'Chat'],
+  ['surfing', 'i-surf', 'Sessions'], ['feed', 'i-wave', 'Stoke'], ['chat', 'i-community', 'Community'],
   ['events', 'i-calendar', 'Events'], ['you', 'i-user', 'Profile'],
 ];
 
@@ -1262,6 +1386,15 @@ function renderChrome() {
   renderEventRegions();
   renderChatRegions();
   renderDmPeople();
+  requestAnimationFrame(syncNativeViewportMetrics);
+}
+
+function syncNativeViewportMetrics() {
+  if (!NATIVE_APP) return;
+  const viewportHeight = Math.max(1, Math.round(window.visualViewport?.height || window.innerHeight));
+  const topbarHeight = Math.max(0, Math.round($('#appShell:not(.hidden) .topbar')?.getBoundingClientRect().height || 0));
+  document.documentElement.style.setProperty('--native-viewport-height', `${viewportHeight}px`);
+  document.documentElement.style.setProperty('--native-topbar-height', `${topbarHeight}px`);
 }
 
 function updateCreateFab(view = state.view) {
@@ -4299,8 +4432,12 @@ async function pickNativeClips() {
     for (const item of selected) {
       const localUrl = globalThis.Capacitor.convertFileSrc(item.path);
       const response = await fetch(localUrl);
-      if (!response.ok) throw new Error('Sodium could not open one compressed clip.');
       const blob = await response.blob();
+      // Capacitor's iOS local media handler intentionally returns a generic
+      // URLResponse for video (status 0), not an HTTP 200 response. `ok` is
+      // therefore false even when the compressed file is fully readable.
+      // Validate the actual payload instead of rejecting a healthy native URL.
+      if (!blob.size) throw new Error('Sodium could not open one compressed clip.');
       files.push(new File([blob], item.name || 'sodium-clip.mp4', { type:item.type || 'video/mp4', lastModified:Date.now() }));
     }
     await validatePostSelection(files);
@@ -4746,11 +4883,17 @@ function selectedPostKind() {
 function setPostKind(kind = 'photo', options = {}) {
   const postKind = kind === 'clip' ? 'clip' : 'photo';
   const editing = Boolean(options.editing);
+  const clipPostingPaused = CLIP_POSTING_TEMPORARILY_PAUSED && postKind === 'clip' && !editing;
   $$('input[name="postKind"]').forEach(input => {
     input.checked = input.value === postKind;
     input.disabled = editing;
   });
   const mediaInput = $('#mediaFile');
+  $('#clipPostingNotice').classList.toggle('hidden', !clipPostingPaused);
+  $('#postMediaPicker').classList.toggle('posting-paused', clipPostingPaused);
+  mediaInput.disabled = clipPostingPaused;
+  $('#postSubmit').disabled = clipPostingPaused;
+  $('#postDraftSave').disabled = clipPostingPaused && !state.editingPostDraftId;
   $('#postSheet').dataset.postKind = postKind;
   $('#postRatioPreview').dataset.kind = postKind;
   mediaInput.accept = postKind === 'photo'
@@ -4770,8 +4913,10 @@ function setPostKind(kind = 'photo', options = {}) {
     $('#postSheetTitle').textContent = postKind === 'photo' ? 'Share photos' : 'Share clips';
     $('#postSheetDescription').textContent = postKind === 'photo'
       ? 'Share up to 10 photos with the whole Sodium community.'
+      : clipPostingPaused
+      ? 'Clip posting is paused while we finish the reliable native iPhone uploader.'
       : 'Share up to 5 clips with the whole Sodium community.';
-    $('#fileLabel').textContent = postKind === 'photo' ? 'Choose up to 10 photos' : 'Choose up to 5 clips';
+    $('#fileLabel').textContent = postKind === 'photo' ? 'Choose up to 10 photos' : clipPostingPaused ? 'Clip upload temporarily unavailable' : 'Choose up to 5 clips';
     $('#postMediaHelp').textContent = postKind === 'photo'
       ? 'Original shapes are preserved unless you choose a crop below.'
       : 'MP4, MOV, or WebM · 5 minutes and 1 GB max per clip.';
@@ -4823,7 +4968,10 @@ function resetPostComposer() {
   $('#postSheetDescription').textContent = 'Photo or clip—the whole community sees this, every area.';
   $('#postKindPicker').classList.remove('editing');
   $('#postMediaPicker').classList.remove('hidden');
-  $('#mediaFile').required = true;
+  // Native iOS selection stores compressed files in state.postDraftFiles rather
+  // than the browser file input. Keep native/browser validation in savePost()
+  // so restored drafts can submit without HTML silently blocking the event.
+  $('#mediaFile').required = false;
   $('#postRatioPreview').classList.add('hidden');
   $('#postRatioPreview').querySelector('img').removeAttribute('src');
   const previewVideo = $('#postRatioPreview video');
@@ -4885,6 +5033,10 @@ function openPostComposer(postId = null) {
 
 async function savePost(event) {
   event.preventDefault();
+  if (CLIP_POSTING_TEMPORARILY_PAUSED && selectedPostKind() === 'clip' && !state.editingPostId) {
+    toast('Clip posting is coming soon with the reliable native iPhone uploader. Photos work now, and your draft is safe.', 7000);
+    return;
+  }
   const submit = $('#postSubmit'); submit.disabled = true;
   const progress = $('#uploadProgress');
   const uploadStatus = $('#uploadStatus');
@@ -6165,18 +6317,79 @@ window.addEventListener('appinstalled', () => {
 
 applyIconTheme(localStorage.getItem('salty:theme') || localStorage.getItem('salty:icon-theme') || 'ink');
 
+if (NATIVE_APP) {
+  window.addEventListener('resize', syncNativeViewportMetrics, { passive:true });
+  window.addEventListener('orientationchange', () => setTimeout(syncNativeViewportMetrics, 120), { passive:true });
+  window.visualViewport?.addEventListener('resize', syncNativeViewportMetrics, { passive:true });
+  window.visualViewport?.addEventListener('scroll', syncNativeViewportMetrics, { passive:true });
+  requestAnimationFrame(syncNativeViewportMetrics);
+}
+
+async function refreshVisibleNativeView() {
+  // Pull-to-refresh should behave like a native screen refresh, not a cold app
+  // boot. Refresh only the data the member can currently see so the control
+  // can finish promptly; realtime subscriptions keep the other tabs current.
+  switch (state.view) {
+    case 'surfing': return loadSessions();
+    case 'calendar': return Promise.all([loadSessions(), loadEvents()]);
+    case 'feed': return Promise.all([loadPosts(), loadPostDrafts()]);
+    case 'chat': return loadRoomMessages();
+    case 'events': return loadEvents();
+    case 'dms':
+      return Promise.all([loadDmInbox(), loadSessionChatInbox(), loadClipDeliveries()]);
+    case 'clips': return loadClipDeliveries();
+    case 'members':
+      renderMembers();
+      return;
+    case 'profile': return renderProfile();
+    case 'marketplace': return loadListings();
+    case 'perks': return loadPerks();
+    case 'beta-feedback': return loadIssueReports({ silent:true });
+    default: return loadApp();
+  }
+}
+
+// Native pull-to-refresh calls this instead of reloading the WebView. A full
+// reload reran OAuth/session bootstrap and brought the launch screen back.
+globalThis.sodiumNativeRefresh = async () => {
+  if (!NATIVE_APP || !state.session || !state.profile || state.nativeRefreshPending) return false;
+  state.nativeRefreshPending = true;
+  let ok = false;
+  try {
+    await refreshVisibleNativeView();
+    ok = true;
+    return ok;
+  } catch (error) {
+    console.error('Native refresh failed:', error);
+    toast(`Could not refresh: ${readableError(error)}`, 5000);
+    return ok;
+  } finally {
+    state.nativeRefreshPending = false;
+    globalThis.webkit?.messageHandlers?.sodiumRefresh?.postMessage({ ok });
+  }
+};
+
 async function bootstrap() {
-  if (NATIVE_APP_LINKS?.addListener) await NATIVE_APP_LINKS.addListener('appUrlOpen', handleNativeAuthUrl);
+  await hydrateNativePlugins();
+  if (NATIVE_APP_LINKS?.addListener) {
+    await NATIVE_APP_LINKS.addListener('appUrlOpen', event => {
+      handleNativeAuthUrl(event).catch(error => {
+        state.nativeAuthProcessing = false;
+        openAuth(state.pendingInvite ? 'new' : 'existing', true);
+        toast(readableError(error), 6000);
+      });
+    });
+  }
   if (NATIVE_APP_LINKS?.addListener) {
     await NATIVE_APP_LINKS.addListener('appStateChange', ({ isActive }) => {
       if (isActive) setTimeout(resetGoogleAuthButton, 750);
     });
   }
-  await init();
   if (NATIVE_APP_LINKS?.getLaunchUrl) {
     const launch = await NATIVE_APP_LINKS.getLaunchUrl();
-    if (launch?.url) await handleNativeAuthUrl(launch);
+    if (launch?.url && await handleNativeAuthUrl(launch)) return;
   }
+  await init();
 }
 
 bootstrap().catch(error => { showWelcome(); toast(readableError(error), 6000); });

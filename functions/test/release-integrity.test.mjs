@@ -91,13 +91,33 @@ test('large Stream uploads recover stale sessions and tolerate mobile interrupti
 });
 
 test('native Sodium routes protected APIs to production and compresses before Stream upload', () => {
-  assert.match(app, /const NATIVE_APP = Boolean\(globalThis\.Capacitor\?\.isNativePlatform/);
+  assert.match(app, /const NATIVE_APP = location\.protocol === 'capacitor:' \|\| Boolean\(globalThis\.Capacitor\?\.isNativePlatform/);
   assert.match(app, /const API_ORIGIN = NATIVE_APP \? 'https:\/\/community\.saltyviewfinder\.com' : ''/);
+  assert.match(app, /flowType: NATIVE_APP \? 'pkce' : 'implicit'/);
+  assert.match(app, /return new URL\('sodium:\/\/auth'\)/);
+  assert.match(app, /exchangeCodeForSession\(authorizationCode\)/);
   assert.match(app, /registerPlugin\('SodiumMedia'\)/);
   assert.match(app, /pickAndCompressVideos/);
   assert.match(app, /Compressed on this iPhone\. Ready to upload\./);
   assert.match(app, /new URL\('sodium:\/\/auth'\)/);
-  assert.match(app, /addListener\('appUrlOpen', handleNativeAuthUrl\)/);
+  assert.match(app, /addListener\('appUrlOpen', event =>/);
   assert.match(apiMiddleware, /capacitor:\/\/localhost/);
   assert.match(apiMiddleware, /request\.method === 'OPTIONS'/);
+});
+
+test('native refresh uses one system trigger and respects full-screen overlays', () => {
+  const nativeController = read('ios/App/App/AppDelegate.swift');
+  const capacitorConfig = read('capacitor.config.json');
+  assert.match(nativeController, /sodiumRefreshControl\.addTarget\(self, action: #selector\(refreshSodium\), for: \.valueChanged\)/);
+  assert.doesNotMatch(nativeController, /handleRefreshPan|sodiumRefreshArmed|setContentOffset/);
+  assert.match(nativeController, /#guideViewer:not\(\.hidden\)/);
+  assert.match(capacitorConfig, /"contentInset": "never"/);
+});
+
+test('clip posting is clearly paused without disabling photo posting or existing media', () => {
+  assert.match(html, /id="clipPostingNotice"/);
+  assert.match(app, /const CLIP_POSTING_TEMPORARILY_PAUSED = true/);
+  assert.match(app, /selectedPostKind\(\) === 'clip'/);
+  assert.match(app, /for \(let index = 0; index < files\.length; index \+= 1\)[\s\S]*await uploadMedia\(selected, path\)/);
+  assert.doesNotMatch(html.match(/<input id="mediaFile"[^>]+>/)?.[0] || '', /disabled/);
 });

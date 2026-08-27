@@ -82,7 +82,11 @@ const html = (await readFile(resolve(root, 'index.html'), 'utf8'))
   .replace("connect-src 'self'", "connect-src 'self' https://community.saltyviewfinder.com")
   .replace('<link id="appManifest" rel="manifest" href="./manifest.webmanifest">', '')
   .replace(/<meta name="apple-mobile-web-app-[^>]+>\n?/g, '')
-  .replace('</body>', '  <script src="./native/startup-diagnostics.js"></script>\n</body>');
+  // Install the native error listener before Supabase, Capacitor-dependent app
+  // code, or even the small theme bootstrap can execute. Keeping diagnostics
+  // at the end of <body> missed exceptions thrown by earlier scripts and only
+  // reported a misleading timeout.
+  .replace('<script>try{document.documentElement.dataset.theme=', '<script src="./native/startup-diagnostics.js"></script>\n  <script>try{document.documentElement.dataset.theme=');
 await writeFile(resolve(output, 'index.html'), html);
 
 console.log(`Prepared Sodium native web bundle in ${output}`);

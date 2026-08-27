@@ -4,7 +4,7 @@
   "webDir": "native-web",
   "loggingBehavior": "debug",
   "ios": {
-    "contentInset": "always",
+    "contentInset": "never",
     "preferredContentMode": "mobile",
     "scheme": "Sodium",
     "backgroundColor": "#081722"

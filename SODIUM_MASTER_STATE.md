@@ -19,6 +19,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 - The first native media bridge uses the iOS Photos picker and AVFoundation to create network-optimized 1080p MP4 copies before the existing resumable Cloudflare Stream upload. Originals remain untouched. The PWA keeps its original-file resumable fallback.
 - Native Google authentication returns through `sodium://auth`, which was added to the production Supabase redirect allowlist on August 26, 2026. The iOS build uses `ASWebAuthenticationSession` to capture that callback inside Sodium rather than leaving members in Google or a browser tab. Real-device completion and persistence testing remains required before TestFlight release.
 - Push, Browser, App Links, Share, Haptics, Splash Screen, and Status Bar Capacitor packages are installed. Native APNs registration and server delivery still require Apple signing/capability configuration after Xcode is ready.
+- Native pull-to-refresh now uses one standard `UIRefreshControl` trigger. The earlier custom pan handler and forced content offsets were removed because repeated pulls could stack a large blank area above the app. Safe-area spacing is owned by the web UI rather than duplicated by Capacitor.
+- The native Community chat is a single keyboard-aware surface: its message list and composer resize together with the visible iPhone viewport, and the bottom navigation gets out of the way while typing. The bottom destination is explicitly **Community** with a people icon; the top-right Inbox remains the private messages and clip-delivery destination.
 - Do not represent the native build as beta-ready until the Swift media bridge compiles in Xcode and real-device auth, compression, upload, background/interruption, notifications, and deep links pass testing.
 
 ## Core product
@@ -26,6 +28,14 @@ This file consolidates decisions and implementation state from the Sodium Commun
 Sodium is a private, invite-only surf community app for organizing sessions, finding friends or filmers, delivering clips, sharing Stoke, chatting, planning events, and supporting things made or done by community members.
 
 Preserve the existing approved visual system, swirl icon, themes, PWA behavior, Supabase-backed data, Cloudflare deployment, and mobile-first interaction patterns.
+
+### Interface color semantics
+
+- Orange is the primary action color: create, send, share, give Stoke, or otherwise do something.
+- Blue provides navigation, context, selection, and secondary controls.
+- Green means active, live, ready, or successfully completed.
+- Red is reserved for cancellation, destructive actions, errors, and ended/past-state warnings.
+- The streak, personal Inbox, and menu remain grouped in the header for now. Do not reshuffle that hierarchy again until the current native build has been reviewed on a physical iPhone.
 
 ## Current navigation
 
@@ -94,6 +104,7 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 
 - Photo posts support up to 10 images in their original orientation or an optional fixed crop.
 - Clip posts support up to five Cloudflare Stream videos, five minutes and 1 GB maximum per clip.
+- New clip posting is temporarily paused and clearly labeled while the native background uploader is finished and physically tested. Photo posting remains available, and existing clips, clip deliveries, posts, and drafts are preserved.
 - Drafts remain on the device for 30 days.
 - Linked member tags and custom visual tags are supported.
 - Photos and clips can be edited or deleted by their author.

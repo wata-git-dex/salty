@@ -4,16 +4,24 @@ import PhotosUI
 import UniformTypeIdentifiers
 import AVFoundation
 import AuthenticationServices
+import WebKit
 
 @objc(SodiumAuthPlugin)
 public class SodiumAuthPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPresentationContextProviding {
     public let identifier = "SodiumAuthPlugin"
     public let jsName = "SodiumAuth"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "logDiagnostic", returnType: CAPPluginReturnPromise)
     ]
 
     private var authenticationSession: ASWebAuthenticationSession?
+
+    @objc func logDiagnostic(_ call: CAPPluginCall) {
+        let message = call.getString("message") ?? "Unknown startup diagnostic"
+        print("[Sodium native startup] \(message)")
+        call.resolve()
+    }
 
     @objc func authenticate(_ call: CAPPluginCall) {
         guard let rawURL = call.getString("url"), let url = URL(string: rawURL) else {
@@ -24,12 +32,16 @@ public class SodiumAuthPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationP
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.authenticationSession?.cancel()
+            print("[SodiumAuth] Starting native authentication session")
             let session = ASWebAuthenticationSession(url: url, callbackURLScheme: callbackScheme) { [weak self] callbackURL, error in
                 self?.authenticationSession = nil
                 if let callbackURL {
+                    let keys = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?.queryItems?.map(\.name) ?? []
+                    print("[SodiumAuth] Received \(callbackURL.scheme ?? "unknown") callback with keys: \(keys)")
                     call.resolve(["url": callbackURL.absoluteString])
                     return
                 }
+                print("[SodiumAuth] Authentication ended without a callback: \(error?.localizedDescription ?? "unknown error")")
                 if let authError = error as? ASWebAuthenticationSessionError, authError.code == .canceledLogin {
                     call.reject("Google sign-in was cancelled.")
                 } else {
@@ -47,7 +59,11 @@ public class SodiumAuthPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationP
     }
 
     public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        bridge?.viewController?.view.window ?? UIWindow()
+        if let window = bridge?.viewController?.view.window { return window }
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            if let keyWindow = scene.windows.first(where: { $0.isKeyWindow }) { return keyWindow }
+        }
+        return ASPresentationAnchor()
     }
 }
 
@@ -69,19 +85,23 @@ public class SodiumMediaPlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewControl
         }
         pendingCall = call
         maximumDuration = min(300, max(1, call.getDouble("maxDurationSeconds") ?? 300))
+        let selectionLimit = min(5, max(1, call.getInt("maxCount") ?? 5))
 
-        var configuration = PHPickerConfiguration(photoLibrary: .shared())
-        configuration.filter = .videos
-        configuration.selectionLimit = min(5, max(1, call.getInt("maxCount") ?? 5))
-        configuration.selection = .ordered
-
-        let picker = PHPickerViewController(configuration: configuration)
-        picker.delegate = self
+        // Capacitor invokes plugin methods on its bridge queue. PhotosUI has
+        // main-thread-only initialization assertions and will SIGABRT if the
+        // picker itself (not merely presentation) is created on that queue.
         DispatchQueue.main.async { [weak self] in
-            guard let controller = self?.bridge?.viewController else {
-                self?.finishWithError("Sodium could not open the video picker.")
+            guard let self else { return }
+            guard let controller = self.bridge?.viewController else {
+                self.finishWithError("Sodium could not open the video picker.")
                 return
             }
+            var configuration = PHPickerConfiguration(photoLibrary: .shared())
+            configuration.filter = .videos
+            configuration.selectionLimit = selectionLimit
+            configuration.selection = .ordered
+            let picker = PHPickerViewController(configuration: configuration)
+            picker.delegate = self
             controller.present(picker, animated: true)
         }
     }
@@ -208,10 +228,112 @@ public class SodiumMediaPlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewControl
     }
 }
 
-public class SodiumBridgeViewController: CAPBridgeViewController {
+public class SodiumBridgeViewController: CAPBridgeViewController, WKScriptMessageHandler {
+    private let sodiumRefreshControl = UIRefreshControl()
+    private let sodiumRefreshIcon = UIImageView()
+    private var sodiumRefreshInFlight = false
+    private var sodiumRefreshTimeout: DispatchWorkItem?
+
     public override func capacitorDidLoad() {
+        bridge?.webView?.configuration.userContentController.add(self, name: "sodiumDiagnostic")
+        bridge?.webView?.configuration.userContentController.add(self, name: "sodiumRefresh")
         bridge?.registerPluginInstance(SodiumAuthPlugin())
         bridge?.registerPluginInstance(SodiumMediaPlugin())
+        configurePullToRefresh()
+    }
+
+    private func configurePullToRefresh() {
+        guard let webView = bridge?.webView else { return }
+        let scrollView = webView.scrollView
+        let sodiumBackground = UIColor(red: 10.0 / 255.0, green: 20.0 / 255.0, blue: 28.0 / 255.0, alpha: 1)
+        webView.isOpaque = false
+        webView.backgroundColor = sodiumBackground
+        scrollView.backgroundColor = sodiumBackground
+        // Capacitor disables bouncing by default. A refresh control cannot be
+        // revealed on short pages unless vertical bouncing is explicitly on.
+        scrollView.bounces = true
+        scrollView.alwaysBounceVertical = true
+        scrollView.alwaysBounceHorizontal = false
+        scrollView.isDirectionalLockEnabled = true
+
+        sodiumRefreshControl.tintColor = UIColor(red: 246.0 / 255.0, green: 162.0 / 255.0, blue: 60.0 / 255.0, alpha: 1)
+        sodiumRefreshControl.backgroundColor = .clear
+        sodiumRefreshControl.addTarget(self, action: #selector(refreshSodium), for: .valueChanged)
+
+        let iconURL = Bundle.main.bundleURL
+            .appendingPathComponent("public/assets/emojis/png/core/salt-shaker-stoked.png")
+        sodiumRefreshIcon.image = UIImage(contentsOfFile: iconURL.path)
+        sodiumRefreshIcon.contentMode = .scaleAspectFit
+        sodiumRefreshIcon.translatesAutoresizingMaskIntoConstraints = false
+        sodiumRefreshControl.addSubview(sodiumRefreshIcon)
+        NSLayoutConstraint.activate([
+            sodiumRefreshIcon.centerXAnchor.constraint(equalTo: sodiumRefreshControl.centerXAnchor),
+            sodiumRefreshIcon.centerYAnchor.constraint(equalTo: sodiumRefreshControl.centerYAnchor),
+            sodiumRefreshIcon.widthAnchor.constraint(equalToConstant: 32),
+            sodiumRefreshIcon.heightAnchor.constraint(equalToConstant: 32)
+        ])
+        scrollView.refreshControl = sodiumRefreshControl
+        scrollView.sendSubviewToBack(sodiumRefreshControl)
+    }
+
+    @objc private func refreshSodium() {
+        guard !sodiumRefreshInFlight else { return }
+        print("[Sodium refresh] Pull-to-refresh triggered")
+        guard let webView = bridge?.webView else {
+            sodiumRefreshControl.endRefreshing()
+            return
+        }
+        let canRefresh = """
+        (() => {
+          const app = document.getElementById('app');
+          const blocked = document.querySelector('.sheet.open, #drawer.open, #guideViewer:not(.hidden)');
+          return Boolean(app && !app.classList.contains('hidden') && !blocked);
+        })()
+        """
+        webView.evaluateJavaScript(canRefresh) { [weak self, weak webView] result, _ in
+            guard let self else { return }
+            guard result as? Bool == true else {
+                self.finishSodiumRefresh()
+                return
+            }
+            self.sodiumRefreshInFlight = true
+            let rotation = CABasicAnimation(keyPath: "transform.rotation.z")
+            rotation.fromValue = 0
+            rotation.toValue = Double.pi * 2
+            rotation.duration = 0.7
+            rotation.repeatCount = .infinity
+            self.sodiumRefreshIcon.layer.add(rotation, forKey: "sodium-refresh-spin")
+            webView?.evaluateJavaScript("window.sodiumNativeRefresh?.(); true") { _, error in
+                if let error {
+                    print("[Sodium refresh] JavaScript refresh failed: \(error.localizedDescription)")
+                    self.finishSodiumRefresh()
+                }
+            }
+            let timeout = DispatchWorkItem { [weak self] in
+                print("[Sodium refresh] Timed out waiting for the web app")
+                self?.finishSodiumRefresh()
+            }
+            self.sodiumRefreshTimeout?.cancel()
+            self.sodiumRefreshTimeout = timeout
+            DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: timeout)
+        }
+    }
+
+    private func finishSodiumRefresh() {
+        sodiumRefreshTimeout?.cancel()
+        sodiumRefreshTimeout = nil
+        sodiumRefreshIcon.layer.removeAnimation(forKey: "sodium-refresh-spin")
+        sodiumRefreshControl.endRefreshing()
+        sodiumRefreshInFlight = false
+    }
+
+    public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "sodiumRefresh" {
+            print("[Sodium refresh] Completed: \(String(describing: message.body))")
+            finishSodiumRefresh()
+        } else if message.name == "sodiumDiagnostic" {
+            print("[Sodium native startup] \(String(describing: message.body))")
+        }
     }
 }
 

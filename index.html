@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=108-upload-recovery">
+  <link rel="stylesheet" href="./styles.css?v=109-native-refresh-chat">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -31,6 +31,7 @@
       <linearGradient id="curl-gradient" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#54ABEC"/><stop offset="1" stop-color="#F6A23C"/></linearGradient>
       <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
       <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 4h14a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-8l-6 3v-3a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z"/></symbol>
+      <symbol id="i-community" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M14 14.5c.8-.5 1.8-.8 3-.8 2.5 0 4.5 1.8 4.5 4.3"/></symbol>
       <symbol id="i-surf" viewBox="0 0 24 24"><path d="M12 2C8.6 4.8 6.5 8.2 6.5 12S8.6 19.2 12 22c3.4-2.8 5.5-6.2 5.5-10S15.4 4.8 12 2Z"/><path d="M12 3v18M9.5 17.5 12 15l2.5 2.5"/></symbol>
       <symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 16c2.4-1.2 4.7-1.2 7 0s4.6 1.2 7 0 4.6-1.2 6 0"/><path d="M3 12c2.5-4.8 6.1-7 10.6-6.4 3.9.5 6.5 3.1 7.4 6.4-1.9-1.5-4-2.1-6.2-1.7-2.2.4-3.9 1.7-5.1 3.8"/></symbol>
       <symbol id="i-flame" viewBox="0 0 24 24"><path d="M13.2 2.5c.6 3.2-1.2 4.7-2.5 6.2-1.2 1.3-2.1 2.6-1.2 4.8.5-1.5 1.6-2.5 3-3.3-.1 2 1.8 3.1 1.8 5.2 0 1.6-.9 3-2.3 4-3.2-.2-5.8-2.8-5.8-6.1 0-4 3.1-6 7-10.8Z"/><path d="M14.3 19.2c2.1-1.2 3.5-3.5 3.5-6.1 0-1.8-.7-3.5-2.1-5.2"/></symbol>
@@ -374,7 +375,8 @@
             <label><input type="radio" name="postKind" value="clip"><span><svg><use href="#i-camera"/></svg><b>Clips</b><small>up to 5 · 5 min each</small></span></label>
           </div>
         </fieldset>
-        <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple required><svg id="postMediaIcon"><use href="#i-photo"/></svg><strong id="fileLabel">Choose up to 10 photos</strong><small id="postMediaHelp">Original shapes are preserved unless you choose a crop below.</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress><small id="uploadStatus" class="upload-status hidden" role="status" aria-live="polite"></small></label>
+        <div id="clipPostingNotice" class="clip-posting-notice hidden" role="status" aria-live="polite"><svg><use href="#i-camera"/></svg><div><b>Clip posting is coming soon</b><p>We’re finishing the reliable native iPhone uploader. Photos work now, and your existing clips, deliveries, and saved drafts stay safe.</p></div></div>
+        <label id="postMediaPicker" class="file-drop"><input id="mediaFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple><svg id="postMediaIcon"><use href="#i-photo"/></svg><strong id="fileLabel">Choose up to 10 photos</strong><small id="postMediaHelp">Original shapes are preserved unless you choose a crop below.</small><progress id="uploadProgress" max="100" value="0" class="hidden"></progress><small id="uploadStatus" class="upload-status hidden" role="status" aria-live="polite"></small></label>
         <fieldset id="postRatioPicker" class="post-ratio-picker">
           <legend><span id="postRatioLegendLabel">Photo shape</span> <small>optional · Original never crops</small></legend>
           <div class="post-ratio-options">
@@ -589,6 +591,6 @@
   <script src="./vendor/supabase.min.js?v=2.57.4"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
   <script src="./vendor/tus.min.js?v=4.3.1" defer></script>
-  <script src="./app.js?v=108-native-auth" defer></script>
+  <script src="./app.js?v=109-native-refresh-chat" defer></script>
 </body>
 </html>
