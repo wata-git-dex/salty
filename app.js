@@ -58,6 +58,8 @@ let NATIVE_MEDIA = null;
 let NATIVE_APP_LINKS = null;
 let NATIVE_BROWSER = null;
 let NATIVE_AUTH = null;
+const nativeUploadObservers = new Map();
+let nativeMediaListenersReady = false;
 
 async function hydrateNativePlugins() {
   if (!NATIVE_APP) return false;
@@ -4388,6 +4390,7 @@ function renderPosts() {
 }
 
 async function videoDuration(file) {
+  if (isNativeClip(file)) return Number(file.duration) || 0;
   return await new Promise((resolve, reject) => {
     const video = document.createElement('video');
     const url = URL.createObjectURL(file);
@@ -4398,11 +4401,16 @@ async function videoDuration(file) {
   });
 }
 
+function isNativeClip(file) {
+  return Boolean(NATIVE_APP && file && typeof file.path === 'string' && file.path && file.native === true);
+}
+
 async function validateMedia(file) {
   if (!file) throw new Error('Choose a photo or clip.');
   if (file.type.startsWith('video/')) {
     if (file.size > CONFIG.maxStreamClipBytes) throw new Error(`This clip is ${(file.size / 1073741824).toFixed(1)} GB. Each Cloudflare Stream clip must be 1 GB or smaller.`);
     const duration = await videoDuration(file);
+    if (!duration) throw new Error('Sodium could not read this clip duration. Choose it again.');
     if (duration > CONFIG.maxClipSeconds + 0.5) throw new Error(`This clip is ${Math.ceil(duration)} seconds. Clips are capped at 5 minutes.`);
   } else if (file.size > CONFIG.maxUploadBytes) {
     throw new Error(`This photo is ${(file.size / 1048576).toFixed(0)} MB. Photos must be 50 MB or smaller.`);
@@ -4429,18 +4437,18 @@ async function pickNativeClips() {
     const selected = Array.isArray(result?.files) ? result.files : [];
     if (!selected.length) { clearPostUploadUi(); return; }
     status.textContent = 'Preparing compressed clips…';
-    const files = [];
-    for (const item of selected) {
-      const localUrl = globalThis.Capacitor.convertFileSrc(item.path);
-      const response = await fetch(localUrl);
-      const blob = await response.blob();
-      // Capacitor's iOS local media handler intentionally returns a generic
-      // URLResponse for video (status 0), not an HTTP 200 response. `ok` is
-      // therefore false even when the compressed file is fully readable.
-      // Validate the actual payload instead of rejecting a healthy native URL.
-      if (!blob.size) throw new Error('Sodium could not open one compressed clip.');
-      files.push(new File([blob], item.name || 'sodium-clip.mp4', { type:item.type || 'video/mp4', lastModified:Date.now() }));
-    }
+    // Keep the native file on disk. Rebuilding it as a JavaScript Blob copied
+    // hundreds of megabytes through WKWebView memory and was the source of the
+    // iPhone crashes and "could not open compressed clip" failures.
+    const files = selected.map((item, index) => ({
+      native:true,
+      path:item.path,
+      name:item.name || `sodium-clip-${index + 1}.mp4`,
+      type:item.type || 'video/mp4',
+      size:Number(item.size) || 0,
+      duration:Number(item.duration) || 0,
+      lastModified:Date.now(),
+    }));
     await validatePostSelection(files);
     state.postDraftFiles = files;
     $('#fileLabel').textContent = `${files.length} compressed ${files.length === 1 ? 'clip' : 'clips'} ready`;
@@ -4596,6 +4604,37 @@ async function uploadStreamClip(file, progressCallback = () => {}, statusCallbac
     progressCallback(1);
     statusCallback('Recovered the completed clip. Finishing the post…');
     return { uid:saved.uid, duration:saved.duration, fingerprint };
+  }
+  if (isNativeClip(file)) {
+    let created = saved?.uploadUrl && saved?.uid && validStreamUploadUrl(saved.uploadUrl) ? saved : null;
+    if (!created) {
+      clearStreamUploadSession(fingerprint);
+      created = await createStreamUpload(file, fingerprint, statusCallback);
+    }
+    await hydrateNativePlugins();
+    if (!NATIVE_MEDIA?.uploadTus) throw new Error('The native Sodium uploader is unavailable. Close and reopen the app, then try again.');
+    await ensureNativeMediaListeners();
+    const uploadId = crypto.randomUUID();
+    nativeUploadObservers.set(uploadId, ({ progress, bytesUploaded }) => {
+      const fraction = Math.max(0, Math.min(1, Number(progress) || 0));
+      progressCallback(fraction);
+      saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:Number(bytesUploaded) || 0 });
+      statusCallback(`Uploading from this iPhone · ${Math.round(fraction * 100)}%`);
+    });
+    try {
+      statusCallback(saved?.offset ? 'Resuming the native upload…' : 'Starting native resumable upload…');
+      await NATIVE_MEDIA.uploadTus({ path:file.path, uploadUrl:created.uploadUrl, uploadId });
+      progressCallback(1);
+      saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:file.size, duration:file.duration, complete:true });
+      statusCallback('Upload complete—Cloudflare is processing the clip…');
+      return { uid:created.uid, duration:file.duration, fingerprint };
+    } catch (error) {
+      const stopped = new Error(readableError(error));
+      stopped.recoverableUpload = true;
+      throw stopped;
+    } finally {
+      nativeUploadObservers.delete(uploadId);
+    }
   }
   let created = saved?.uploadUrl && saved?.uid && validStreamUploadUrl(saved.uploadUrl) ? saved : null;
   if (!globalThis.tus?.Upload) throw new Error('The resumable uploader did not load. Close and reopen Sodium, then try again.');
@@ -4831,8 +4870,10 @@ async function savePostDraft() {
 
 function showPostFilePreview(files) {
   if (!files.length) return;
-  if (state.postPreviewUrl) URL.revokeObjectURL(state.postPreviewUrl);
-  state.postPreviewUrl = URL.createObjectURL(files[0]);
+  if (state.postPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(state.postPreviewUrl);
+  state.postPreviewUrl = isNativeClip(files[0])
+    ? globalThis.Capacitor.convertFileSrc(files[0].path)
+    : URL.createObjectURL(files[0]);
   const previewImage = $('#postRatioPreview img');
   const previewVideo = $('#postRatioPreview video');
   if (selectedPostKind() === 'photo') previewImage.src = state.postPreviewUrl;
@@ -6224,8 +6265,12 @@ $('#mediaFile').addEventListener('click', event => {
   void pickNativeClips();
 });
 
-if (NATIVE_MEDIA?.addListener) {
-  void NATIVE_MEDIA.addListener('compressionProgress', detail => {
+async function ensureNativeMediaListeners() {
+  if (nativeMediaListenersReady) return;
+  await hydrateNativePlugins();
+  if (!NATIVE_MEDIA?.addListener) return;
+  nativeMediaListenersReady = true;
+  await NATIVE_MEDIA.addListener('compressionProgress', detail => {
     const status = $('#uploadStatus');
     if (!status || selectedPostKind() !== 'clip') return;
     const current = Math.min(Number(detail.index || 0) + 1, Number(detail.total || 1));
@@ -6233,7 +6278,11 @@ if (NATIVE_MEDIA?.addListener) {
     status.classList.remove('hidden');
     status.textContent = `Compressing clip ${current} of ${detail.total || 1} · ${percent}%`;
   });
+  await NATIVE_MEDIA.addListener('uploadProgress', detail => {
+    nativeUploadObservers.get(detail.uploadId)?.(detail);
+  });
 }
+if (NATIVE_APP) void ensureNativeMediaListeners();
 $$('input[name="postRatio"]').forEach(input => input.addEventListener('change', applyPostRatioPreview));
 $('#postSession').addEventListener('change', event => {
   state.postSessionId = event.target.value || '';

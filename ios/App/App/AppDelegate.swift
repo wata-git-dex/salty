@@ -72,11 +72,58 @@ public class SodiumMediaPlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewControl
     public let identifier = "SodiumMediaPlugin"
     public let jsName = "SodiumMedia"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "pickAndCompressVideos", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "pickAndCompressVideos", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "uploadTus", returnType: CAPPluginReturnPromise)
     ]
 
     private var pendingCall: CAPPluginCall?
     private var maximumDuration: Double = 300
+    private var uploads: [String: SodiumTusUploadOperation] = [:]
+
+    @objc func uploadTus(_ call: CAPPluginCall) {
+        guard let rawPath = call.getString("path"),
+              let uploadAddress = call.getString("uploadUrl"),
+              let uploadURL = URL(string: uploadAddress),
+              uploadURL.scheme == "https" else {
+            call.reject("Sodium received an invalid native upload request.")
+            return
+        }
+        let fileURL: URL
+        if let parsed = URL(string: rawPath), parsed.isFileURL {
+            fileURL = parsed
+        } else {
+            fileURL = URL(fileURLWithPath: rawPath)
+        }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            call.reject("The compressed clip is no longer available on this iPhone. Choose it again.")
+            return
+        }
+        let uploadID = call.getString("uploadId") ?? UUID().uuidString
+        let operation = SodiumTusUploadOperation(
+            uploadID: uploadID,
+            fileURL: fileURL,
+            uploadURL: uploadURL,
+            progress: { [weak self] uploaded, total in
+                self?.notifyListeners("uploadProgress", data: [
+                    "uploadId": uploadID,
+                    "bytesUploaded": uploaded,
+                    "bytesTotal": total,
+                    "progress": total > 0 ? Double(uploaded) / Double(total) : 0
+                ])
+            },
+            completion: { [weak self] result in
+                self?.uploads.removeValue(forKey: uploadID)
+                switch result {
+                case .success(let bytes):
+                    call.resolve(["uploadId": uploadID, "bytesUploaded": bytes])
+                case .failure(let error):
+                    call.reject(error.localizedDescription)
+                }
+            }
+        )
+        uploads[uploadID] = operation
+        operation.start()
+    }
 
     @objc func pickAndCompressVideos(_ call: CAPPluginCall) {
         guard pendingCall == nil else {
@@ -167,13 +214,16 @@ public class SodiumMediaPlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewControl
             completion(.failure(NSError(domain: "SodiumMedia", code: 2, userInfo: [NSLocalizedDescriptionKey: "This clip is longer than five minutes."])))
             return
         }
-        guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset1920x1080) else {
+        // 720p is intentional for Stoke: it keeps phone uploads materially
+        // smaller while preserving enough detail for social surf clips. The
+        // original remains untouched in Photos.
+        guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPreset1280x720) else {
             completion(.failure(NSError(domain: "SodiumMedia", code: 3, userInfo: [NSLocalizedDescriptionKey: "This video cannot be compressed on this iPhone."])))
             return
         }
 
         do {
-            let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("sodium-media", isDirectory: true)
+            let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("sodium-media", isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let outputURL = directory.appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
             try? FileManager.default.removeItem(at: outputURL)
@@ -225,6 +275,122 @@ public class SodiumMediaPlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewControl
             self?.pendingCall?.reject(message)
             self?.pendingCall = nil
         }
+    }
+}
+
+private final class SodiumTusUploadOperation {
+    private static let chunkSize = 5 * 1024 * 1024
+    private static let retryDelays: [TimeInterval] = [1, 3, 5, 10, 20, 30]
+
+    private let uploadID: String
+    private let fileURL: URL
+    private let uploadURL: URL
+    private let totalSize: Int64
+    private let progress: (Int64, Int64) -> Void
+    private let completion: (Result<Int64, Error>) -> Void
+    private var offset: Int64 = 0
+    private var retryAttempt = 0
+    private var finished = false
+
+    init(uploadID: String, fileURL: URL, uploadURL: URL, progress: @escaping (Int64, Int64) -> Void, completion: @escaping (Result<Int64, Error>) -> Void) {
+        self.uploadID = uploadID
+        self.fileURL = fileURL
+        self.uploadURL = uploadURL
+        self.progress = progress
+        self.completion = completion
+        let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey])
+        self.totalSize = Int64(values?.fileSize ?? 0)
+    }
+
+    func start() {
+        guard totalSize > 0 else {
+            finish(.failure(error("The compressed clip is empty.")))
+            return
+        }
+        recoverOffset()
+    }
+
+    private func recoverOffset() {
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "HEAD"
+        request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, requestError in
+            guard let self else { return }
+            if let requestError { self.retryOrFail(requestError); return }
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                self.retryOrFail(self.error("Cloudflare could not resume this upload.")); return
+            }
+            self.offset = Int64(http.value(forHTTPHeaderField: "Upload-Offset") ?? "0") ?? 0
+            self.retryAttempt = 0
+            self.progress(self.offset, self.totalSize)
+            self.uploadNextChunk()
+        }.resume()
+    }
+
+    private func uploadNextChunk() {
+        if offset >= totalSize {
+            finish(.success(totalSize))
+            return
+        }
+        let remaining = totalSize - offset
+        let length = Int(min(Int64(Self.chunkSize), remaining))
+        let chunkURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sodium-tus-\(uploadID)-\(offset)")
+            .appendingPathExtension("chunk")
+        do {
+            let source = try FileHandle(forReadingFrom: fileURL)
+            defer { try? source.close() }
+            try source.seek(toOffset: UInt64(offset))
+            guard let data = try source.read(upToCount: length), !data.isEmpty else {
+                throw error("Sodium could not read the next part of this clip.")
+            }
+            try data.write(to: chunkURL, options: .atomic)
+        } catch {
+            finish(.failure(error)); return
+        }
+
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "PATCH"
+        request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
+        request.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue(String(offset), forHTTPHeaderField: "Upload-Offset")
+        URLSession.shared.uploadTask(with: request, fromFile: chunkURL) { [weak self] _, response, requestError in
+            try? FileManager.default.removeItem(at: chunkURL)
+            guard let self else { return }
+            if let requestError { self.retryOrFail(requestError); return }
+            guard let http = response as? HTTPURLResponse, http.statusCode == 204 else {
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if status == 409 || status == 412 { self.recoverOffset(); return }
+                self.retryOrFail(self.error("Cloudflare stopped the upload (\(status)).")); return
+            }
+            let next = Int64(http.value(forHTTPHeaderField: "Upload-Offset") ?? "")
+            self.offset = next ?? min(self.totalSize, self.offset + Int64(length))
+            self.retryAttempt = 0
+            self.progress(self.offset, self.totalSize)
+            self.uploadNextChunk()
+        }.resume()
+    }
+
+    private func retryOrFail(_ uploadError: Error) {
+        guard retryAttempt < Self.retryDelays.count else {
+            finish(.failure(error("The connection stopped. Your upload can resume from its saved Cloudflare checkpoint when you try again.")))
+            return
+        }
+        let delay = Self.retryDelays[retryAttempt]
+        retryAttempt += 1
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.recoverOffset()
+        }
+    }
+
+    private func finish(_ result: Result<Int64, Error>) {
+        guard !finished else { return }
+        finished = true
+        DispatchQueue.main.async { [completion] in completion(result) }
+    }
+
+    private func error(_ message: String) -> NSError {
+        NSError(domain: "SodiumTusUpload", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }
 

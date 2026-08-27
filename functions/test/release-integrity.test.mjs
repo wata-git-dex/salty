@@ -134,11 +134,19 @@ test('native Sodium routes protected APIs to production and compresses before St
   assert.match(app, /exchangeCodeForSession\(authorizationCode\)/);
   assert.match(app, /registerPlugin\('SodiumMedia'\)/);
   assert.match(app, /pickAndCompressVideos/);
+  assert.match(app, /NATIVE_MEDIA\.uploadTus/);
+  assert.match(app, /isNativeClip\(file\)/);
+  assert.doesNotMatch(app, /fetch\(localUrl\)[\s\S]{0,500}new File\(\[blob\]/);
   assert.match(app, /Compressed on this iPhone\. Ready to upload\./);
   assert.match(app, /new URL\('sodium:\/\/auth'\)/);
   assert.match(app, /addListener\('appUrlOpen', event =>/);
   assert.match(apiMiddleware, /capacitor:\/\/localhost/);
   assert.match(apiMiddleware, /request\.method === 'OPTIONS'/);
+  const nativeController = read('ios/App/App/AppDelegate.swift');
+  assert.match(nativeController, /CAPPluginMethod\(name: "uploadTus"/);
+  assert.match(nativeController, /AVAssetExportPreset1280x720/);
+  assert.match(nativeController, /private static let chunkSize = 5 \* 1024 \* 1024/);
+  assert.match(nativeController, /application\/offset\+octet-stream/);
 });
 
 test('native refresh uses one system trigger and respects full-screen overlays', () => {

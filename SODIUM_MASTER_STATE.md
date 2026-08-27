@@ -16,7 +16,7 @@ This file consolidates decisions and implementation state from the Sodium Commun
 - The Apple Developer membership is active and Xcode installation began on August 26, 2026.
 - Sodium now has a committed Capacitor iOS project using bundle ID `com.saltyviewfinder.sodium`; the existing HTML/CSS/JavaScript interface remains the product UI rather than being redesigned.
 - Native builds package a curated local web bundle and route protected Stream/Drive API requests to `https://community.saltyviewfinder.com`. Cloudflare API middleware explicitly permits the Capacitor origin without relaxing browser origins generally.
-- The first native media bridge uses the iOS Photos picker and AVFoundation to create network-optimized 1080p MP4 copies before the existing resumable Cloudflare Stream upload. Originals remain untouched. The PWA keeps its original-file resumable fallback.
+- The native media bridge uses the iOS Photos picker and AVFoundation to create network-optimized 720p MP4 copies. Native builds now upload those copies directly from disk in resumable 5 MiB TUS chunks instead of loading a large movie into WKWebView memory. Originals remain untouched. The PWA keeps its original-file resumable fallback.
 - Native Google authentication returns through `sodium://auth`, which was added to the production Supabase redirect allowlist on August 26, 2026. The iOS build uses `ASWebAuthenticationSession` to capture that callback inside Sodium rather than leaving members in Google or a browser tab. Real-device completion and persistence testing remains required before TestFlight release.
 - Push, Browser, App Links, Share, Haptics, Splash Screen, and Status Bar Capacitor packages are installed. Native APNs registration and server delivery still require Apple signing/capability configuration after Xcode is ready.
 - Native pull-to-refresh now uses one standard `UIRefreshControl` trigger. The earlier custom pan handler and forced content offsets were removed because repeated pulls could stack a large blank area above the app. Safe-area spacing is owned by the web UI rather than duplicated by Capacitor.
@@ -105,6 +105,7 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - Photo posts support up to 10 images in their original orientation or an optional fixed crop.
 - Clip posts support up to five Cloudflare Stream videos, five minutes and 1 GB maximum per clip.
 - New clip posting is temporarily paused and clearly labeled while the native background uploader is finished and physically tested. Photo posting remains available, and existing clips, clip deliveries, posts, and drafts are preserved.
+- The current unreleased native uploader recovers Cloudflare Stream offsets, retries interrupted chunks, and reports byte-level progress. Full relaunch recovery after iOS terminates the app is still a release gate; it must not be described as background-complete until a background `URLSession` coordinator and real-device interruption tests pass.
 - Drafts remain on the device for 30 days.
 - Linked member tags and custom visual tags are supported.
 - Photos and clips can be edited or deleted by their author.
