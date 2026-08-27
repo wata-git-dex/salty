@@ -73,6 +73,16 @@ test('finished Now sessions display their recorded date instead of a permanent N
   assert.match(app, /session\.surf_time \|\| session\.started_at \|\| session\.ended_at \|\| session\.created_at/);
 });
 
+test('past sessions use a separate no-reward logging path', () => {
+  assert.match(html, /id="sessionModeSheet"/);
+  assert.match(html, /data-action="open-session-plan"/);
+  assert.match(html, /data-action="open-session-past"/);
+  assert.match(app, /const loggingPast = !state\.editingSessionId && state\.sessionEntryMode === 'past'/);
+  assert.match(app, /if \(loggingPast\) \{[\s\S]*payload\.status = 'ended';[\s\S]*payload\.ended_at = savedSurfTime;/);
+  assert.match(app, /started_at: loggingPast \? null : startedAt/);
+  assert.doesNotMatch(app.match(/if \(loggingPast\) \{[\s\S]*?\n    \}/)?.[0] || '', /points_awarded_at|streak/);
+});
+
 test('session chat stays tied to the surf crew across UI, RLS, and realtime', () => {
   assert.match(html, /id="view-session-chat"/);
   assert.match(html, /id="sessionChatThreads"/);

@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=115-drive-share">
+  <link rel="stylesheet" href="./styles.css?v=116-past-sessions">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -71,7 +71,7 @@
 
   <div id="boot" class="boot" aria-live="polite">
     <img class="boot-mark" src="./icon-ink.svg" alt="Sodium">
-    <small class="boot-credit">Saltyview Productions · v1.115</small>
+    <small class="boot-credit">Saltyview Productions · v1.116</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -318,6 +318,15 @@
     </aside>
 
     <div id="sheetScrim" class="sheet-scrim" data-action="close-sheet"></div>
+    <section id="sessionModeSheet" class="sheet session-mode-sheet" aria-modal="true" role="dialog" aria-labelledby="sessionModeTitle">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <span class="sheet-eyebrow">SESSIONS</span><h2 id="sessionModeTitle">What are you adding?</h2><p>Make a new plan for the crew, or save a surf that already happened.</p>
+      <div class="session-mode-options">
+        <button type="button" data-action="open-session-plan"><svg><use href="#i-surf"/></svg><span><b>Plan a session</b><small>Now or later · the crew can join</small></span><i>›</i></button>
+        <button type="button" data-action="open-session-past"><svg><use href="#i-check"/></svg><span><b>Log a past session</b><small>Save the date, spot, surfers, and filmer</small></span><i>›</i></button>
+      </div>
+    </section>
+
     <section id="sessionSheet" class="sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2 id="sessionSheetTitle">Create a session</h2><p id="sessionSheetIntro">Post where and when you'll be surfing or filming. The crew can join without another group text.</p>
@@ -327,10 +336,11 @@
         <fieldset id="sessionInitiatorFields" class="session-initiator hidden"><legend>Who initiated this session?</legend><label><select id="sessionInitiator"></select></label><small id="sessionInitiatorTransferNote" class="session-initiator-transfer hidden">Stokens were already awarded. Changing this safely transfers organizer credit.</small><label id="sessionInitiatorNameRow" class="hidden">Their first name<input id="sessionInitiatorName" maxlength="80" placeholder="Initiator's first name"><small>They can claim this session—and its organizer credit—when they join Sodium.</small></label></fieldset>
         <label>Spot name<input id="sessionSpot" maxlength="120" required placeholder="Surf spot name" list="spotsList"><datalist id="spotsList"></datalist></label>
         <label>General location<input id="sessionLocation" maxlength="160" required placeholder="City, beach, or general area" list="locationsList"><datalist id="locationsList"></datalist><small>The broader map area—not a secret pin or exact takeoff spot.</small></label>
-        <label>When<div class="session-when-row"><button type="button" class="now-choice active" data-when="now">Now</button><span id="sessionDateChoice" class="date-choice compact" data-when="later"><svg><use href="#i-calendar"/></svg><span><small>Date &amp; time</small><strong id="sessionTimeDisplay">Choose date and time</strong></span><input id="sessionTime" type="datetime-local" aria-label="Session date and time"></span></div></label>
+        <label><span id="sessionWhenLabel">When</span><div class="session-when-row"><button type="button" class="now-choice active" data-when="now">Now</button><span id="sessionDateChoice" class="date-choice compact" data-when="later"><svg><use href="#i-calendar"/></svg><span><small id="sessionDateChoiceLabel">Date &amp; time</small><strong id="sessionTimeDisplay">Choose date and time</strong></span><input id="sessionTime" type="datetime-local" aria-label="Session date and time"></span></div></label>
         <label><span id="sessionPeopleLabel">Surfing with</span> <small>optional · choose a community member or Other</small><div id="sessionPeopleChips" class="person-chips"></div><select id="sessionPersonSelect" aria-label="Choose a community member"></select><div id="sessionOtherPersonRow" class="add-person-row hidden"><input id="sessionPersonInput" maxlength="100" placeholder="Type their name" autocomplete="name"><button type="button" data-action="add-session-person">Add</button></div></label>
         <label>Note <small>optional</small><textarea id="sessionNote" maxlength="500" placeholder="Anything the crew should know?"></textarea></label>
         <div class="session-form-actions"><button id="sessionSubmit" class="primary" type="submit">Create session</button><button id="sessionPlanInvite" class="secondary-button" type="button" data-action="open-plan-invite">Invite someone to session</button></div>
+        <p id="pastSessionNote" class="past-session-note hidden">Past sessions are history only. They do not award Stokens, extend streaks, or invent timed minutes.</p>
         <button id="sessionCancel" class="danger-button hidden" type="button" data-action="cancel-session"><svg><use href="#i-close"/></svg>Cancel session</button>
         <p id="sessionCancelNote" class="session-cancel-note hidden">Removes this session for everyone. Cancelled sessions award no Stokens.</p>
       </form>
@@ -573,9 +583,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.115</span>
-    <h3>Google Drive counting no longer needs your Google login.</h3>
-    <ul><li>Share only a clip folder with Sodium as Viewer.</li><li>Paste its link and Sodium can count new video files automatically.</li><li>Manual counts and non-Google folder links still work.</li></ul>
+    <span>NEW IN V1.116</span>
+    <h3>Save the sessions that already happened.</h3>
+    <ul><li>Tap New session, then Log a past session.</li><li>Add the real date, spot, surfers, and filmer.</li><li>Historical sessions never manufacture Stokens, streaks, or timed minutes.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -591,6 +601,6 @@
   <script src="./vendor/supabase.min.js?v=2.57.4"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
   <script src="./vendor/tus.min.js?v=4.3.1" defer></script>
-  <script src="./app.js?v=115-drive-share" defer></script>
+  <script src="./app.js?v=116-past-sessions" defer></script>
 </body>
 </html>

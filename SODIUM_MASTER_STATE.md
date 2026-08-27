@@ -6,8 +6,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.115.
-- This release enables free background Google Drive folder counting through a Sodium service identity. A filmer shares only the delivery folder as **Viewer**; no member Google login, Drive OAuth consent, paid verification, or broader Drive access is required. Sodium still does not claim to verify external-file downloads.
+- Current release: v1.116.
+- This release adds a separate, honest **Log a past session** path. Historical sessions preserve the date, spot, surfers, filmer, and session history without generating Stokens, streaks, or invented timed minutes.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -16,6 +16,7 @@ This file consolidates decisions and implementation state from the Sodium Commun
 - The Apple Developer membership is active and Xcode installation began on August 26, 2026.
 - Sodium now has a committed Capacitor iOS project using bundle ID `com.saltyviewfinder.sodium`; the existing HTML/CSS/JavaScript interface remains the product UI rather than being redesigned.
 - Native builds package a curated local web bundle and route protected Stream/Drive API requests to `https://community.saltyviewfinder.com`. Cloudflare API middleware explicitly permits the Capacitor origin without relaxing browser origins generally.
+- Sodium has one shared HTML/CSS/JavaScript product source and two release channels. Cloudflare serves that source immediately to the PWA; `pnpm native:sync` copies the same verified source into the iOS bundle. Supabase data changes appear in both channels immediately, while bundled interface/code changes reach an installed iPhone only after a new local build or TestFlight update.
 - The native media bridge uses the iOS Photos picker and AVFoundation to create network-optimized 720p MP4 copies. Native builds now upload those copies directly from disk in resumable 5 MiB TUS chunks instead of loading a large movie into WKWebView memory. Originals remain untouched. The PWA keeps its original-file resumable fallback.
 - Native Google authentication returns through `sodium://auth`, which was added to the production Supabase redirect allowlist on August 26, 2026. The iOS build uses `ASWebAuthenticationSession` to capture that callback inside Sodium rather than leaving members in Google or a browser tab. Real-device completion and persistence testing remains required before TestFlight release.
 - Push, Browser, App Links, Share, Haptics, Splash Screen, and Status Bar Capacitor packages are installed. Native APNs registration and server delivery still require Apple signing/capability configuration after Xcode is ready.
@@ -99,6 +100,7 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - Stopping it moves it to Past sessions and awards eligible Stokens once.
 - Admin attribution can credit the person who actually initiated a session, including a pending nonmember who later claims it.
 - Sessions can be edited, cancelled, shared externally, or shared directly with an existing Sodium member.
+- **Log a past session** records a surf that already happened directly under Past sessions. It requires the real past date and preserves the crew and location, but it has no Start/Stop step and does not create Stokens, streaks, or fabricated duration.
 
 ## Stoke and media
 
@@ -196,3 +198,5 @@ Version 1.113 fixes the underlying Drive visibility limitation. Sodium now reque
 Version 1.114 fixes a native packaging failure discovered during device verification: the Xcode shell had v1.113 metadata but bundled stale v1.111 JavaScript because an incorrect manual Capacitor invocation silently skipped sync. The supported `native:sync` command now runs Capacitor and a mandatory version verifier that fails the build unless the web source, `native-web`, and Xcode public bundle match. The Clips inbox now shows Google Drive connection/live-count status and the required one-time reconnect action directly. Session cards no longer label name-only guests as “listed”; session chat explains that those names are not connected to member accounts.
 
 Version 1.115 retires member Google Drive OAuth and Picker access after the production consent screen exposed an unverified restricted-scope warning. Automatic counting now uses one Sodium-owned service identity and only folders that a filmer explicitly shares with that identity as **Viewer**. Members never grant Sodium access to their Google account or full Drive. Pasted Google Drive folder links are recognized automatically, manual counts remain monotonic and authoritative, and Dropbox/iCloud/other HTTPS links remain manual. The legacy `google_drive_connections` data is intentionally preserved but no longer used for counting; this avoids a destructive migration and keeps old connection records available for controlled cleanup.
+
+Version 1.116 adds a dedicated choice between **Plan a session** and **Log a past session**. A historical entry requires an actual past date/time and is stored as finished immediately, so it appears in Past sessions without Start/Stop controls. Historical logging intentionally awards no Stokens or streak credit and invents no duration. The release also documents the one-source/two-channel pipeline: the PWA updates from Cloudflare immediately, while iPhone UI/code updates require a verified native sync and a new local/TestFlight build.

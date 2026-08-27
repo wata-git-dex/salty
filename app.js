@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.115';
+const APP_VERSION = '1.116';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -132,7 +132,7 @@ const state = {
   pendingInviteRegion: '',
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
-  consentNext: 'new', sessionPeople: [], editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
+  consentNext: 'new', sessionPeople: [], sessionEntryMode: 'plan', editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
   notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '', pendingDeliveryId: '',
   calendarMonth: null, calendarDate: '', eventFilter: 'all',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
@@ -4027,10 +4027,17 @@ function addSessionPerson(rawName = $('#sessionPersonInput').value) {
 }
 
 function resetSessionComposer() {
+  state.sessionEntryMode = 'plan';
   state.editingSessionId = null;
   state.sessionPeople = [];
   $('#sessionForm').reset();
   $('#sessionSheetTitle').textContent = 'Create a session';
+  $('#sessionSheetIntro').textContent = "Post where and when you'll be surfing or filming. The crew can join without another group text.";
+  $('#sessionForm').classList.remove('past-session-mode');
+  $('#sessionWhenLabel').textContent = 'When';
+  $('#sessionDateChoiceLabel').textContent = 'Date & time';
+  $('#sessionTime').removeAttribute('max');
+  $('#pastSessionNote').classList.add('hidden');
   $('#sessionCancel').classList.add('hidden');
   $('#sessionCancelNote').classList.add('hidden');
   $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === 'now'));
@@ -4098,6 +4105,28 @@ function openSessionComposer(sessionId = null) {
   openSheet('sessionSheet');
 }
 
+function openNewSessionComposer(mode = 'plan') {
+  openSessionComposer();
+  state.sessionEntryMode = mode === 'past' ? 'past' : 'plan';
+  if (state.sessionEntryMode !== 'past') return;
+  $('#sessionForm').classList.add('past-session-mode');
+  $('#sessionSheetTitle').textContent = 'Log a past session';
+  $('#sessionSheetIntro').textContent = 'Save a surf that already happened so the crew, location, and clips have a home.';
+  $('#sessionWhenLabel').textContent = 'When did it happen?';
+  $('#sessionDateChoiceLabel').textContent = 'Past date & time';
+  $('#sessionSubmit').textContent = 'Log past session';
+  $('#sessionPlanInvite').classList.add('hidden');
+  $('#wantsFilmerRow').classList.add('hidden');
+  $('#wantsFilmer').checked = false;
+  $('#pastSessionNote').classList.remove('hidden');
+  $$('[data-when]').forEach(button => button.classList.toggle('active', button.dataset.when === 'later'));
+  const now = new Date();
+  const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  $('#sessionTime').max = localNow;
+  $('#sessionTime').value = localNow;
+  updateDateChoiceLabels();
+}
+
 async function createSession(event) {
   event.preventDefault();
   const submit = $('#sessionForm button[type="submit"]'); submit.disabled = true;
@@ -4105,12 +4134,14 @@ async function createSession(event) {
     await joinLocation(state.currentRegion, false);
     if (!$('#sessionOtherPersonRow').classList.contains('hidden') && $('#sessionPersonInput').value.trim()) addSessionPerson();
     const spot = await ensureSpot($('#sessionSpot').value, $('#sessionLocation').value, state.currentRegion.id);
-    const later = $('[data-when="later"]').classList.contains('active');
+    const loggingPast = !state.editingSessionId && state.sessionEntryMode === 'past';
+    const later = loggingPast || $('[data-when="later"]').classList.contains('active');
     const surfTime = later ? $('#sessionTime').value : null;
     const existingSession = state.editingSessionId ? state.sessions.find(session => session.id === state.editingSessionId) : null;
     const editingPastSession = Boolean(existingSession && isPastSession(existingSession));
     if (later && !surfTime) throw new Error('Pick a date and time.');
-    if (surfTime && new Date(surfTime) <= new Date() && !editingPastSession) throw new Error('Pick a future date and time.');
+    if (loggingPast && (!surfTime || new Date(surfTime) > new Date())) throw new Error('Pick the date and time this session happened.');
+    if (!loggingPast && surfTime && new Date(surfTime) <= new Date() && !editingPastSession) throw new Error('Pick a future date and time.');
     const now = new Date().toISOString();
     const savedSurfTime = surfTime
       ? new Date(surfTime).toISOString()
@@ -4124,7 +4155,7 @@ async function createSession(event) {
         : now;
     const payload = {
       author: state.profile.id, spot_id: spot.id, region_id: state.currentRegion.id,
-      when_label: later ? 'Scheduled' : 'Now', surf_time: savedSurfTime, started_at: startedAt,
+      when_label: loggingPast ? 'Logged' : (later ? 'Scheduled' : 'Now'), surf_time: savedSurfTime, started_at: loggingPast ? null : startedAt,
       author_role: $('[data-session-role].active').dataset.sessionRole,
       featured_surfer_name: null, featured_surfer_user: null, participant_names: state.sessionPeople,
       wants_filmer: $('#wantsFilmer').checked, note: $('#sessionNote').value.trim() || null,
@@ -4135,12 +4166,17 @@ async function createSession(event) {
       payload.initiator_name = selectedInitiator === 'pending' ? $('#sessionInitiatorName').value.trim() : (memberById(selectedInitiator)?.name || state.profile.name);
       if (selectedInitiator === 'pending' && !payload.initiator_name) throw new Error('Add the first name of the person who initiated this surf.');
     }
+    if (loggingPast) {
+      payload.status = 'ended';
+      payload.ended_at = savedSurfTime;
+      payload.wants_filmer = false;
+    }
     const result = state.editingSessionId
       ? await db.from('sessions').update(payload).eq('id', state.editingSessionId).eq('author', state.profile.id)
       : await db.from('sessions').insert(payload);
     if (result.error) throw result.error;
     const edited = Boolean(state.editingSessionId);
-    resetSessionComposer(); closeSheet(); await loadSessions(); await renderProfile(); toast(edited ? 'Session updated.' : 'Your session is live.');
+    resetSessionComposer(); closeSheet(); await loadSessions(); await renderProfile(); toast(edited ? 'Session updated.' : (loggingPast ? 'Past session saved.' : 'Your session is live.'));
   } catch (error) { toast(readableError(error)); }
   finally { submit.disabled = false; }
 }
@@ -6040,7 +6076,9 @@ document.addEventListener('click', async event => {
     'open-drawer': openDrawer,
     'close-drawer': closeDrawer,
     'toggle-regions': () => $('#regionMenu').classList.toggle('open'),
-    'open-session': () => openSessionComposer(),
+    'open-session': () => openSheet('sessionModeSheet'),
+    'open-session-plan': () => { closeSheet(); openNewSessionComposer('plan'); },
+    'open-session-past': () => { closeSheet(); openNewSessionComposer('past'); },
     'open-share-invite': () => { closeDrawer(); openShareInviteHub(); },
     'open-nonprofits': () => { state.eventFilter = 'nonprofit'; renderEvents(); setView('events'); },
     'show-invite-qr': openInviteQr,
