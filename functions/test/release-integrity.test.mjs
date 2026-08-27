@@ -13,6 +13,7 @@ const xcodeProject = read('ios/App/App.xcodeproj/project.pbxproj');
 const sessionChatMigration = read('supabase/session-chat-v1-migration.sql');
 const clipReceiptMigration = read('supabase/clip-delivery-receipts-v1-migration.sql');
 const sessionLifecycleMigration = read('supabase/session-lifecycle-v1-migration.sql');
+const sessionAttendanceMigration = read('supabase/session-attendance-v1-migration.sql');
 const apiMiddleware = read('functions/api/_middleware.js');
 
 test('HTML IDs are unique and hard JavaScript selectors resolve', () => {
@@ -89,7 +90,11 @@ test('active sessions have one Start/Finish lifecycle with linked-crew alerts', 
   assert.match(app, /function activeSessionForCurrentMember/);
   assert.match(app, /data-open-active-session/);
   assert.match(app, /reminder_sent_at:null/);
-  assert.match(app, /Finish this surf and move it to Past sessions/);
+  assert.match(html, /Who actually showed up\?/);
+  assert.match(app, /function openFinishSession/);
+  assert.match(app, /It stays here through today/);
+  assert.match(sessionAttendanceMigration, /public\.finish_session/);
+  assert.match(sessionAttendanceMigration, /attendance_status='confirmed'/);
   assert.doesNotMatch(app, /pauseSession|Pause session/);
   assert.match(sessionLifecycleMigration, /public\.add_session_member/);
   assert.match(sessionLifecycleMigration, /selected_user is distinct from actor/);

@@ -6,8 +6,10 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.117.
-- This release links selected Sodium members to session crew, adds lifecycle notifications and a three-hour organizer reminder, keeps historical logs silent, and adds a compact active-surf bar with one Start/Finish lifecycle.
+- Current release: v1.118.
+- This release keeps a finished session on the main Sessions screen through the rest of its local calendar day, preserves its crew chat, lets filmers start session-linked clip deliveries from the card, and separates joining intent from confirmed attendance.
+- Joining a session records intent. At Finish, the session creator or an admin confirms which linked members actually showed; only confirmed linked members receive attendance Stokens, and the existing unique point ledger prevents double-credit if someone is removed and re-added. Typed guest names never receive account credit until they are linked to a member.
+- Mandatory GPS check-in is intentionally deferred. Sodium supports future plans, travel, weak-signal beaches, and privacy-sensitive surf locations, so precise location is not required to create or join. Organizer confirmation is the current attendance authority; optional coarse check-in can be reconsidered after beta evidence shows it is needed.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 

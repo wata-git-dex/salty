@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=117-session-lifecycle">
+  <link rel="stylesheet" href="./styles.css?v=118-session-attendance">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -71,7 +71,7 @@
 
   <div id="boot" class="boot" aria-live="polite">
     <img class="boot-mark" src="./icon-ink.svg" alt="Sodium">
-    <small class="boot-credit">Saltyview Productions · v1.117</small>
+    <small class="boot-credit">Saltyview Productions · v1.118</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -347,6 +347,18 @@
       </form>
     </section>
 
+    <section id="finishSessionSheet" class="sheet finish-session-sheet" aria-modal="true" role="dialog" aria-labelledby="finishSessionTitle">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <span class="sheet-eyebrow">FINISH SESSION</span><h2 id="finishSessionTitle">Who actually showed up?</h2><p>Joining is a plan. Confirming attendance is what awards participation Stokens.</p>
+      <form id="finishSessionForm"><div id="finishSessionCrew" class="attendance-list"></div><small class="attendance-note">Uncheck anyone who did not make it. Typed guest names stay on the session but cannot receive Stokens until they have a linked Sodium account.</small><button id="finishSessionSubmit" class="primary" type="submit">Finish session</button></form>
+    </section>
+
+    <section id="sessionClipSheet" class="sheet session-clip-sheet" aria-modal="true" role="dialog" aria-labelledby="sessionClipTitle">
+      <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
+      <span class="sheet-eyebrow">SESSION CLIPS</span><h2 id="sessionClipTitle">Send clips to the crew</h2><p>Choose a surfer. Sodium links the delivery to this session and keeps it in your clip outbox.</p>
+      <div id="sessionClipPeople" class="session-clip-people"></div>
+    </section>
+
     <section id="planInviteSheet" class="sheet" aria-modal="true" role="dialog">
       <i class="grab"></i><button class="sheet-close" data-action="close-sheet" aria-label="Close"><svg><use href="#i-close"/></svg></button>
       <h2>Invite someone to session</h2><p>Community members can be added from the dropdown. If they are not on Sodium yet, send this invite so they can join and add their session.</p>
@@ -584,9 +596,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.117</span>
-    <h3>Your active surf stays one tap away.</h3>
-    <ul><li>Linked crew now receive session starts, finishes, changes, and cancellations.</li><li>An active-surf bar keeps the current session easy to reopen or finish.</li><li>Past-session logs stay silent and never interrupt the crew.</li></ul>
+    <span>NEW IN V1.118</span>
+    <h3>Finish the surf without ending the conversation.</h3>
+    <ul><li>Finished sessions stay on today’s screen so the crew can chat and get clips.</li><li>The organizer confirms who showed before attendance Stokens are awarded.</li><li>Filmers can send clips to the session crew directly from the session card.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -602,6 +614,6 @@
   <script src="./vendor/supabase.min.js?v=2.57.4"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
   <script src="./vendor/tus.min.js?v=4.3.1" defer></script>
-  <script src="./app.js?v=117-session-lifecycle" defer></script>
+  <script src="./app.js?v=118-session-attendance" defer></script>
 </body>
 </html>

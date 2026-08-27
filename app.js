@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.117';
+const APP_VERSION = '1.118';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -132,7 +132,7 @@ const state = {
   pendingInviteRegion: '',
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
-  consentNext: 'new', sessionPeople: [], sessionLinkedPeople: [], sessionEntryMode: 'plan', editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
+  consentNext: 'new', sessionPeople: [], sessionLinkedPeople: [], sessionEntryMode: 'plan', editingSessionId: null, finishingSessionId: null, sessionClipSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
   notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '', pendingDeliveryId: '',
   calendarMonth: null, calendarDate: '', eventFilter: 'all',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
@@ -1445,7 +1445,7 @@ function setView(view) {
 
 async function loadSessions() {
   const result = await db.from('sessions')
-    .select('*,spot:spots(*),author_profile:profiles!sessions_author_fkey(id,name),initiator_profile:profiles!sessions_initiator_user_fkey(id,name,avatar_path),session_rsvps(id,user_id,role,profile:profiles!session_rsvps_user_id_fkey(id,name))')
+    .select('*,spot:spots(*),author_profile:profiles!sessions_author_fkey(id,name),initiator_profile:profiles!sessions_initiator_user_fkey(id,name,avatar_path),session_rsvps(id,user_id,role,attendance_status,attendance_confirmed_at,profile:profiles!session_rsvps_user_id_fkey(id,name,avatar_path))')
     .eq('region_id', state.currentRegion.id).in('status', ['active', 'ended', 'archived']).order('created_at', { ascending: false }).limit(100);
   if (result.error) { toast(readableError(result.error)); return; }
   state.sessions = result.data || [];
@@ -2750,7 +2750,7 @@ function clipSessionOptions(selected = '') {
   }).join('');
 }
 
-function openClipDeliveryComposer(deliveryId = null, sessionId = '', recipientId = '') {
+function openClipDeliveryComposer(deliveryId = null, sessionId = '', recipientId = '', recipientName = '') {
   const delivery = deliveryId ? state.clipDeliveries.find(item => item.id === deliveryId && item.sender === state.profile.id) : null;
   state.editingClipDeliveryId = delivery?.id || null;
   $('#clipDeliveryForm').reset();
@@ -2759,8 +2759,8 @@ function openClipDeliveryComposer(deliveryId = null, sessionId = '', recipientId
   $('#clipDeliveryDelete').classList.toggle('hidden', !delivery);
   $('#clipMarkReady').classList.toggle('hidden', !delivery || delivery.status === 'ready');
   const chosenRecipient = delivery?.recipient || recipientId || state.activeDmMember?.id || '';
-  $('#clipRecipient').innerHTML = '<option value="">Choose a member</option>' + state.people.filter(person => person.id !== state.profile.id).map(person => `<option value="${person.id}" ${person.id === chosenRecipient ? 'selected' : ''}>${esc(person.name)}</option>`).join('') + `<option value="pending" ${delivery && !delivery.recipient ? 'selected' : ''}>Not on Sodium yet…</option>`;
-  $('#clipRecipientName').value = delivery?.recipient_name || '';
+  $('#clipRecipient').innerHTML = '<option value="">Choose a member</option>' + state.people.filter(person => person.id !== state.profile.id).map(person => `<option value="${person.id}" ${person.id === chosenRecipient ? 'selected' : ''}>${esc(person.name)}</option>`).join('') + `<option value="pending" ${(delivery && !delivery.recipient) || (!delivery && recipientName) ? 'selected' : ''}>Not on Sodium yet…</option>`;
+  $('#clipRecipientName').value = delivery?.recipient_name || recipientName || '';
   updateClipRecipientUi();
   $('#clipSession').innerHTML = clipSessionOptions(delivery?.session_id || sessionId);
   $('#clipSubjects').value = delivery ? clipSubjectNames(delivery) : '';
@@ -3712,9 +3712,15 @@ function sessionSchedulePills(session) {
 }
 
 function isPastSession(session, now = Date.now()) {
+  if (isFinishedToday(session, new Date(now))) return false;
   if (session.status && session.status !== 'active') return true;
   const anchor = new Date(session.surf_time || session.created_at || 0).getTime();
   return Number.isFinite(anchor) && anchor > 0 && anchor < now - 18 * 60 * 60 * 1000;
+}
+
+function isFinishedToday(session, now = new Date()) {
+  if (!['ended', 'archived'].includes(session.status) || !session.ended_at) return false;
+  return calendarDateKey(session.ended_at) === calendarDateKey(now);
 }
 
 function calendarDateKey(value) {
@@ -3728,7 +3734,7 @@ function calendarItems() {
     .filter(session => session.region_id === state.currentRegion.id && !isPastSession(session))
     .map(session => {
       const date = session.surf_time ? new Date(session.surf_time) : now;
-      return { type:'surf', id:session.id, date, title:session.spot?.name || 'Surf', location:session.spot?.general_location || '', live:session.when_label === 'Now' };
+      return { type:'surf', id:session.id, date, title:session.spot?.name || 'Surf', location:session.spot?.general_location || '', live:session.status === 'active' && session.when_label === 'Now' };
     });
   const events = state.events
     .filter(event => event.region_id === state.currentRegion.id && event.start_time && !isPastEvent(event))
@@ -3871,12 +3877,12 @@ function strongestCrewPair(sessions, memberName = '') {
 }
 
 function weeklyPersonalStats(profileId = state.profile?.id) {
-  const sessions = state.sessions.filter(completedThisWeek).filter(session => session.author === profileId || session.initiator_user === profileId || (session.session_rsvps || []).some(rsvp => rsvp.user_id === profileId));
+  const sessions = state.sessions.filter(completedThisWeek).filter(session => session.author === profileId || session.initiator_user === profileId || (session.session_rsvps || []).some(rsvp => rsvp.user_id === profileId && rsvp.attendance_status !== 'absent'));
   let surfed = 0;
   let filmed = 0;
   let organized = 0;
   sessions.forEach(session => {
-    const rsvpRole = (session.session_rsvps || []).find(rsvp => rsvp.user_id === profileId)?.role;
+    const rsvpRole = (session.session_rsvps || []).find(rsvp => rsvp.user_id === profileId && rsvp.attendance_status !== 'absent')?.role;
     const role = session.author === profileId ? session.author_role : rsvpRole;
     if (role === 'film') filmed += 1;
     else if (role === 'surf') surfed += 1;
@@ -3933,8 +3939,8 @@ function renderSessions() {
   const now = Date.now();
   const active = state.sessions.filter(session => !isPastSession(session, now));
   const past = state.sessions.filter(session => isPastSession(session, now)).sort((a, b) => new Date(b.ended_at || b.surf_time || b.created_at || 0) - new Date(a.ended_at || a.surf_time || a.created_at || 0));
-  const liveNow = active.filter(session => session.when_label === 'Now').length;
-  const planned = active.length - liveNow;
+  const liveNow = active.filter(session => session.status === 'active' && session.when_label === 'Now').length;
+  const planned = active.filter(session => session.status === 'active' && session.when_label !== 'Now').length;
   $('#liveCount').innerHTML = liveNow
     ? `<i></i>${liveNow} IN THE WATER${planned ? ` · ${planned} PLANNED` : ''}`
     : (planned ? `${planned} PLANNED` : 'NO SURFS PLANNED');
@@ -3952,26 +3958,33 @@ function renderSessions() {
   });
   const renderSessionCard = (session, pastSession = false) => {
     const mine = session.author === state.profile.id;
+    const canManage = mine || Boolean(state.profile.is_admin);
+    const finishedToday = isFinishedToday(session);
+    const finished = pastSession || finishedToday;
     const rsvps = session.session_rsvps || [];
+    const visibleRsvps = finished ? rsvps.filter(rsvp => rsvp.attendance_status !== 'absent') : rsvps;
     const myRsvp = rsvps.find(rsvp => rsvp.user_id === state.profile.id);
-    const surfers = [session.author_role === 'surf' ? session.author_profile?.name : null, ...(session.participant_names || []), session.featured_surfer_name, ...rsvps.filter(rsvp => rsvp.role === 'surf').map(rsvp => rsvp.profile?.name)]
+    const linkedNames = new Set(rsvps.map(rsvp => normalizePersonName(rsvp.profile?.name || memberById(rsvp.user_id)?.name)).filter(Boolean));
+    const typedNames = (session.participant_names || []).filter(name => !linkedNames.has(normalizePersonName(name)));
+    const surfers = [session.author_role === 'surf' ? session.author_profile?.name : null, ...typedNames, session.featured_surfer_name, ...visibleRsvps.filter(rsvp => rsvp.role === 'surf').map(rsvp => rsvp.profile?.name)]
       .filter(Boolean)
       .filter((name, index, names) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
-    const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
-    const edit = mine ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="${pastSession ? 'Edit finished surf' : 'Edit surf'}"><svg><use href="#i-edit"/></svg></button>` : '';
+    const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...visibleRsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
+    const edit = canManage ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="${finished ? 'Edit finished surf' : 'Edit surf'}"><svg><use href="#i-edit"/></svg></button>` : '';
     const share = !pastSession ? `<button class="session-share-icon" data-share-session="${session.id}" aria-label="Share this surf"><svg><use href="#i-share"/></svg></button>` : '';
-    const sessionState = !pastSession && mine
+    const sessionState = !finished && canManage
       ? (session.when_label === 'Now'
         ? `<button class="session-state-icon stop" data-end-session="${session.id}" aria-label="Stop surf" title="Stop surf"><svg><use href="#i-stop"/></svg></button>`
         : `<button class="session-state-icon start" data-start-session="${session.id}" aria-label="Start surf" title="Start surf"><svg><use href="#i-play"/></svg></button>`)
       : '';
-    const sendClips = pastSession && (mine || myRsvp?.role === 'film') ? `<button class="session-send-clips" data-session-clips="${session.id}" aria-label="Send clips from this session" title="Send clips"><svg><use href="#i-folder"/></svg></button>` : '';
-    const tools = pastSession ? `<div class="session-card-tools"><span class="past-badge">Finished</span>${edit}</div>` : `<div class="session-card-tools">${sessionState}${share}${edit}</div>`;
+    const canSendClips = finished && ((session.author_role === 'film' && mine) || myRsvp?.role === 'film' || state.profile.is_admin);
+    const sendClips = canSendClips ? `<button class="session-clips-icon" data-session-clips="${session.id}" aria-label="Send clips to this crew" title="Send clips"><svg><use href="#i-camera"/></svg></button>` : '';
+    const tools = `<div class="session-card-tools">${finished ? '<span class="past-badge">Finished</span>' : sessionState}${sendClips}${share}${edit}</div>`;
     const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;
     const filmAction = (session.wants_filmer || myRsvp?.role === 'film')
       ? `<button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : (filmers.length ? 'Film too' : 'I can film')}</button>`
       : '';
-    const actions = pastSession || mine ? '' : `${surfAction}${filmAction}`;
+    const actions = finished || mine ? '' : `${surfAction}${filmAction}`;
     const mapUrl = spotMapUrl(session.spot);
     const location = session.spot?.general_location ? `<a class="spot-location" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}</a>` : '';
     const surferNames = surfers.length ? surfers.map(name => `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
@@ -3986,12 +3999,12 @@ function renderSessions() {
     const initiatorName = initiator?.name || session.initiator_name || session.author_profile?.name || 'Sodium member';
     const addedBy = session.author_profile?.name && session.author_profile.name !== initiatorName ? `<small>Added by ${esc(session.author_profile.name)}</small>` : '';
     const starter = `<div class="session-attribution">${avatarMarkup(initiator || { name:initiatorName }, 'session-starter-avatar')}<span><b>${esc(initiatorName)}</b> initiated this session${addedBy}</span></div>`;
-    const claimInvite = !pastSession && mine && !session.initiator_user && session.initiator_name ? `<button class="claim-invite" data-invite-session-claim="${session.id}" title="Invite ${esc(session.initiator_name)} to join Sodium and claim this surf"><svg><use href="#i-send"/></svg>Invite ${esc(session.initiator_name)}</button>` : '';
-    const schedule = pastSession
+    const claimInvite = !finished && mine && !session.initiator_user && session.initiator_name ? `<button class="claim-invite" data-invite-session-claim="${session.id}" title="Invite ${esc(session.initiator_name)} to join Sodium and claim this surf"><svg><use href="#i-send"/></svg>Invite ${esc(session.initiator_name)}</button>` : '';
+    const schedule = finished
       ? schedulePills(scheduleParts(session.surf_time || session.ended_at || session.created_at), 'session-schedule')
       : sessionSchedulePills(session);
-    const timingClass = pastSession ? 'past-card' : (session.when_label === 'Now' ? 'live-session' : 'future-session');
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${sessionChat}${actions ? `<div class="card-actions">${actions}</div>` : ''}${claimInvite}${sendClips}</article>`;
+    const timingClass = pastSession ? 'past-card' : (finishedToday ? 'finished-today' : (session.when_label === 'Now' ? 'live-session' : 'future-session'));
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${sessionChat}${actions ? `<div class="card-actions">${actions}</div>` : ''}${claimInvite}</article>`;
   };
   const activeMarkup = orderedSessions.length
     ? orderedSessions.map(session => renderSessionCard(session)).join('')
@@ -4120,7 +4133,7 @@ function updateSessionRoleUi(role) {
 
 function openSessionComposer(sessionId = null) {
   resetSessionComposer();
-  const session = sessionId ? state.sessions.find(item => item.id === sessionId && item.author === state.profile.id) : null;
+  const session = sessionId ? state.sessions.find(item => item.id === sessionId && (item.author === state.profile.id || state.profile.is_admin)) : null;
   if (session) {
     state.editingSessionId = session.id;
     state.sessionPeople = [...(session.participant_names || (session.featured_surfer_name ? [session.featured_surfer_name] : []))];
@@ -4201,7 +4214,7 @@ async function createSession(event) {
         ? (existingSession.started_at || existingSession.surf_time || now)
         : now;
     const payload = {
-      author: state.profile.id, spot_id: spot.id, region_id: state.currentRegion.id,
+      author: existingSession?.author || state.profile.id, spot_id: spot.id, region_id: state.currentRegion.id,
       when_label: loggingPast ? 'Logged' : (later ? 'Scheduled' : 'Now'), surf_time: savedSurfTime, started_at: loggingPast ? null : startedAt,
       author_role: $('[data-session-role].active').dataset.sessionRole,
       featured_surfer_name: null, featured_surfer_user: null, participant_names: state.sessionPeople,
@@ -4218,8 +4231,10 @@ async function createSession(event) {
       payload.ended_at = savedSurfTime;
       payload.wants_filmer = false;
     }
+    let updateQuery = state.editingSessionId ? db.from('sessions').update(payload).eq('id', state.editingSessionId) : null;
+    if (updateQuery && !state.profile.is_admin) updateQuery = updateQuery.eq('author', state.profile.id);
     const result = state.editingSessionId
-      ? await db.from('sessions').update(payload).eq('id', state.editingSessionId).eq('author', state.profile.id).select('id').single()
+      ? await updateQuery.select('id').single()
       : await db.from('sessions').insert(payload).select('id').single();
     if (result.error) throw result.error;
     if (!loggingPast && result.data?.id) {
@@ -4247,16 +4262,66 @@ async function setRsvp(sessionId, role) {
 
 async function startSession(sessionId) {
   const startedAt = new Date().toISOString();
-  const result = await db.from('sessions').update({ when_label: 'Now', surf_time: startedAt, started_at: startedAt, reminder_sent_at:null }).eq('id', sessionId).eq('author', state.profile.id).eq('status', 'active');
+  let query = db.from('sessions').update({ when_label: 'Now', surf_time: startedAt, started_at: startedAt, reminder_sent_at:null }).eq('id', sessionId).eq('status', 'active');
+  if (!state.profile.is_admin) query = query.eq('author', state.profile.id);
+  const result = await query;
   if (result.error) { toast(readableError(result.error)); return; }
   await loadSessions(); toast('Session started — the crew can see you are out now.');
 }
 
-async function endSession(sessionId) {
-  if (!confirm('Finish this surf and move it to Past sessions? If it was cancelled, use the pencil and Cancel session instead.')) return;
-  const result = await db.from('sessions').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', sessionId).eq('author', state.profile.id);
-  if (result.error) { toast(readableError(result.error)); return; }
-  await loadSessions(); toast('Surf finished and moved to Past sessions.');
+function openFinishSession(sessionId) {
+  const session = state.sessions.find(item => item.id === sessionId && (item.author === state.profile.id || state.profile.is_admin));
+  if (!session) return;
+  state.finishingSessionId = session.id;
+  $('#finishSessionTitle').textContent = `Finish ${session.spot?.name || 'session'}`;
+  const linkedCrew = (session.session_rsvps || []).filter(rsvp => rsvp.user_id !== session.author);
+  $('#finishSessionCrew').innerHTML = linkedCrew.length
+    ? linkedCrew.map(rsvp => `<label><input type="checkbox" name="confirmed_attendee" value="${rsvp.user_id}" ${rsvp.attendance_status === 'absent' ? '' : 'checked'}><span>${avatarMarkup(rsvp.profile || memberById(rsvp.user_id) || { name:'Member' }, 'attendance-avatar')}<b>${esc(rsvp.profile?.name || memberById(rsvp.user_id)?.name || 'Member')}</b><small>${rsvp.role === 'film' ? 'Filming' : 'Surfing'}</small></span></label>`).join('')
+    : '<div class="attendance-empty"><b>No linked crew to confirm</b><small>Finish the session now. Typed guest names remain in its history.</small></div>';
+  openSheet('finishSessionSheet');
+}
+
+async function finishSession(event) {
+  event.preventDefault();
+  const sessionId = state.finishingSessionId;
+  if (!sessionId) return;
+  const button = $('#finishSessionSubmit'); button.disabled = true;
+  try {
+    const confirmed = [...document.querySelectorAll('#finishSessionCrew input[name="confirmed_attendee"]:checked')].map(input => input.value);
+    const result = await db.rpc('finish_session', { target_session:sessionId, confirmed_attendees:confirmed });
+    if (result.error) throw result.error;
+    state.finishingSessionId = null;
+    closeSheet();
+    await loadSessions(); await renderProfile();
+    toast('Session finished. It stays here through today so the crew can chat and get clips.');
+  } catch (error) { toast(readableError(error)); }
+  finally { button.disabled = false; }
+}
+
+function normalizePersonName(value = '') { return value.trim().toLowerCase().replace(/\s+/g, ' '); }
+
+function openSessionClipHub(sessionId) {
+  const session = state.sessions.find(item => item.id === sessionId);
+  if (!session) return;
+  state.sessionClipSessionId = session.id;
+  $('#sessionClipTitle').textContent = `Send clips · ${session.spot?.name || 'session'}`;
+  const people = [];
+  const addPerson = (name, userId = '') => {
+    if (!name || userId === state.profile.id) return;
+    if (!people.some(person => userId ? person.userId === userId : normalizePersonName(person.name) === normalizePersonName(name))) people.push({ name, userId });
+  };
+  if (session.author_role === 'surf') addPerson(session.author_profile?.name, session.author);
+  (session.session_rsvps || []).filter(rsvp => rsvp.role === 'surf').forEach(rsvp => addPerson(rsvp.profile?.name || memberById(rsvp.user_id)?.name, rsvp.user_id));
+  (session.participant_names || []).forEach(name => {
+    const linked = (session.session_rsvps || []).find(rsvp => normalizePersonName(rsvp.profile?.name || memberById(rsvp.user_id)?.name) === normalizePersonName(name));
+    addPerson(name, linked?.user_id || '');
+  });
+  if (session.featured_surfer_name) addPerson(session.featured_surfer_name, session.featured_surfer_user || '');
+  $('#sessionClipPeople').innerHTML = people.length ? people.map(person => {
+    const existing = state.clipDeliveries.find(delivery => delivery.sender === state.profile.id && delivery.session_id === session.id && (person.userId ? delivery.recipient === person.userId : !delivery.recipient && normalizePersonName(delivery.recipient_name) === normalizePersonName(person.name)) && delivery.status !== 'cancelled');
+    return `<button type="button" data-session-clip-person="${esc(person.userId || '')}" data-session-clip-name="${esc(person.name)}" ${existing ? `data-session-clip-delivery="${existing.id}"` : ''}>${avatarMarkup(person.userId ? (memberById(person.userId) || { name:person.name }) : { name:person.name }, 'session-clip-avatar')}<span><b>${esc(person.name)}</b><small>${existing ? 'Open existing delivery' : (person.userId ? 'Sodium member' : 'Guest delivery')}</small></span><svg><use href="#${existing ? 'i-edit' : 'i-camera'}"/></svg></button>`;
+  }).join('') : '<div class="attendance-empty"><b>No surfers listed</b><small>Edit the session to add the surfers who received clips.</small></div>';
+  openSheet('sessionClipSheet');
 }
 
 async function cancelSession() {
@@ -4264,7 +4329,9 @@ async function cancelSession() {
   if (!sessionId || !confirm('Cancel this session? It will disappear for everyone. This cannot be undone.')) return;
   const button = $('#sessionCancel'); button.disabled = true;
   try {
-    const result = await db.from('sessions').delete().eq('id', sessionId).eq('author', state.profile.id);
+    let query = db.from('sessions').delete().eq('id', sessionId);
+    if (!state.profile.is_admin) query = query.eq('author', state.profile.id);
+    const result = await query;
     if (result.error) throw result.error;
     resetSessionComposer(); closeSheet(); await loadSessions(); await renderProfile(); toast('Surf cancelled.');
   } catch (error) { toast(readableError(error)); }
@@ -5986,6 +6053,7 @@ document.addEventListener('click', async event => {
   const clipBoxNode = event.target.closest('[data-clip-box]');
   const editClipDeliveryNode = event.target.closest('[data-edit-clip-delivery]');
   const sessionClipsNode = event.target.closest('[data-session-clips]');
+  const sessionClipPersonNode = event.target.closest('[data-session-clip-person]');
   const refreshDriveDeliveryNode = event.target.closest('[data-refresh-drive-delivery]');
   if (carouselDirectionNode) {
     const carousel = carouselDirectionNode.closest('[data-post-carousel]');
@@ -6088,14 +6156,21 @@ document.addEventListener('click', async event => {
     return;
   }
   if (editClipDeliveryNode) openClipDeliveryComposer(editClipDeliveryNode.dataset.editClipDelivery);
-  if (sessionClipsNode) openClipDeliveryComposer(null, sessionClipsNode.dataset.sessionClips);
+  if (sessionClipsNode) openSessionClipHub(sessionClipsNode.dataset.sessionClips);
+  if (sessionClipPersonNode) {
+    const deliveryId = sessionClipPersonNode.dataset.sessionClipDelivery;
+    const recipientId = sessionClipPersonNode.dataset.sessionClipPerson;
+    const recipientName = sessionClipPersonNode.dataset.sessionClipName;
+    closeSheet();
+    openClipDeliveryComposer(deliveryId || null, state.sessionClipSessionId, recipientId, recipientId ? '' : recipientName);
+  }
   if (rsvpNode) await setRsvp(rsvpNode.dataset.rsvp, rsvpNode.dataset.role);
   if (startNode) await startSession(startNode.dataset.startSession);
   if (editSessionNode) openSessionComposer(editSessionNode.dataset.editSession);
   if (shareSessionNode) openSessionShare(shareSessionNode.dataset.shareSession);
   if (shareEventNode) await shareEvent(shareEventNode.dataset.shareEvent);
   if (editPostNode) openPostComposer(editPostNode.dataset.editPost);
-  if (endNode) await endSession(endNode.dataset.endSession);
+  if (endNode) openFinishSession(endNode.dataset.endSession);
   const activeSessionNode = event.target.closest('[data-open-active-session]');
   if (activeSessionNode) openActiveSession(activeSessionNode.dataset.openActiveSession);
   if (likeNode) await toggleLike(likeNode.dataset.like);
@@ -6236,6 +6311,7 @@ document.addEventListener('submit', async event => {
   if (event.target.id === 'authForm') await sendMagicLink(event);
   else if (event.target.id === 'profileForm') await completeProfile(event);
   else if (event.target.id === 'sessionForm') await createSession(event);
+  else if (event.target.id === 'finishSessionForm') await finishSession(event);
   else if (event.target.id === 'postForm') await savePost(event);
   else if (event.target.id === 'eventForm') await createEvent(event);
   else if (event.target.id === 'nonprofitForm') await saveNonprofit(event);
