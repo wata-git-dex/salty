@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.113';
+const APP_VERSION = '1.114';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -1854,7 +1854,7 @@ function renderSessionChatSummary() {
   const chatMembers = sessionChatMemberNames(session);
   const listedGuests = sessionListedGuestNames(session);
   const parts = scheduleParts(session.surf_time || session.created_at);
-  target.innerHTML = `<div><span>SESSION CHAT</span><h2>${esc(session.spot?.name || 'Surf session')}</h2><p><svg><use href="#i-calendar"/></svg>${esc(parts.date)} · ${esc(parts.time)}${session.spot?.general_location ? ` <b>·</b> <svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}` : ''}</p></div><div class="session-chat-crew"><span><b>Surfers</b>${esc(surfers.join(', ') || 'Open')}</span><span><b>Filmers</b>${esc(filmers.join(', ') || 'Open')}</span></div><div class="session-chat-access"><span><svg><use href="#i-chat"/></svg><b>In this chat</b>${esc(chatMembers.join(', ') || 'Just you')}</span>${listedGuests.length ? `<span class="listed-only"><svg><use href="#i-person"/></svg><b>Listed on the surf</b>${esc(listedGuests.join(', '))}<small>Not in this chat until they join Sodium and this session.</small></span>` : ''}</div>`;
+  target.innerHTML = `<div><span>SESSION CHAT</span><h2>${esc(session.spot?.name || 'Surf session')}</h2><p><svg><use href="#i-calendar"/></svg>${esc(parts.date)} · ${esc(parts.time)}${session.spot?.general_location ? ` <b>·</b> <svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}` : ''}</p></div><div class="session-chat-crew"><span><b>Surfers</b>${esc(surfers.join(', ') || 'Open')}</span><span><b>Filmers</b>${esc(filmers.join(', ') || 'Open')}</span></div><div class="session-chat-access"><span><svg><use href="#i-chat"/></svg><b>In this chat</b>${esc(chatMembers.join(', ') || 'Just you')}</span>${listedGuests.length ? `<span class="listed-only"><svg><use href="#i-person"/></svg><b>Name only</b>${esc(listedGuests.join(', '))}<small>Not connected to a Sodium account, so they do not receive this chat.</small></span>` : ''}</div>`;
 }
 
 async function loadSessionChatConversation() {
@@ -2304,6 +2304,33 @@ function renderGoogleDriveCard() {
   const automatic = Boolean(folderId);
   $('.clip-count-fields').classList.toggle('google-tracked', automatic);
   $('#clipUploadedCount').readOnly = false;
+  renderGoogleDriveInboxStatus();
+}
+
+function renderGoogleDriveInboxStatus() {
+  const card = $('#clipDriveInboxStatus');
+  if (!card) return;
+  const heading = $('#clipDriveInboxHeading');
+  const copy = $('#clipDriveInboxCopy');
+  const action = $('#clipDriveInboxAction');
+  card.classList.remove('hidden', 'connected', 'upgrade');
+  if (state.googleDriveNeedsUpgrade) {
+    card.classList.add('upgrade');
+    heading.textContent = 'Reconnect once for live counts';
+    copy.textContent = 'Required so Sodium can count clips uploaded normally into your Drive folder.';
+    action.textContent = 'Reconnect for live counts';
+    action.classList.remove('hidden');
+  } else if (state.googleDriveConnected) {
+    card.classList.add('connected');
+    heading.textContent = 'Live folder counting is on';
+    copy.textContent = 'Sodium checks connected Drive folders automatically. Manual counts are never lowered.';
+    action.classList.add('hidden');
+  } else {
+    heading.textContent = 'Connect Drive for live counts';
+    copy.textContent = 'Optional. Manual Drive, Dropbox, and iCloud links still work.';
+    action.textContent = 'Connect Drive';
+    action.classList.remove('hidden');
+  }
 }
 
 async function loadGoogleDriveStatus(force = false) {
@@ -2663,6 +2690,7 @@ function renderClipDeliveries() {
   updateUnreadBadge();
   renderDmClipDeliveries();
   renderInboxTabs();
+  renderGoogleDriveInboxStatus();
 }
 
 function renderDmClipDeliveries() {
@@ -3988,8 +4016,7 @@ function renderSessions() {
     const actions = pastSession || mine ? '' : `${surfAction}${filmAction}`;
     const mapUrl = spotMapUrl(session.spot);
     const location = session.spot?.general_location ? `<a class="spot-location" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}</a>` : '';
-    const listedGuests = new Set(sessionListedGuestNames(session).map(name => name.toLowerCase()));
-    const surferNames = surfers.length ? surfers.map(name => listedGuests.has(name.toLowerCase()) ? `<b class="session-listed-guest" title="Listed on this surf · not in the session chat">${esc(name)}<small>listed</small></b>` : `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
+    const surferNames = surfers.length ? surfers.map(name => `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
     const filmerNames = filmers.length ? filmers.map(name => `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
     const filmerRow = (session.wants_filmer || filmers.length)
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
@@ -5926,7 +5953,10 @@ document.addEventListener('click', async event => {
   }
   if (inboxTabNode) {
     state.inboxTab = inboxTabNode.dataset.inboxTab;
-    if (state.inboxTab === 'clips') markClipInboxSeen();
+    if (state.inboxTab === 'clips') {
+      markClipInboxSeen();
+      await loadGoogleDriveStatus();
+    }
     renderInboxTabs();
     updateCreateFab('dms');
   }

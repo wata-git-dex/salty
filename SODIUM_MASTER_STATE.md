@@ -6,7 +6,7 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.113.
+- Current release: v1.114.
 - This release enables real background Google Drive folder counting after one explicit reconnect and renames the external receipt to **Folder link tapped**. Sodium still does not claim to verify external-file downloads.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
@@ -191,3 +191,5 @@ Version 1.111 adds secure Clip Delivery receipts for both linked members and pri
 Version 1.112 makes Google Drive counting monotonic and honest. The narrow `drive.file` permission may not expose clips added later through the normal Google Drive app, so a background Drive check is allowed to raise an upload count but can never lower or erase a filmer-confirmed count. The sender can always edit **Uploaded so far** or use **Mark all clips ready**; those values remain authoritative across foreground and scheduled syncs.
 
 Version 1.113 fixes the underlying Drive visibility limitation. Sodium now requests metadata-only Drive access in addition to Picker access, requires one explicit reconnect for old connections, and can count ordinary video uploads in the selected folder during the scheduled background checks. It does not read video contents. The sender-facing receipt now says **Folder link tapped — not proof of download**, because neither Sodium nor the folder click can prove that Google Drive files were downloaded.
+
+Version 1.114 fixes a native packaging failure discovered during device verification: the Xcode shell had v1.113 metadata but bundled stale v1.111 JavaScript because an incorrect manual Capacitor invocation silently skipped sync. The supported `native:sync` command now runs Capacitor and a mandatory version verifier that fails the build unless the web source, `native-web`, and Xcode public bundle match. The Clips inbox now shows Google Drive connection/live-count status and the required one-time reconnect action directly. Session cards no longer label name-only guests as “listed”; session chat explains that those names are not connected to member accounts.
