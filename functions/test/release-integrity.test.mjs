@@ -94,15 +94,19 @@ test('clip receipts are recipient-authorized and never claim external downloads'
   assert.match(app, /data-clip-folder-delivery=/);
   assert.match(app, /recordClipDeliveryReceipt\(delivery\.id, 'viewed'\)/);
   assert.match(app, /Delivery viewed/);
-  assert.match(app, /Clips opened/);
+  assert.match(app, /Folder link tapped/);
+  assert.match(app, /not proof of download/);
   assert.doesNotMatch(app, /clips downloaded|files downloaded/i);
 });
 
 test('Google Drive sync can advance but never erase a filmer-confirmed clip count', () => {
+  const driveShared = read('functions/api/google-drive/_shared.js');
   const driveSync = read('functions/api/google-drive/sync.js');
   const scheduledDriveSync = read('functions/api/google-drive/sync-all.js');
   assert.match(driveSync, /Math\.max\(Number\(delivery\.uploaded_count\) \|\| 0, driveVisibleCount\)/);
   assert.match(scheduledDriveSync, /Math\.max\(Number\(delivery\.uploaded_count\) \|\| 0, driveVisibleCount\)/);
+  assert.match(driveShared, /drive\.metadata\.readonly/);
+  assert.match(driveShared, /driveConnectionNeedsUpgrade/);
   assert.match(app, /\$\('#clipUploadedCount'\)\.readOnly = false/);
   assert.match(html, /Drive will never lower this number/);
 });

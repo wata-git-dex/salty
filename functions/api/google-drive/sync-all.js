@@ -1,4 +1,4 @@
-import { getDriveConnection, json, refreshGoogleAccessToken, serviceRequest } from './_shared.js';
+import { getDriveConnection, json, refreshGoogleAccessToken, requireLiveFolderCountConnection, serviceRequest } from './_shared.js';
 
 const FOLDER_ID_PATTERN = /^[A-Za-z0-9_-]{10,200}$/u;
 
@@ -41,13 +41,11 @@ export async function onRequestPost({ request, env }) {
       if (!FOLDER_ID_PATTERN.test(delivery.google_folder_id || '') || failedSenders.has(delivery.sender)) continue;
       try {
         if (!accessTokens.has(delivery.sender)) {
-          const connection = await getDriveConnection(env, delivery.sender);
-          if (!connection) { failedSenders.add(delivery.sender); continue; }
+          const connection = requireLiveFolderCountConnection(await getDriveConnection(env, delivery.sender));
           accessTokens.set(delivery.sender, await refreshGoogleAccessToken(env, connection.encrypted_refresh_token));
         }
         const driveVisibleCount = await countVideoFiles(accessTokens.get(delivery.sender), delivery.google_folder_id);
-        // Background sync can advance a handoff but never lower the filmer's
-        // confirmed count when Google's narrow scope cannot see every file.
+        // Background sync can advance a handoff but never lower a filmer-confirmed count.
         const count = Math.max(Number(delivery.uploaded_count) || 0, driveVisibleCount);
         const status = count >= Number(delivery.expected_count) ? 'ready' : 'uploading';
         if (count === Number(delivery.uploaded_count) && status === 'uploading') continue;

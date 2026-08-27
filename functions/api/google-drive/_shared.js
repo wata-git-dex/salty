@@ -1,7 +1,13 @@
 import { json, requireSodiumMember } from '../stream/_shared.js';
 
 const SUPABASE_URL = 'https://maihhnwrstewzapsvrec.supabase.co';
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+// Picker only needs drive.file, but live counting also needs permission to see
+// metadata for videos added to the chosen folder outside Sodium.
+const DRIVE_SCOPE = [
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/drive.metadata.readonly',
+].join(' ');
+const LIVE_FOLDER_COUNT_RELEASED_AT = Date.parse('2026-08-27T04:41:00Z');
 const GOOGLE_AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
@@ -162,6 +168,20 @@ export async function getDriveConnection(env, userId) {
   if (!response.ok) throw new Response('Could not read the Google Drive connection', { status:502 });
   const rows = await response.json();
   return rows[0] || null;
+}
+
+export function driveConnectionNeedsUpgrade(connection) {
+  if (!connection) return false;
+  const connectedAt = Date.parse(connection.updated_at || '');
+  return !Number.isFinite(connectedAt) || connectedAt < LIVE_FOLDER_COUNT_RELEASED_AT;
+}
+
+export function requireLiveFolderCountConnection(connection) {
+  if (!connection) throw new Response('Connect Google Drive in Sodium', { status:409 });
+  if (driveConnectionNeedsUpgrade(connection)) {
+    throw new Response('Reconnect Google Drive once to enable live folder counts', { status:409 });
+  }
+  return connection;
 }
 
 export async function saveDriveConnection(env, userId, encryptedRefreshToken, googleEmail = null) {

@@ -1,4 +1,4 @@
-import { getDriveConnection, json, refreshGoogleAccessToken, requireMember, serviceRequest } from './_shared.js';
+import { getDriveConnection, json, refreshGoogleAccessToken, requireLiveFolderCountConnection, requireMember, serviceRequest } from './_shared.js';
 
 const FOLDER_ID_PATTERN = /^[A-Za-z0-9_-]{10,200}$/u;
 
@@ -53,13 +53,10 @@ export async function onRequestPost({ request, env }) {
     if (delivery.tracking_mode !== 'google_drive' || !FOLDER_ID_PATTERN.test(delivery.google_folder_id || '')) {
       return json({ error:'This delivery uses manual counting.' }, 409);
     }
-    const connection = await getDriveConnection(env, delivery.sender);
-    if (!connection) return json({ error:'The filmer disconnected Google Drive. Manual counting still works.' }, 409);
+    const connection = requireLiveFolderCountConnection(await getDriveConnection(env, delivery.sender));
     const accessToken = await refreshGoogleAccessToken(env, connection.encrypted_refresh_token);
     const driveVisibleCount = Math.min(2000, await countVideoFiles(accessToken, delivery.google_folder_id));
-    // drive.file intentionally grants narrow, per-file access. Files added to the
-    // folder outside Sodium may be invisible here. A refresh may advance a
-    // delivery, but it must never erase a count the filmer confirmed manually.
+    // Never erase a count the filmer confirmed manually if Drive metadata is delayed.
     const count = Math.max(Number(delivery.uploaded_count) || 0, driveVisibleCount);
     const status = count >= delivery.expected_count ? 'ready' : 'uploading';
     const update = await serviceRequest(env, `clip_deliveries?id=eq.${encodeURIComponent(delivery.id)}`, {

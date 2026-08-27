@@ -4,6 +4,7 @@ import {
   createOAuthState,
   decryptRefreshToken,
   encryptRefreshToken,
+  googleAuthorizationUrl,
   verifyOAuthState,
 } from '../api/google-drive/_shared.js';
 
@@ -24,4 +25,15 @@ test('Google refresh tokens are encrypted at rest', async () => {
   assert.match(encrypted, /^v1\./u);
   assert.ok(!encrypted.includes('refresh-token'));
   assert.equal(await decryptRefreshToken(env, encrypted), 'refresh-token-that-never-enters-the-client');
+});
+
+test('Drive authorization can count ordinary files added outside Sodium', () => {
+  const url = new URL(googleAuthorizationUrl(
+    { GOOGLE_CLIENT_ID:'test-client' },
+    new Request('https://community.saltyviewfinder.com/api/google-drive/connect'),
+    'signed-state',
+  ));
+  const scopes = new Set((url.searchParams.get('scope') || '').split(' '));
+  assert.ok(scopes.has('https://www.googleapis.com/auth/drive.file'));
+  assert.ok(scopes.has('https://www.googleapis.com/auth/drive.metadata.readonly'));
 });

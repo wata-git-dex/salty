@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.112';
+const APP_VERSION = '1.113';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -138,7 +138,7 @@ const state = {
   guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
   postMemberTags: [], postPersonNames: [], postCustomTags: [], postSessionId: '', qrInviteUrl: '', qrInviteRegionName: '',
   nonprofitLogoUrls: {}, editingNonprofitId: null, drawerScrollY: 0,
-  googleDriveConnected: false, googleDriveChecked: false, googleDriveSyncTimer: null,
+  googleDriveConnected: false, googleDriveNeedsUpgrade: false, googleDriveChecked: false, googleDriveSyncTimer: null,
   driveConnectResult: '', driveReconnectWarned: false,
   editingMessageKind: '', editingMessageId: '', editingMessageHasAttachment: false,
   reactingMessageKind: '', reactingMessageId: '',
@@ -2290,13 +2290,17 @@ function renderGoogleDriveCard() {
   const folderId = $('#clipGoogleFolderId').value;
   const folderName = $('#clipGoogleFolderName').value;
   card.classList.toggle('selected', Boolean(folderId));
-  $('#clipDriveConnect').classList.toggle('hidden', state.googleDriveConnected);
-  $('#clipDrivePick').classList.toggle('hidden', !state.googleDriveConnected);
+  const usableConnection = state.googleDriveConnected && !state.googleDriveNeedsUpgrade;
+  $('#clipDriveConnect').classList.toggle('hidden', usableConnection);
+  $('#clipDriveConnect').textContent = state.googleDriveNeedsUpgrade ? 'Reconnect for live counts' : 'Connect Drive';
+  $('#clipDrivePick').classList.toggle('hidden', !usableConnection);
   $('#clipDriveDisconnect').classList.toggle('hidden', !state.googleDriveConnected);
   $('#clipDriveHeading').textContent = folderId ? (folderName || 'Google Drive folder selected') : 'Pick a folder without copying its link';
   $('#clipDriveStatus').textContent = folderId
     ? 'Background checks may raise the count. Your entered count is always preserved and can never be reduced by Drive.'
-    : state.googleDriveConnected ? 'Connected. Choose only the folder for this delivery.' : 'Manual links always remain available.';
+    : state.googleDriveNeedsUpgrade
+      ? 'Reconnect once so Sodium can count videos added to the folder outside the app.'
+      : usableConnection ? 'Connected. Choose only the folder for this delivery.' : 'Manual links always remain available.';
   const automatic = Boolean(folderId);
   $('.clip-count-fields').classList.toggle('google-tracked', automatic);
   $('#clipUploadedCount').readOnly = false;
@@ -2310,9 +2314,11 @@ async function loadGoogleDriveStatus(force = false) {
   try {
     const result = await googleDriveRequest('status', { method:'POST' });
     state.googleDriveConnected = Boolean(result.connected);
+    state.googleDriveNeedsUpgrade = Boolean(result.needsUpgrade);
   } catch (error) {
     console.warn('Optional Google Drive status unavailable:', error.message);
     state.googleDriveConnected = false;
+    state.googleDriveNeedsUpgrade = false;
   }
   state.googleDriveChecked = true;
   renderGoogleDriveCard();
@@ -2322,6 +2328,7 @@ async function loadGoogleDriveStatus(force = false) {
 async function connectGoogleDrive() {
   try {
     state.googleDriveConnected = false;
+    state.googleDriveNeedsUpgrade = false;
     state.googleDriveChecked = false;
     state.driveReconnectWarned = false;
     const result = await googleDriveRequest('connect', { method:'POST' });
@@ -2335,6 +2342,7 @@ async function disconnectGoogleDrive() {
   try {
     await googleDriveRequest('disconnect', { method:'POST' });
     state.googleDriveConnected = false;
+    state.googleDriveNeedsUpgrade = false;
     state.googleDriveChecked = true;
     $('#clipGoogleFolderId').value = '';
     $('#clipGoogleFolderName').value = '';
@@ -2393,6 +2401,7 @@ async function pickGoogleDriveFolder() {
   } catch (error) {
     if (/reconnect/i.test(error.message)) {
       state.googleDriveConnected = false;
+      state.googleDriveNeedsUpgrade = true;
       state.googleDriveChecked = true;
       renderGoogleDriveCard();
     }
@@ -2467,7 +2476,7 @@ async function syncGoogleDriveDelivery(delivery) {
   } catch (error) {
     console.warn('Google Drive clip count deferred:', error.message);
     if (error.status === 409 && delivery.sender === state.profile?.id) {
-      state.googleDriveConnected = false;
+      state.googleDriveNeedsUpgrade = true;
       state.googleDriveChecked = true;
       if (!state.driveReconnectWarned) {
         state.driveReconnectWarned = true;
@@ -2586,7 +2595,7 @@ function clipDeliveryReceiptMarkup(delivery, mine) {
   const viewed = delivery.first_delivery_viewed_at
     ? `<span><b>Delivery viewed</b><small>${esc(clipReceiptTime(delivery.first_delivery_viewed_at))}${Number(delivery.delivery_view_count || 0) > 1 ? ` · ${formatCount(delivery.delivery_view_count)} views` : ''}</small></span>` : '';
   const opened = delivery.first_clips_opened_at
-    ? `<span><b>Clips opened</b><small>${esc(clipReceiptTime(delivery.first_clips_opened_at))}${Number(delivery.clips_open_count || 0) > 1 ? ` · ${formatCount(delivery.clips_open_count)} opens` : ''}</small></span>` : '';
+    ? `<span><b>Folder link tapped</b><small>${esc(clipReceiptTime(delivery.first_clips_opened_at))}${Number(delivery.clips_open_count || 0) > 1 ? ` · ${formatCount(delivery.clips_open_count)} taps` : ''} · not proof of download</small></span>` : '';
   return `<div class="clip-receipt-history" aria-label="Recipient activity">${viewed}${opened}</div>`;
 }
 
@@ -2610,7 +2619,7 @@ function clipDeliveryMarkup(delivery) {
     ? `<button class="clip-open clip-refresh" data-refresh-drive-delivery="${delivery.id}"><svg><use href="#i-refresh"/></svg>Refresh Drive count</button>`
     : '';
   const receiptStatus = mine && delivery.first_clips_opened_at
-    ? 'Clips opened' : (mine && delivery.first_delivery_viewed_at ? 'Delivery viewed' : (ready ? 'Clips ready' : 'Uploading'));
+    ? 'Folder tapped' : (mine && delivery.first_delivery_viewed_at ? 'Delivery viewed' : (ready ? 'Clips ready' : 'Uploading'));
   return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><details class="clip-card-details"><summary><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : receiptStatus}</span></div><div class="clip-summary-meta"><span>${esc(subjectPreview)}${esc(formatCount(delivery.expected_count))} clips · ${esc(clipSessionLabel(delivery))}</span><svg><use href="#i-back"/></svg></div></summary><div class="clip-delivery-expanded"><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${clipDeliveryReceiptMarkup(delivery, mine)}${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}<div class="clip-delivery-actions"><a class="clip-open" data-clip-folder-delivery="${delivery.id}" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${refresh}${shareAction}${edit}</div></div></details></article>`;
 }
 
