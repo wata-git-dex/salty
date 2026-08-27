@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.120';
+const APP_VERSION = '1.121';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -3984,7 +3984,7 @@ function renderSessions() {
     const canSendClips = finished && ((session.author_role === 'film' && mine) || myRsvp?.role === 'film' || state.profile.is_admin);
     const sendClips = canSendClips ? `<button class="session-clips-icon" data-session-clips="${session.id}" aria-label="Send clips to this crew" title="Send clips"><svg><use href="#i-camera"/></svg></button>` : '';
     const sessionChatUnread = sessionChatUnreadCount(session.id);
-    const showSessionChat = canAccessSessionChat(session) && (sessionChatParticipantIds(session).size > 1 || state.sessionMessages.some(message => message.session_id === session.id));
+    const showSessionChat = canAccessSessionChat(session);
     const sessionChat = showSessionChat ? `<button class="session-chat-icon ${sessionChatUnread ? 'unread' : ''}" data-session-chat="${session.id}" aria-label="Message session crew" title="Message crew"><svg><use href="#i-chat"/></svg>${sessionChatUnread ? `<b>${sessionChatUnread > 9 ? '9+' : sessionChatUnread}</b>` : ''}</button>` : '';
     const tools = `<div class="session-card-tools">${finished ? '<span class="past-badge">Finished</span>' : sessionState}${sendClips}${sessionChat}${share}${edit}</div>`;
     const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;

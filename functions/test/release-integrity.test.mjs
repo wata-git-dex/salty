@@ -110,6 +110,7 @@ test('session chat stays tied to the surf crew across UI, RLS, and realtime', ()
   assert.match(html, /id="sessionChatThreads"/);
   assert.match(app, /function sessionChatParticipantIds/);
   assert.match(app, /data-session-chat=/);
+  assert.match(app, /const showSessionChat = canAccessSessionChat\(session\);/);
   assert.match(app, /table: 'session_messages'/);
   assert.match(sessionChatMigration, /create table if not exists public\.session_messages/);
   assert.match(sessionChatMigration, /public\.is_session_chat_member\(session_id\)/);
