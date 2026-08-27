@@ -6,7 +6,7 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.109.
+- Current release: v1.110.
 - This release adds private, text-only Session chats for the organizer and linked members of each surf. Session chats appear beside DMs in Inbox and reuse Sodium reactions, message editing/deletion, unread state, realtime updates, and message notifications.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
@@ -183,3 +183,5 @@ Version 1.107 makes the member boundary visible. Typed nonmember names remain sa
 Version 1.108 hardens the current foreground PWA upload path while native media work proceeds. Cloudflare TUS uploads keep the phone awake when supported, retry transient network and offset failures for several minutes, report actual HTTP failures, discard invalid local upload addresses, and automatically replace an expired direct-upload session once without making the member restart the post. This makes the existing original-file uploader reliable; Instagram-style local compression and true background transfer remain requirements of the native iOS media pipeline rather than claims made by the PWA.
 
 Version 1.109 stabilizes the shared web and native-shell experience. Pull-to-refresh is bounded and cannot stack or drag the app beneath the iPhone safe area, Community chat resizes cohesively with the keyboard, its navigation icon is visually distinct from Inbox, and Stoke clearly marks native clip posting as coming soon while preserving photo posting and existing clip deliveries.
+
+Version 1.110 clarifies the communication hierarchy without changing navigation structure. Inbox is the orange action in the header, the menu is blue, the streak badge is visually quieter, and the bottom Chat destination uses a combined group-and-conversation icon instead of a generic people symbol.

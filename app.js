@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.109';
+const APP_VERSION = '1.110';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -1348,7 +1348,7 @@ function avatarMarkup(profile, className = 'avatar') {
 }
 
 const navItems = [
-  ['surfing', 'i-surf', 'Sessions'], ['feed', 'i-wave', 'Stoke'], ['chat', 'i-community', 'Community'],
+  ['surfing', 'i-surf', 'Sessions'], ['feed', 'i-wave', 'Stoke'], ['chat', 'i-community', 'Chat'],
   ['events', 'i-calendar', 'Events'], ['you', 'i-user', 'Profile'],
 ];
 

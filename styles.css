@@ -293,8 +293,9 @@ html[data-theme="foam"] .session-chat-thread,html[data-theme="foam"] .session-ch
 
 /* v1.54: calmer profile groups and right-side navigation drawer. */
 .brand img,.rail-brand img{object-fit:cover;border:1px solid #eaf2f566;background:var(--ink2);box-shadow:0 0 0 2px #ffffff0d}
-.inbox-button{border-color:#54abec70;background:#54abec17;color:var(--hail)}
-.menu-button{border-color:#f6a23c70;background:#f6a23c14;color:var(--sodium)}
+.inbox-button{border-color:#f6a23c88;background:#f6a23c1c;color:var(--sodium);box-shadow:inset 0 0 0 1px #f6a23c12}
+.menu-button{border-color:#54abec88;background:#54abec18;color:var(--hail);box-shadow:inset 0 0 0 1px #54abec10}
+.streak{border-color:color-mix(in srgb,var(--line) 80%,var(--sodium) 20%);background:color-mix(in srgb,var(--surf) 88%,transparent);box-shadow:none}
 .marketplace-intro{margin:16px 14px 12px;padding:19px;border:1px solid #f6a23c55;border-radius:19px;background:linear-gradient(135deg,#f6a23c18,#54abec10)}
 .marketplace-intro>span{color:var(--sodium);font:900 9px Archivo;letter-spacing:1.3px}.marketplace-intro h3{margin:6px 0;font:900 20px Archivo}.marketplace-intro p{color:var(--mut);font-size:12px;line-height:1.5}
 .marketplace-add-button{margin-bottom:14px}.marketplace-list{padding:0 14px 110px}.marketplace-list>.empty{margin-left:0;margin-right:0}
