@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.119';
+const APP_VERSION = '1.120';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -3983,7 +3983,10 @@ function renderSessions() {
       : '';
     const canSendClips = finished && ((session.author_role === 'film' && mine) || myRsvp?.role === 'film' || state.profile.is_admin);
     const sendClips = canSendClips ? `<button class="session-clips-icon" data-session-clips="${session.id}" aria-label="Send clips to this crew" title="Send clips"><svg><use href="#i-camera"/></svg></button>` : '';
-    const tools = `<div class="session-card-tools">${finished ? '<span class="past-badge">Finished</span>' : sessionState}${sendClips}${share}${edit}</div>`;
+    const sessionChatUnread = sessionChatUnreadCount(session.id);
+    const showSessionChat = canAccessSessionChat(session) && (sessionChatParticipantIds(session).size > 1 || state.sessionMessages.some(message => message.session_id === session.id));
+    const sessionChat = showSessionChat ? `<button class="session-chat-icon ${sessionChatUnread ? 'unread' : ''}" data-session-chat="${session.id}" aria-label="Message session crew" title="Message crew"><svg><use href="#i-chat"/></svg>${sessionChatUnread ? `<b>${sessionChatUnread > 9 ? '9+' : sessionChatUnread}</b>` : ''}</button>` : '';
+    const tools = `<div class="session-card-tools">${finished ? '<span class="past-badge">Finished</span>' : sessionState}${sendClips}${sessionChat}${share}${edit}</div>`;
     const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;
     const filmAction = (session.wants_filmer || myRsvp?.role === 'film')
       ? `<button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : (filmers.length ? 'Film too' : 'I can film')}</button>`
@@ -3996,9 +3999,6 @@ function renderSessions() {
     const filmerRow = (session.wants_filmer || filmers.length)
       ? `<div class="session-crew-row filmers"><span><svg><use href="#i-camera"/></svg>FILMERS</span><div>${filmerNames}</div></div>`
       : '';
-    const sessionChatUnread = sessionChatUnreadCount(session.id);
-    const showSessionChat = canAccessSessionChat(session) && (sessionChatParticipantIds(session).size > 1 || state.sessionMessages.some(message => message.session_id === session.id));
-    const sessionChat = showSessionChat ? `<button class="session-chat-action ${sessionChatUnread ? 'unread' : ''}" data-session-chat="${session.id}"><svg><use href="#i-chat"/></svg><span>Message crew</span>${sessionChatUnread ? `<b>${sessionChatUnread > 9 ? '9+' : sessionChatUnread}</b>` : '<i>›</i>'}</button>` : '';
     const initiator = session.initiator_profile || (session.initiator_user === session.author ? session.author_profile : null);
     const initiatorName = initiator?.name || session.initiator_name || session.author_profile?.name || 'Sodium member';
     const addedBy = session.author_profile?.name && session.author_profile.name !== initiatorName ? `<small>Added by ${esc(session.author_profile.name)}</small>` : '';
@@ -4008,7 +4008,7 @@ function renderSessions() {
       ? schedulePills(scheduleParts(session.surf_time || session.ended_at || session.created_at), 'session-schedule')
       : sessionSchedulePills(session);
     const timingClass = pastSession ? 'past-card' : (finishedToday ? 'finished-today' : (session.when_label === 'Now' ? 'live-session' : 'future-session'));
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${sessionChat}${actions ? `<div class="card-actions">${actions}</div>` : ''}${claimInvite}</article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${actions ? `<div class="card-actions">${actions}</div>` : ''}${claimInvite}</article>`;
   };
   const activeMarkup = orderedSessions.length
     ? orderedSessions.map(session => renderSessionCard(session)).join('')

@@ -6,7 +6,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.119.
+- Current release: v1.120.
+- Session chat is now a compact icon in the card's top action cluster beside start/finish, clips, share, and edit. The full-width Message crew bar was removed so finished and active session cards stay compact while retaining the same chat access and unread count.
 - This release completes a mobile UX density pass: the live-session shortcut is hidden on Sessions and messaging surfaces where it duplicated or obstructed primary controls, remains available as a compact return shortcut elsewhere, and cards, empty states, archive rows, and action spacing are tightened without reducing usable tap targets.
 - This release keeps a finished session on the main Sessions screen through the rest of its local calendar day, preserves its crew chat, lets filmers start session-linked clip deliveries from the card, and separates joining intent from confirmed attendance.
 - Joining a session records intent. At Finish, the session creator or an admin confirms which linked members actually showed; only confirmed linked members receive attendance Stokens, and the existing unique point ledger prevents double-credit if someone is removed and re-added. Typed guest names never receive account credit until they are linked to a member.
