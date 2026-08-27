@@ -56,7 +56,11 @@ export async function onRequestPost({ request, env }) {
     const connection = await getDriveConnection(env, delivery.sender);
     if (!connection) return json({ error:'The filmer disconnected Google Drive. Manual counting still works.' }, 409);
     const accessToken = await refreshGoogleAccessToken(env, connection.encrypted_refresh_token);
-    const count = Math.min(2000, await countVideoFiles(accessToken, delivery.google_folder_id));
+    const driveVisibleCount = Math.min(2000, await countVideoFiles(accessToken, delivery.google_folder_id));
+    // drive.file intentionally grants narrow, per-file access. Files added to the
+    // folder outside Sodium may be invisible here. A refresh may advance a
+    // delivery, but it must never erase a count the filmer confirmed manually.
+    const count = Math.max(Number(delivery.uploaded_count) || 0, driveVisibleCount);
     const status = count >= delivery.expected_count ? 'ready' : 'uploading';
     const update = await serviceRequest(env, `clip_deliveries?id=eq.${encodeURIComponent(delivery.id)}`, {
       method:'PATCH',
@@ -64,7 +68,7 @@ export async function onRequestPost({ request, env }) {
       body:JSON.stringify({ uploaded_count:count, status }),
     });
     if (!update.ok) return json({ error:'Could not update the clip count.' }, 502);
-    return json({ deliveryId:delivery.id, uploadedCount:count, expectedCount:delivery.expected_count, status });
+    return json({ deliveryId:delivery.id, uploadedCount:count, driveVisibleCount, expectedCount:delivery.expected_count, status });
   } catch (error) {
     if (error instanceof Response) return error;
     return json({ error:'Could not refresh the Google Drive count.' }, 500);

@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.111';
+const APP_VERSION = '1.112';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -2295,11 +2295,11 @@ function renderGoogleDriveCard() {
   $('#clipDriveDisconnect').classList.toggle('hidden', !state.googleDriveConnected);
   $('#clipDriveHeading').textContent = folderId ? (folderName || 'Google Drive folder selected') : 'Pick a folder without copying its link';
   $('#clipDriveStatus').textContent = folderId
-    ? 'Sodium checks completed video uploads in the background and alerts the recipient when every clip is ready.'
+    ? 'Background checks may raise the count. Your entered count is always preserved and can never be reduced by Drive.'
     : state.googleDriveConnected ? 'Connected. Choose only the folder for this delivery.' : 'Manual links always remain available.';
   const automatic = Boolean(folderId);
   $('.clip-count-fields').classList.toggle('google-tracked', automatic);
-  $('#clipUploadedCount').readOnly = automatic;
+  $('#clipUploadedCount').readOnly = false;
 }
 
 async function loadGoogleDriveStatus(force = false) {
@@ -2738,7 +2738,7 @@ function updateClipProviderHint() {
   const provider = clipProviderFromUrl($('#clipFolderUrl').value);
   const hint = $('#clipProviderHint');
   if ($('#clipGoogleFolderId').value) {
-    hint.textContent = 'Selected with Google Drive · completed video files count automatically, even after you close Sodium.';
+    hint.textContent = 'Google Drive selected · background checks can raise the count; enter the visible total anytime and Sodium will preserve it.';
     hint.classList.add('clip-auto-count-note');
     return;
   }

@@ -45,7 +45,10 @@ export async function onRequestPost({ request, env }) {
           if (!connection) { failedSenders.add(delivery.sender); continue; }
           accessTokens.set(delivery.sender, await refreshGoogleAccessToken(env, connection.encrypted_refresh_token));
         }
-        const count = await countVideoFiles(accessTokens.get(delivery.sender), delivery.google_folder_id);
+        const driveVisibleCount = await countVideoFiles(accessTokens.get(delivery.sender), delivery.google_folder_id);
+        // Background sync can advance a handoff but never lower the filmer's
+        // confirmed count when Google's narrow scope cannot see every file.
+        const count = Math.max(Number(delivery.uploaded_count) || 0, driveVisibleCount);
         const status = count >= Number(delivery.expected_count) ? 'ready' : 'uploading';
         if (count === Number(delivery.uploaded_count) && status === 'uploading') continue;
         const update = await serviceRequest(env, `clip_deliveries?id=eq.${encodeURIComponent(delivery.id)}`, {
@@ -54,7 +57,7 @@ export async function onRequestPost({ request, env }) {
           body:JSON.stringify({ uploaded_count:count, status }),
         });
         if (!update.ok) throw new Error('Database update failed');
-        results.push({ id:delivery.id, count, status });
+        results.push({ id:delivery.id, count, driveVisibleCount, status });
       } catch (error) {
         if (/reconnect/i.test(error?.statusText || error?.message || '')) failedSenders.add(delivery.sender);
         console.warn('Scheduled Drive sync deferred:', delivery.id, error?.message || error);

@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=111-clip-receipts">
+  <link rel="stylesheet" href="./styles.css?v=112-drive-count-floor">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -71,7 +71,7 @@
 
   <div id="boot" class="boot" aria-live="polite">
     <img class="boot-mark" src="./icon-ink.svg" alt="Sodium">
-    <small class="boot-credit">Saltyview Productions · v1.111</small>
+    <small class="boot-credit">Saltyview Productions · v1.112</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -529,7 +529,7 @@
         </div>
         <input id="clipGoogleFolderId" type="hidden"><input id="clipGoogleFolderName" type="hidden">
         <label>Link to clips<input id="clipFolderUrl" type="url" maxlength="2048" inputmode="url" required placeholder="https://drive.google.com/…"><small id="clipProviderHint">Drive, Dropbox, iCloud, or another HTTPS folder link.</small></label>
-        <div class="clip-count-fields"><label>Total clips<input id="clipExpectedCount" type="number" inputmode="numeric" min="1" max="2000" required value="1"></label><label>Uploaded so far<input id="clipUploadedCount" type="number" inputmode="numeric" min="0" max="2000" required value="0"></label></div>
+        <div class="clip-count-fields"><label>Total clips<input id="clipExpectedCount" type="number" inputmode="numeric" min="1" max="2000" required value="1"></label><label>Uploaded so far<input id="clipUploadedCount" type="number" inputmode="numeric" min="0" max="2000" required value="0"><small>Safe to update manually. Drive will never lower this number.</small></label></div>
         <div id="clipProgressPreview" class="clip-progress-preview"><div><b>0 of 1</b><span>Uploading</span></div><i><span style="width:0%"></span></i><small>At 1 of 1, this automatically becomes Clips ready.</small><small class="clip-count-disclaimer">Clip totals may include waves, B-roll, wipeouts, and other footage from the session.</small></div>
         <label>Note <small>optional</small><textarea id="clipNote" maxlength="500" placeholder="Anything the recipient should know"></textarea></label>
         <button id="clipDeliverySubmit" class="primary" type="submit">Start delivery</button>
@@ -573,9 +573,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.111</span>
-    <h3>Clip deliveries now have honest receipts.</h3>
-    <ul><li>Senders can see when a recipient views the Sodium delivery.</li><li>Sodium also records when they tap through to the external clips folder.</li><li>External downloads stay private to Drive, Dropbox, or the selected provider.</li></ul>
+    <span>NEW IN V1.112</span>
+    <h3>Clip counts no longer move backward.</h3>
+    <ul><li>Your manually entered upload count is always preserved.</li><li>Google Drive checks can raise the number but can never reset it to zero.</li><li>Mark all clips ready remains the guaranteed finish action.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -591,6 +591,6 @@
   <script src="./vendor/supabase.min.js?v=2.57.4"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
   <script src="./vendor/tus.min.js?v=4.3.1" defer></script>
-  <script src="./app.js?v=111-clip-receipts" defer></script>
+  <script src="./app.js?v=112-drive-count-floor" defer></script>
 </body>
 </html>

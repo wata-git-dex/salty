@@ -98,6 +98,15 @@ test('clip receipts are recipient-authorized and never claim external downloads'
   assert.doesNotMatch(app, /clips downloaded|files downloaded/i);
 });
 
+test('Google Drive sync can advance but never erase a filmer-confirmed clip count', () => {
+  const driveSync = read('functions/api/google-drive/sync.js');
+  const scheduledDriveSync = read('functions/api/google-drive/sync-all.js');
+  assert.match(driveSync, /Math\.max\(Number\(delivery\.uploaded_count\) \|\| 0, driveVisibleCount\)/);
+  assert.match(scheduledDriveSync, /Math\.max\(Number\(delivery\.uploaded_count\) \|\| 0, driveVisibleCount\)/);
+  assert.match(app, /\$\('#clipUploadedCount'\)\.readOnly = false/);
+  assert.match(html, /Drive will never lower this number/);
+});
+
 test('large Stream uploads recover stale sessions and tolerate mobile interruptions', () => {
   assert.match(app, /const STREAM_UPLOAD_SESSION_TTL = 6 \* 60 \* 60 \* 1000/);
   assert.match(app, /const STREAM_UPLOAD_RETRY_DELAYS = Object\.freeze/);

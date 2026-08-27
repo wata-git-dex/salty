@@ -6,7 +6,7 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.111.
+- Current release: v1.112.
 - This release adds truthful Clip Delivery receipts: a sender can see when the recipient viewed the Sodium delivery and when they tapped through to the external clips folder. Sodium does not claim to verify external-file downloads.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
@@ -187,3 +187,5 @@ Version 1.109 stabilizes the shared web and native-shell experience. Pull-to-ref
 Version 1.110 clarifies the communication hierarchy without changing navigation structure. Inbox is the orange action in the header, the menu is blue, the streak badge is visually quieter, and the bottom Chat destination uses a combined group-and-conversation icon instead of a generic people symbol.
 
 Version 1.111 adds secure Clip Delivery receipts for both linked members and private guest links. The sender sees **Delivery viewed** when the recipient opens the Sodium delivery and **Clips opened** when the recipient taps the external folder. Receipt timestamps and counts are recorded, sender activity never creates a recipient receipt, and Sodium explicitly does not claim to know whether every external Drive, Dropbox, or iCloud file was downloaded.
+
+Version 1.112 makes Google Drive counting monotonic and honest. The narrow `drive.file` permission may not expose clips added later through the normal Google Drive app, so a background Drive check is allowed to raise an upload count but can never lower or erase a filmer-confirmed count. The sender can always edit **Uploaded so far** or use **Mark all clips ready**; those values remain authoritative across foreground and scheduled syncs.
