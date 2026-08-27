@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.110';
+const APP_VERSION = '1.111';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -2410,6 +2410,7 @@ async function loadGuestClipDelivery() {
   }
   state.guestClipDelivery = result.data;
   renderGuestClipDelivery();
+  void recordClipDeliveryReceipt(result.data.id, 'viewed', state.guestClipToken);
 }
 
 function renderGuestClipDelivery() {
@@ -2417,8 +2418,43 @@ function renderGuestClipDelivery() {
   if (!delivery) return;
   const ready = delivery.status === 'ready' || Number(delivery.uploaded_count) >= Number(delivery.expected_count);
   const percent = delivery.expected_count ? Math.min(100, Math.round(Number(delivery.uploaded_count) / Number(delivery.expected_count) * 100)) : 0;
-  $('#guestClipContent').innerHTML = `<div class="guest-clip-summary"><span>${esc(delivery.sender_name)} SENT YOU CLIPS OF</span><h1>${esc((delivery.subject_names || []).join(', ') || 'Your session')}</h1><small>${delivery.session_spot ? `${esc(delivery.session_spot)}${delivery.session_location ? ` · ${esc(delivery.session_location)}` : ''}` : 'Sodium clip delivery'}</small><div class="clip-progress-copy"><b>${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}</b><span>${ready ? 'Clips ready' : `${percent}% uploaded`}</span></div><div class="clip-progress-track"><span style="width:${ready ? 100 : percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p>${esc(delivery.note)}</p>` : ''}<a class="guest-clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener">${ready ? 'Open your clips' : 'View the uploading folder'}</a><small class="guest-no-account">No Sodium account needed.</small><button class="guest-clip-join guest-clip-join-secondary" data-action="guest-clip-join">Join Sodium + save this delivery</button></div>`;
+  $('#guestClipContent').innerHTML = `<div class="guest-clip-summary"><span>${esc(delivery.sender_name)} SENT YOU CLIPS OF</span><h1>${esc((delivery.subject_names || []).join(', ') || 'Your session')}</h1><small>${delivery.session_spot ? `${esc(delivery.session_spot)}${delivery.session_location ? ` · ${esc(delivery.session_location)}` : ''}` : 'Sodium clip delivery'}</small><div class="clip-progress-copy"><b>${formatCount(delivery.uploaded_count)} of ${formatCount(delivery.expected_count)}</b><span>${ready ? 'Clips ready' : `${percent}% uploaded`}</span></div><div class="clip-progress-track"><span style="width:${ready ? 100 : percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p>${esc(delivery.note)}</p>` : ''}<a class="guest-clip-open" data-clip-folder-delivery="${delivery.id}" data-clip-folder-guest="${esc(state.guestClipToken)}" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener">${ready ? 'Open your clips' : 'View the uploading folder'}</a><small class="guest-no-account">No Sodium account needed.</small><button class="guest-clip-join guest-clip-join-secondary" data-action="guest-clip-join">Join Sodium + save this delivery</button></div>`;
   $('#guestClipAccountActions').classList.remove('hidden');
+}
+
+function clipReceiptStorageKey(deliveryId, receiptKind, guestToken = '') {
+  const audience = guestToken ? `guest:${guestToken}` : `member:${state.profile?.id || 'unknown'}`;
+  return `sodium:clip-receipt:${audience}:${deliveryId}:${receiptKind}`;
+}
+
+async function recordClipDeliveryReceipt(deliveryId, receiptKind, guestToken = '') {
+  if (!deliveryId || state.preview || !['viewed', 'clips_opened'].includes(receiptKind)) return false;
+  const storageKey = clipReceiptStorageKey(deliveryId, receiptKind, guestToken);
+  if (receiptKind === 'viewed' && sessionStorage.getItem(storageKey)) return true;
+  const result = await db.rpc('record_clip_delivery_receipt', {
+    target_delivery: guestToken ? null : deliveryId,
+    access_token: guestToken || null,
+    receipt_kind: receiptKind,
+  });
+  if (result.error || !result.data) {
+    if (result.error) console.warn('Clip receipt could not be recorded:', result.error.message);
+    return false;
+  }
+  if (receiptKind === 'viewed') sessionStorage.setItem(storageKey, new Date().toISOString());
+  const local = state.clipDeliveries.find(delivery => delivery.id === deliveryId);
+  if (local) {
+    const now = new Date().toISOString();
+    if (receiptKind === 'viewed') {
+      local.first_delivery_viewed_at ||= now;
+      local.last_delivery_viewed_at = now;
+      local.delivery_view_count = Number(local.delivery_view_count || 0) + 1;
+    } else {
+      local.first_clips_opened_at ||= now;
+      local.last_clips_opened_at = now;
+      local.clips_open_count = Number(local.clips_open_count || 0) + 1;
+    }
+  }
+  return true;
 }
 
 async function syncGoogleDriveDelivery(delivery) {
@@ -2540,6 +2576,20 @@ function clipDeliveryPercent(delivery) {
   return Math.max(0, Math.min(100, Math.round((delivery.uploaded_count / delivery.expected_count) * 100)));
 }
 
+function clipReceiptTime(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+}
+
+function clipDeliveryReceiptMarkup(delivery, mine) {
+  if (!mine || (!delivery.first_delivery_viewed_at && !delivery.first_clips_opened_at)) return '';
+  const viewed = delivery.first_delivery_viewed_at
+    ? `<span><b>Delivery viewed</b><small>${esc(clipReceiptTime(delivery.first_delivery_viewed_at))}${Number(delivery.delivery_view_count || 0) > 1 ? ` · ${formatCount(delivery.delivery_view_count)} views` : ''}</small></span>` : '';
+  const opened = delivery.first_clips_opened_at
+    ? `<span><b>Clips opened</b><small>${esc(clipReceiptTime(delivery.first_clips_opened_at))}${Number(delivery.clips_open_count || 0) > 1 ? ` · ${formatCount(delivery.clips_open_count)} opens` : ''}</small></span>` : '';
+  return `<div class="clip-receipt-history" aria-label="Recipient activity">${viewed}${opened}</div>`;
+}
+
 function clipDeliveryMarkup(delivery) {
   const mine = delivery.sender === state.profile.id;
   const other = mine ? delivery.recipient_profile : delivery.sender_profile;
@@ -2559,7 +2609,9 @@ function clipDeliveryMarkup(delivery) {
   const refresh = delivery.tracking_mode === 'google_drive' && !cancelled
     ? `<button class="clip-open clip-refresh" data-refresh-drive-delivery="${delivery.id}"><svg><use href="#i-refresh"/></svg>Refresh Drive count</button>`
     : '';
-  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><details class="clip-card-details"><summary><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : (ready ? 'Clips ready' : 'Uploading')}</span></div><div class="clip-summary-meta"><span>${esc(subjectPreview)}${esc(formatCount(delivery.expected_count))} clips · ${esc(clipSessionLabel(delivery))}</span><svg><use href="#i-back"/></svg></div></summary><div class="clip-delivery-expanded"><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}<div class="clip-delivery-actions"><a class="clip-open" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${refresh}${shareAction}${edit}</div></div></details></article>`;
+  const receiptStatus = mine && delivery.first_clips_opened_at
+    ? 'Clips opened' : (mine && delivery.first_delivery_viewed_at ? 'Delivery viewed' : (ready ? 'Clips ready' : 'Uploading'));
+  return `<article class="clip-delivery-card ${ready ? 'ready' : ''} ${cancelled ? 'cancelled' : ''}" data-clip-delivery-id="${delivery.id}"><details class="clip-card-details"><summary><div class="clip-delivery-head"><div class="clip-delivery-person">${avatarMarkup(other || { name:delivery.recipient_name })}<div><b>${esc(direction)}</b><small>${mine ? 'Sent' : 'Received'} · ${esc(date)}</small></div></div><span class="clip-status">${cancelled ? 'Cancelled' : receiptStatus}</span></div><div class="clip-summary-meta"><span>${esc(subjectPreview)}${esc(formatCount(delivery.expected_count))} clips · ${esc(clipSessionLabel(delivery))}</span><svg><use href="#i-back"/></svg></div></summary><div class="clip-delivery-expanded"><div class="clip-delivery-title"><div><span class="clip-subject-label">CLIPS OF</span><h3>${esc(clipSubjectNames(delivery))}</h3><small>${esc(clipSessionLabel(delivery))}</small></div><span class="clip-provider"><svg><use href="#i-folder"/></svg>${esc(clipProviderLabel(delivery.provider))}</span></div><div class="clip-progress-copy"><b>${esc(progress)}</b><span>${percent}% complete</span></div><div class="clip-progress-track"><span style="width:${percent}%"></span></div><small class="clip-count-disclaimer">${esc(CLIP_COUNT_NOTE)}</small>${clipDeliveryReceiptMarkup(delivery, mine)}${delivery.note ? `<p class="clip-delivery-note">${esc(delivery.note)}</p>` : ''}<div class="clip-delivery-actions"><a class="clip-open" data-clip-folder-delivery="${delivery.id}" href="${esc(delivery.folder_url)}" target="_blank" rel="noopener"><svg><use href="#i-folder"/></svg>${ready ? 'Open clips' : 'View folder'}</a>${refresh}${shareAction}${edit}</div></div></details></article>`;
 }
 
 function renderInboxTabs() {
@@ -5715,6 +5767,16 @@ async function shareInvite({ includeGuide = false, includeOverview = false, incl
 }
 
 document.addEventListener('click', async event => {
+  const clipFolderNode = event.target.closest('[data-clip-folder-delivery]');
+  if (clipFolderNode) {
+    // The external folder still opens immediately. Recording is best-effort
+    // and never blocks someone from getting their clips.
+    void recordClipDeliveryReceipt(
+      clipFolderNode.dataset.clipFolderDelivery,
+      'clips_opened',
+      clipFolderNode.dataset.clipFolderGuest || '',
+    );
+  }
   const actionNode = event.target.closest('[data-action]');
   const roomMentionNode = event.target.closest('[data-room-mention]');
   const editMessageNode = event.target.closest('[data-edit-message]');
@@ -6057,6 +6119,15 @@ document.addEventListener('click', async event => {
   };
   if (actions[actionNode.dataset.action]) await actions[actionNode.dataset.action]();
 });
+
+document.addEventListener('toggle', event => {
+  const details = event.target.closest?.('.clip-card-details');
+  if (!details?.open || !state.profile) return;
+  const deliveryId = details.closest('[data-clip-delivery-id]')?.dataset.clipDeliveryId;
+  const delivery = state.clipDeliveries.find(item => item.id === deliveryId);
+  if (!delivery || delivery.recipient !== state.profile.id) return;
+  void recordClipDeliveryReceipt(delivery.id, 'viewed');
+}, true);
 
 document.addEventListener('keydown', event => {
   const reactionTrigger = event.target.closest?.('[data-reveal-message-reactions]');

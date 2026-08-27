@@ -11,6 +11,7 @@ const app = read('app.js');
 const worker = read('sw.js');
 const xcodeProject = read('ios/App/App.xcodeproj/project.pbxproj');
 const sessionChatMigration = read('supabase/session-chat-v1-migration.sql');
+const clipReceiptMigration = read('supabase/clip-delivery-receipts-v1-migration.sql');
 const apiMiddleware = read('functions/api/_middleware.js');
 
 test('HTML IDs are unique and hard JavaScript selectors resolve', () => {
@@ -83,6 +84,18 @@ test('session chat stays tied to the surf crew across UI, RLS, and realtime', ()
   assert.match(sessionChatMigration, /session\.author = auth\.uid\(\)/);
   assert.match(sessionChatMigration, /rsvp\.user_id = auth\.uid\(\)/);
   assert.match(sessionChatMigration, /alter publication supabase_realtime add table public\.session_messages/);
+});
+
+test('clip receipts are recipient-authorized and never claim external downloads', () => {
+  assert.match(clipReceiptMigration, /recipient = auth\.uid\(\)/);
+  assert.match(clipReceiptMigration, /guest_access_token = guest_token/);
+  assert.match(clipReceiptMigration, /status <> 'cancelled'/);
+  assert.match(clipReceiptMigration, /revoke all on function public\.record_clip_delivery_receipt/);
+  assert.match(app, /data-clip-folder-delivery=/);
+  assert.match(app, /recordClipDeliveryReceipt\(delivery\.id, 'viewed'\)/);
+  assert.match(app, /Delivery viewed/);
+  assert.match(app, /Clips opened/);
+  assert.doesNotMatch(app, /clips downloaded|files downloaded/i);
 });
 
 test('large Stream uploads recover stale sessions and tolerate mobile interruptions', () => {

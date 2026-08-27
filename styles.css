@@ -346,6 +346,7 @@ html[data-theme="foam"] .session-chat-thread,html[data-theme="foam"] .session-ch
 
 /* v1.63: the two pending clip-share choices explain whether signup is required. */
 .clip-delivery-actions{flex-wrap:wrap}
+.clip-receipt-history{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:10px 0;padding:9px;border:1px solid #54abec38;border-radius:11px;background:#54abec0b}.clip-receipt-history span{display:grid;gap:2px;min-width:0}.clip-receipt-history b{color:var(--hail);font:850 9.5px Archivo}.clip-receipt-history small{color:var(--mut2);font-size:8.5px;line-height:1.25}.clip-delivery-card.ready .clip-status{white-space:nowrap}
 .clip-delivery-actions .clip-edit.guest-instructions{flex:1 1 100%;padding:0 9px}
 
 /* v1.77: Stoke preserves original media orientation unless the author picks a crop. */
