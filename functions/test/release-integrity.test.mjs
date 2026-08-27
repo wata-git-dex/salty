@@ -105,10 +105,14 @@ test('Google Drive sync can advance but never erase a filmer-confirmed clip coun
   const scheduledDriveSync = read('functions/api/google-drive/sync-all.js');
   assert.match(driveSync, /Math\.max\(Number\(delivery\.uploaded_count\) \|\| 0, driveVisibleCount\)/);
   assert.match(scheduledDriveSync, /Math\.max\(Number\(delivery\.uploaded_count\) \|\| 0, driveVisibleCount\)/);
+  assert.match(driveShared, /GOOGLE_SERVICE_ACCOUNT_JSON/);
+  assert.match(driveShared, /googleServiceAccountAccessToken/);
   assert.match(driveShared, /drive\.metadata\.readonly/);
-  assert.match(driveShared, /driveConnectionNeedsUpgrade/);
+  assert.match(driveShared, /Share this Google Drive folder with Sodium as a Viewer/);
   assert.match(app, /\$\('#clipUploadedCount'\)\.readOnly = false/);
   assert.match(html, /Drive will never lower this number/);
+  assert.match(html, /Copy Sodium sharing email/);
+  assert.doesNotMatch(html, /Connect Drive/);
 });
 
 test('large Stream uploads recover stale sessions and tolerate mobile interruptions', () => {

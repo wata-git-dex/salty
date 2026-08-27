@@ -1,24 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  createOAuthState,
+  countDriveVideoFiles,
   decryptRefreshToken,
   encryptRefreshToken,
-  googleAuthorizationUrl,
-  verifyOAuthState,
+  googleServiceAccountAccessToken,
+  googleServiceAccountEmail,
 } from '../api/google-drive/_shared.js';
 
 const env = {
   GOOGLE_OAUTH_STATE_SECRET:'test-only-state-secret-with-enough-entropy',
   GOOGLE_TOKEN_ENCRYPTION_KEY:'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8',
 };
-
-test('OAuth state is signed, bound to the member, and tamper evident', async () => {
-  const state = await createOAuthState(env, '11111111-1111-4111-8111-111111111111');
-  const verified = await verifyOAuthState(env, state);
-  assert.equal(verified.sub, '11111111-1111-4111-8111-111111111111');
-  await assert.rejects(() => verifyOAuthState(env, `${state.slice(0, -1)}x`));
-});
 
 test('Google refresh tokens are encrypted at rest', async () => {
   const encrypted = await encryptRefreshToken(env, 'refresh-token-that-never-enters-the-client');
@@ -27,13 +20,35 @@ test('Google refresh tokens are encrypted at rest', async () => {
   assert.equal(await decryptRefreshToken(env, encrypted), 'refresh-token-that-never-enters-the-client');
 });
 
-test('Drive authorization can count ordinary files added outside Sodium', () => {
-  const url = new URL(googleAuthorizationUrl(
-    { GOOGLE_CLIENT_ID:'test-client' },
-    new Request('https://community.saltyviewfinder.com/api/google-drive/connect'),
-    'signed-state',
-  ));
-  const scopes = new Set((url.searchParams.get('scope') || '').split(' '));
-  assert.ok(scopes.has('https://www.googleapis.com/auth/drive.file'));
-  assert.ok(scopes.has('https://www.googleapis.com/auth/drive.metadata.readonly'));
+test('free folder counting uses a Sodium service identity without member OAuth', async () => {
+  const keyPair = await crypto.subtle.generateKey(
+    { name:'RSASSA-PKCS1-v1_5', modulusLength:2048, publicExponent:new Uint8Array([1, 0, 1]), hash:'SHA-256' },
+    true,
+    ['sign', 'verify'],
+  );
+  const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', keyPair.privateKey));
+  const privateKey = `-----BEGIN PRIVATE KEY-----\n${Buffer.from(pkcs8).toString('base64')}\n-----END PRIVATE KEY-----\n`;
+  const serviceEnv = { GOOGLE_SERVICE_ACCOUNT_JSON:JSON.stringify({ client_email:'sodium-drive@test-project.iam.gserviceaccount.com', private_key:privateKey }) };
+  assert.equal(googleServiceAccountEmail(serviceEnv), 'sodium-drive@test-project.iam.gserviceaccount.com');
+  const originalFetch = globalThis.fetch;
+  let assertion = '';
+  globalThis.fetch = async (_url, init) => {
+    assertion = new URLSearchParams(init.body).get('assertion') || '';
+    return new Response(JSON.stringify({ access_token:'service-token', expires_in:3600 }), { status:200, headers:{ 'Content-Type':'application/json' } });
+  };
+  try {
+    assert.equal(await googleServiceAccountAccessToken(serviceEnv), 'service-token');
+    assert.equal(assertion.split('.').length, 3);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('shared-folder counting includes videos and ignores other files', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ files:[
+    { id:'video-1', mimeType:'video/mp4' },
+    { id:'image-1', mimeType:'image/jpeg' },
+    { id:'video-2', mimeType:'video/quicktime' },
+  ] }), { status:200, headers:{ 'Content-Type':'application/json' } });
+  try { assert.equal(await countDriveVideoFiles('service-token', 'folder_1234567890'), 2); }
+  finally { globalThis.fetch = originalFetch; }
 });

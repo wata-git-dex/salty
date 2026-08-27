@@ -1,4 +1,4 @@
-import { getDriveConnection, json, refreshGoogleAccessToken, requireLiveFolderCountConnection, serviceRequest } from './_shared.js';
+import { countDriveVideoFiles, googleServiceAccountAccessToken, json, serviceRequest } from './_shared.js';
 
 const FOLDER_ID_PATTERN = /^[A-Za-z0-9_-]{10,200}$/u;
 
@@ -7,44 +7,19 @@ function authorized(request, env) {
   return Boolean(env.CLIP_SYNC_SECRET && supplied && supplied === env.CLIP_SYNC_SECRET);
 }
 
-async function countVideoFiles(accessToken, folderId) {
-  let pageToken = '';
-  let total = 0;
-  do {
-    const url = new URL('https://www.googleapis.com/drive/v3/files');
-    url.searchParams.set('q', `'${folderId.replaceAll("'", "\\'")}' in parents and trashed = false`);
-    url.searchParams.set('fields', 'nextPageToken,files(id,mimeType)');
-    url.searchParams.set('pageSize', '1000');
-    url.searchParams.set('supportsAllDrives', 'true');
-    url.searchParams.set('includeItemsFromAllDrives', 'true');
-    if (pageToken) url.searchParams.set('pageToken', pageToken);
-    const response = await fetch(url, { headers:{ Authorization:`Bearer ${accessToken}` } });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(`Drive count failed (${response.status})`);
-    total += (payload.files || []).filter(file => String(file.mimeType || '').startsWith('video/')).length;
-    pageToken = payload.nextPageToken || '';
-  } while (pageToken);
-  return Math.min(2000, total);
-}
-
 export async function onRequestPost({ request, env }) {
   if (!authorized(request, env)) return json({ error:'Not found.' }, 404);
   try {
     const response = await serviceRequest(env, 'clip_deliveries?tracking_mode=eq.google_drive&status=eq.uploading&google_folder_id=not.is.null&select=id,sender,expected_count,uploaded_count,google_folder_id&order=updated_at.asc&limit=200');
     if (!response.ok) return json({ error:'Could not load pending clip deliveries.' }, 502);
     const deliveries = await response.json();
-    const accessTokens = new Map();
-    const failedSenders = new Set();
+    const accessToken = await googleServiceAccountAccessToken(env);
     const results = [];
 
     for (const delivery of deliveries) {
-      if (!FOLDER_ID_PATTERN.test(delivery.google_folder_id || '') || failedSenders.has(delivery.sender)) continue;
+      if (!FOLDER_ID_PATTERN.test(delivery.google_folder_id || '')) continue;
       try {
-        if (!accessTokens.has(delivery.sender)) {
-          const connection = requireLiveFolderCountConnection(await getDriveConnection(env, delivery.sender));
-          accessTokens.set(delivery.sender, await refreshGoogleAccessToken(env, connection.encrypted_refresh_token));
-        }
-        const driveVisibleCount = await countVideoFiles(accessTokens.get(delivery.sender), delivery.google_folder_id);
+        const driveVisibleCount = await countDriveVideoFiles(accessToken, delivery.google_folder_id);
         // Background sync can advance a handoff but never lower a filmer-confirmed count.
         const count = Math.max(Number(delivery.uploaded_count) || 0, driveVisibleCount);
         const status = count >= Number(delivery.expected_count) ? 'ready' : 'uploading';
@@ -57,7 +32,6 @@ export async function onRequestPost({ request, env }) {
         if (!update.ok) throw new Error('Database update failed');
         results.push({ id:delivery.id, count, driveVisibleCount, status });
       } catch (error) {
-        if (/reconnect/i.test(error?.statusText || error?.message || '')) failedSenders.add(delivery.sender);
         console.warn('Scheduled Drive sync deferred:', delivery.id, error?.message || error);
       }
     }

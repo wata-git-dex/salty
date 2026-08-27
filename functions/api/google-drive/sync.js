@@ -1,4 +1,4 @@
-import { getDriveConnection, json, refreshGoogleAccessToken, requireLiveFolderCountConnection, requireMember, serviceRequest } from './_shared.js';
+import { countDriveVideoFiles, googleServiceAccountAccessToken, googleServiceAccountEmail, json, requireMember, serviceRequest } from './_shared.js';
 
 const FOLDER_ID_PATTERN = /^[A-Za-z0-9_-]{10,200}$/u;
 
@@ -18,26 +18,6 @@ async function deliveryForGuest(env, guestToken) {
   return rows[0] || null;
 }
 
-async function countVideoFiles(accessToken, folderId) {
-  let pageToken = '';
-  let total = 0;
-  do {
-    const url = new URL('https://www.googleapis.com/drive/v3/files');
-    url.searchParams.set('q', `'${folderId.replaceAll("'", "\\'")}' in parents and trashed = false`);
-    url.searchParams.set('fields', 'nextPageToken,files(id,mimeType)');
-    url.searchParams.set('pageSize', '1000');
-    url.searchParams.set('supportsAllDrives', 'true');
-    url.searchParams.set('includeItemsFromAllDrives', 'true');
-    if (pageToken) url.searchParams.set('pageToken', pageToken);
-    const response = await fetch(url, { headers:{ Authorization:`Bearer ${accessToken}` } });
-    const payload = await response.json();
-    if (!response.ok) throw new Response(response.status === 403 ? 'Reconnect or reselect this Google Drive folder' : 'Could not count the Google Drive clips', { status:response.status === 403 ? 409 : 502 });
-    total += (payload.files || []).filter(file => String(file.mimeType || '').startsWith('video/')).length;
-    pageToken = payload.nextPageToken || '';
-  } while (pageToken);
-  return total;
-}
-
 export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
@@ -53,9 +33,8 @@ export async function onRequestPost({ request, env }) {
     if (delivery.tracking_mode !== 'google_drive' || !FOLDER_ID_PATTERN.test(delivery.google_folder_id || '')) {
       return json({ error:'This delivery uses manual counting.' }, 409);
     }
-    const connection = requireLiveFolderCountConnection(await getDriveConnection(env, delivery.sender));
-    const accessToken = await refreshGoogleAccessToken(env, connection.encrypted_refresh_token);
-    const driveVisibleCount = Math.min(2000, await countVideoFiles(accessToken, delivery.google_folder_id));
+    const accessToken = await googleServiceAccountAccessToken(env);
+    const driveVisibleCount = await countDriveVideoFiles(accessToken, delivery.google_folder_id);
     // Never erase a count the filmer confirmed manually if Drive metadata is delayed.
     const count = Math.max(Number(delivery.uploaded_count) || 0, driveVisibleCount);
     const status = count >= delivery.expected_count ? 'ready' : 'uploading';
@@ -65,9 +44,9 @@ export async function onRequestPost({ request, env }) {
       body:JSON.stringify({ uploaded_count:count, status }),
     });
     if (!update.ok) return json({ error:'Could not update the clip count.' }, 502);
-    return json({ deliveryId:delivery.id, uploadedCount:count, driveVisibleCount, expectedCount:delivery.expected_count, status });
+    return json({ deliveryId:delivery.id, uploadedCount:count, driveVisibleCount, expectedCount:delivery.expected_count, status, sharingEmail:googleServiceAccountEmail(env) });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Response) return json({ error:await error.text(), sharingEmail:env.GOOGLE_SERVICE_ACCOUNT_JSON ? googleServiceAccountEmail(env) : null }, error.status);
     return json({ error:'Could not refresh the Google Drive count.' }, 500);
   }
 }

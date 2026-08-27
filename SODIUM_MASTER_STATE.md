@@ -1,13 +1,13 @@
 # Sodium Community App — Master Project State
 
-Updated: August 26, 2026
+Updated: August 27, 2026
 
 This file consolidates decisions and implementation state from the Sodium Community App and surf-feature brainstorming threads. The current repository remains the implementation source of truth; this document explains the product intent behind it.
 
 ## Release state
 
-- Current release: v1.114.
-- This release enables real background Google Drive folder counting after one explicit reconnect and renames the external receipt to **Folder link tapped**. Sodium still does not claim to verify external-file downloads.
+- Current release: v1.115.
+- This release enables free background Google Drive folder counting through a Sodium service identity. A filmer shares only the delivery folder as **Viewer**; no member Google login, Drive OAuth consent, paid verification, or broader Drive access is required. Sodium still does not claim to verify external-file downloads.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -193,3 +193,5 @@ Version 1.112 makes Google Drive counting monotonic and honest. The narrow `driv
 Version 1.113 fixes the underlying Drive visibility limitation. Sodium now requests metadata-only Drive access in addition to Picker access, requires one explicit reconnect for old connections, and can count ordinary video uploads in the selected folder during the scheduled background checks. It does not read video contents. The sender-facing receipt now says **Folder link tapped — not proof of download**, because neither Sodium nor the folder click can prove that Google Drive files were downloaded.
 
 Version 1.114 fixes a native packaging failure discovered during device verification: the Xcode shell had v1.113 metadata but bundled stale v1.111 JavaScript because an incorrect manual Capacitor invocation silently skipped sync. The supported `native:sync` command now runs Capacitor and a mandatory version verifier that fails the build unless the web source, `native-web`, and Xcode public bundle match. The Clips inbox now shows Google Drive connection/live-count status and the required one-time reconnect action directly. Session cards no longer label name-only guests as “listed”; session chat explains that those names are not connected to member accounts.
+
+Version 1.115 retires member Google Drive OAuth and Picker access after the production consent screen exposed an unverified restricted-scope warning. Automatic counting now uses one Sodium-owned service identity and only folders that a filmer explicitly shares with that identity as **Viewer**. Members never grant Sodium access to their Google account or full Drive. Pasted Google Drive folder links are recognized automatically, manual counts remain monotonic and authoritative, and Dropbox/iCloud/other HTTPS links remain manual. The legacy `google_drive_connections` data is intentionally preserved but no longer used for counting; this avoids a destructive migration and keeps old connection records available for controlled cleanup.

@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.114';
+const APP_VERSION = '1.115';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -138,8 +138,8 @@ const state = {
   guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
   postMemberTags: [], postPersonNames: [], postCustomTags: [], postSessionId: '', qrInviteUrl: '', qrInviteRegionName: '',
   nonprofitLogoUrls: {}, editingNonprofitId: null, drawerScrollY: 0,
-  googleDriveConnected: false, googleDriveNeedsUpgrade: false, googleDriveChecked: false, googleDriveSyncTimer: null,
-  driveConnectResult: '', driveReconnectWarned: false,
+  googleDriveConfigured: false, googleDriveSharingEmail: '', googleDriveChecked: false, googleDriveSyncTimer: null,
+  driveShareWarned: false,
   editingMessageKind: '', editingMessageId: '', editingMessageHasAttachment: false,
   reactingMessageKind: '', reactingMessageId: '',
   quickMessageReactions: [...DEFAULT_MESSAGE_REACTIONS],
@@ -326,7 +326,6 @@ function startEmailCooldown(button, seconds = 60) {
 
 async function init() {
   const params = new URLSearchParams(location.search);
-  state.driveConnectResult = params.get('drive') || '';
   if (params.get('preview') === '1') {
     await runPreview();
     return;
@@ -864,17 +863,6 @@ async function enterCommunity() {
   revealSharedTarget();
   showWhatsNew();
   startGoogleDrivePolling();
-  if (state.driveConnectResult) {
-    const result = state.driveConnectResult;
-    state.driveConnectResult = '';
-    if (result === 'connected') {
-      state.googleDriveChecked = false;
-      await loadGoogleDriveStatus();
-      openClipDeliveryComposer();
-      toast('Google Drive connected. Choose the clip folder.');
-    } else if (result === 'cancelled') toast('Google Drive connection cancelled. Paste a link instead.');
-    else toast('Google Drive did not connect. Paste a link instead.', 6000);
-  }
 }
 
 async function loadApp() {
@@ -2266,6 +2254,15 @@ function clipProviderLabel(provider) {
   return ({ google_drive:'Google Drive', dropbox:'Dropbox', icloud:'iCloud', other:'Clip link' })[provider] || 'Clip link';
 }
 
+function googleDriveFolderIdFromUrl(value = '') {
+  try {
+    const url = new URL(value);
+    if (url.hostname !== 'drive.google.com' && !url.hostname.endsWith('.drive.google.com')) return '';
+    const pathMatch = url.pathname.match(/\/folders\/([A-Za-z0-9_-]{10,200})/u);
+    return pathMatch?.[1] || (/^[A-Za-z0-9_-]{10,200}$/u.test(url.searchParams.get('id') || '') ? url.searchParams.get('id') : '');
+  } catch (_error) { return ''; }
+}
+
 async function googleDriveRequest(path, options = {}, authenticated = true) {
   const headers = { ...(options.headers || {}) };
   if (authenticated) {
@@ -2279,6 +2276,7 @@ async function googleDriveRequest(path, options = {}, authenticated = true) {
   if (!response.ok) {
     const error = new Error(payload.error || 'Google Drive is unavailable. Paste the folder link instead.');
     error.status = response.status;
+    error.sharingEmail = payload.sharingEmail || '';
     throw error;
   }
   return payload;
@@ -2290,17 +2288,13 @@ function renderGoogleDriveCard() {
   const folderId = $('#clipGoogleFolderId').value;
   const folderName = $('#clipGoogleFolderName').value;
   card.classList.toggle('selected', Boolean(folderId));
-  const usableConnection = state.googleDriveConnected && !state.googleDriveNeedsUpgrade;
-  $('#clipDriveConnect').classList.toggle('hidden', usableConnection);
-  $('#clipDriveConnect').textContent = state.googleDriveNeedsUpgrade ? 'Reconnect for live counts' : 'Connect Drive';
-  $('#clipDrivePick').classList.toggle('hidden', !usableConnection);
-  $('#clipDriveDisconnect').classList.toggle('hidden', !state.googleDriveConnected);
-  $('#clipDriveHeading').textContent = folderId ? (folderName || 'Google Drive folder selected') : 'Pick a folder without copying its link';
+  $('#clipDriveHeading').textContent = folderId ? (folderName || 'Google Drive folder selected') : 'Paste the folder link below';
   $('#clipDriveStatus').textContent = folderId
-    ? 'Background checks may raise the count. Your entered count is always preserved and can never be reduced by Drive.'
-    : state.googleDriveNeedsUpgrade
-      ? 'Reconnect once so Sodium can count videos added to the folder outside the app.'
-      : usableConnection ? 'Connected. Choose only the folder for this delivery.' : 'Manual links always remain available.';
+    ? `For live counts, share this folder with ${state.googleDriveSharingEmail || 'the Sodium sharing email'} as a Viewer.`
+    : state.googleDriveConfigured
+      ? `Share only the clip folder with ${state.googleDriveSharingEmail} as a Viewer, then paste its link.`
+      : 'Manual Drive, Dropbox, and iCloud links still work while automatic counting is unavailable.';
+  $('#clipDriveCopyEmail').classList.toggle('hidden', !state.googleDriveSharingEmail);
   const automatic = Boolean(folderId);
   $('.clip-count-fields').classList.toggle('google-tracked', automatic);
   $('#clipUploadedCount').readOnly = false;
@@ -2314,125 +2308,46 @@ function renderGoogleDriveInboxStatus() {
   const copy = $('#clipDriveInboxCopy');
   const action = $('#clipDriveInboxAction');
   card.classList.remove('hidden', 'connected', 'upgrade');
-  if (state.googleDriveNeedsUpgrade) {
-    card.classList.add('upgrade');
-    heading.textContent = 'Reconnect once for live counts';
-    copy.textContent = 'Required so Sodium can count clips uploaded normally into your Drive folder.';
-    action.textContent = 'Reconnect for live counts';
-    action.classList.remove('hidden');
-  } else if (state.googleDriveConnected) {
+  if (state.googleDriveConfigured) {
     card.classList.add('connected');
-    heading.textContent = 'Live folder counting is on';
-    copy.textContent = 'Sodium checks connected Drive folders automatically. Manual counts are never lowered.';
-    action.classList.add('hidden');
+    heading.textContent = 'Free live folder counting is available';
+    copy.textContent = 'Share only a delivery folder with Sodium as Viewer. Manual counts are never lowered.';
+    action.textContent = 'Copy sharing email';
+    action.classList.toggle('hidden', !state.googleDriveSharingEmail);
   } else {
-    heading.textContent = 'Connect Drive for live counts';
-    copy.textContent = 'Optional. Manual Drive, Dropbox, and iCloud links still work.';
-    action.textContent = 'Connect Drive';
-    action.classList.remove('hidden');
+    heading.textContent = 'Manual folder links are on';
+    copy.textContent = 'Automatic Google Drive counting is not configured yet.';
+    action.classList.add('hidden');
   }
 }
 
 async function loadGoogleDriveStatus(force = false) {
   if (state.preview || (!force && state.googleDriveChecked)) {
     renderGoogleDriveCard();
-    return state.googleDriveConnected;
+    return state.googleDriveConfigured;
   }
   try {
     const result = await googleDriveRequest('status', { method:'POST' });
-    state.googleDriveConnected = Boolean(result.connected);
-    state.googleDriveNeedsUpgrade = Boolean(result.needsUpgrade);
+    state.googleDriveConfigured = Boolean(result.configured);
+    state.googleDriveSharingEmail = result.sharingEmail || '';
   } catch (error) {
     console.warn('Optional Google Drive status unavailable:', error.message);
-    state.googleDriveConnected = false;
-    state.googleDriveNeedsUpgrade = false;
+    state.googleDriveConfigured = false;
+    state.googleDriveSharingEmail = '';
   }
   state.googleDriveChecked = true;
   renderGoogleDriveCard();
-  return state.googleDriveConnected;
+  return state.googleDriveConfigured;
 }
 
-async function connectGoogleDrive() {
+async function copyGoogleDriveSharingEmail() {
+  if (!state.googleDriveSharingEmail) await loadGoogleDriveStatus(true);
+  if (!state.googleDriveSharingEmail) { toast('Automatic Drive counting is not configured yet.'); return; }
   try {
-    state.googleDriveConnected = false;
-    state.googleDriveNeedsUpgrade = false;
-    state.googleDriveChecked = false;
-    state.driveReconnectWarned = false;
-    const result = await googleDriveRequest('connect', { method:'POST' });
-    if (!result.authorizationUrl) throw new Error('Google Drive did not provide a connection page.');
-    location.href = result.authorizationUrl;
-  } catch (error) { toast(readableError(error), 6000); }
-}
-
-async function disconnectGoogleDrive() {
-  if (!confirm('Disconnect Google Drive from Sodium? Existing folder links will keep working with manual counts.')) return;
-  try {
-    await googleDriveRequest('disconnect', { method:'POST' });
-    state.googleDriveConnected = false;
-    state.googleDriveNeedsUpgrade = false;
-    state.googleDriveChecked = true;
-    $('#clipGoogleFolderId').value = '';
-    $('#clipGoogleFolderName').value = '';
-    renderGoogleDriveCard();
-    updateClipProviderHint();
-    toast('Google Drive disconnected. Paste links still work.');
-  } catch (error) { toast(readableError(error), 6000); }
-}
-
-let googlePickerPromise = null;
-function loadGooglePicker() {
-  if (window.google?.picker) return Promise.resolve();
-  if (googlePickerPromise) return googlePickerPromise;
-  googlePickerPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-google-picker]');
-    const ready = () => window.gapi.load('picker', { callback:resolve, onerror:() => reject(new Error('Google Picker did not load.')) });
-    if (existing) { existing.addEventListener('load', ready, { once:true }); return; }
-    const script = document.createElement('script');
-    script.src = 'https://apis.google.com/js/api.js';
-    script.async = true;
-    script.dataset.googlePicker = 'true';
-    script.onload = ready;
-    script.onerror = () => reject(new Error('Google Picker did not load.'));
-    document.head.append(script);
-  });
-  return googlePickerPromise;
-}
-
-async function pickGoogleDriveFolder() {
-  try {
-    const config = await googleDriveRequest('token', { method:'POST' });
-    await loadGooglePicker();
-    const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-      .setIncludeFolders(true)
-      .setSelectFolderEnabled(true)
-      .setMimeTypes('application/vnd.google-apps.folder');
-    const picker = new google.picker.PickerBuilder()
-      .setAppId(config.appId)
-      .setDeveloperKey(config.apiKey)
-      .setOAuthToken(config.accessToken)
-      .addView(view)
-      .setTitle('Choose the clip folder')
-      .setCallback(data => {
-        if (data.action !== google.picker.Action.PICKED || !data.docs?.[0]) return;
-        const folder = data.docs[0];
-        $('#clipGoogleFolderId').value = folder.id || '';
-        $('#clipGoogleFolderName').value = folder.name || 'Google Drive folder';
-        $('#clipFolderUrl').value = folder.url || `https://drive.google.com/drive/folders/${folder.id}`;
-        $('#clipUploadedCount').value = '0';
-        renderGoogleDriveCard();
-        updateClipProviderHint();
-        updateClipProgressPreview();
-      })
-      .build();
-    picker.setVisible(true);
-  } catch (error) {
-    if (/reconnect/i.test(error.message)) {
-      state.googleDriveConnected = false;
-      state.googleDriveNeedsUpgrade = true;
-      state.googleDriveChecked = true;
-      renderGoogleDriveCard();
-    }
-    toast(`${readableError(error)} You can still paste the folder link.`, 7000);
+    await navigator.clipboard.writeText(state.googleDriveSharingEmail);
+    toast('Sodium sharing email copied. In Drive, share only the clip folder with it as Viewer.');
+  } catch (_error) {
+    prompt('Copy this email, then share only the clip folder with it as Viewer:', state.googleDriveSharingEmail);
   }
 }
 
@@ -2502,13 +2417,10 @@ async function syncGoogleDriveDelivery(delivery) {
     return true;
   } catch (error) {
     console.warn('Google Drive clip count deferred:', error.message);
-    if (error.status === 409 && delivery.sender === state.profile?.id) {
-      state.googleDriveNeedsUpgrade = true;
-      state.googleDriveChecked = true;
-      if (!state.driveReconnectWarned) {
-        state.driveReconnectWarned = true;
-        toast('Google Drive needs to be reconnected. Your existing delivery and folder link are safe.', 7000);
-      }
+    if (error.sharingEmail) state.googleDriveSharingEmail = error.sharingEmail;
+    if (error.status === 409 && delivery.sender === state.profile?.id && !state.driveShareWarned) {
+      state.driveShareWarned = true;
+      toast(`Share only this folder with ${state.googleDriveSharingEmail || 'the Sodium sharing email'} as Viewer, then refresh.`, 9000);
     }
     return false;
   }
@@ -2775,7 +2687,7 @@ function updateClipProviderHint() {
   const provider = clipProviderFromUrl($('#clipFolderUrl').value);
   const hint = $('#clipProviderHint');
   if ($('#clipGoogleFolderId').value) {
-    hint.textContent = 'Google Drive selected · background checks can raise the count; enter the visible total anytime and Sodium will preserve it.';
+    hint.textContent = `Google Drive live counting · share only this folder with ${state.googleDriveSharingEmail || 'the Sodium sharing email'} as Viewer. Manual counts are always preserved.`;
     hint.classList.add('clip-auto-count-note');
     return;
   }
@@ -2816,6 +2728,7 @@ function openClipDeliveryComposer(deliveryId = null, sessionId = '', recipientId
   updateClipProviderHint();
   updateClipProgressPreview();
   renderGoogleDriveCard();
+  void loadGoogleDriveStatus();
   openSheet('clipDeliverySheet');
 }
 
@@ -2841,7 +2754,7 @@ async function saveClipDelivery(event) {
     if (!subjectNames.length || subjectNames.length > 20) throw new Error('Add the first name of the surfer in the clips.');
     if (subjectNames.some(name => name.length > 80)) throw new Error('Keep each surfer name under 80 characters.');
     const pendingRecipient = $('#clipRecipient').value === 'pending';
-    const googleFolderId = $('#clipGoogleFolderId').value.trim() || null;
+    const googleFolderId = ($('#clipGoogleFolderId').value.trim() || googleDriveFolderIdFromUrl(url.href)) || null;
     const googleFolderName = $('#clipGoogleFolderName').value.trim() || null;
     const payload = {
       sender:state.profile.id,
@@ -6137,9 +6050,7 @@ document.addEventListener('click', async event => {
     'close-ready-clips': closeClipReadyAlert,
     'start-message': startInboxMessage,
     'open-clip-delivery': () => openClipDeliveryComposer(),
-    'connect-google-drive': connectGoogleDrive,
-    'pick-google-folder': pickGoogleDriveFolder,
-    'disconnect-google-drive': disconnectGoogleDrive,
+    'copy-drive-email': copyGoogleDriveSharingEmail,
     'mark-clips-ready': markClipDeliveryReady,
     'delete-clip-delivery': deleteClipDelivery,
     'make-invite': openShareInviteHub,
@@ -6364,12 +6275,10 @@ $('#roomPhoto').addEventListener('change', event => {
   $(`#${id}`).addEventListener('change', updateClipProgressPreview);
 });
 $('#clipFolderUrl').addEventListener('input', () => {
-  const folderId = $('#clipGoogleFolderId').value;
-  if (folderId && !$('#clipFolderUrl').value.includes(folderId)) {
-    $('#clipGoogleFolderId').value = '';
-    $('#clipGoogleFolderName').value = '';
-    renderGoogleDriveCard();
-  }
+  const folderId = googleDriveFolderIdFromUrl($('#clipFolderUrl').value);
+  $('#clipGoogleFolderId').value = folderId;
+  $('#clipGoogleFolderName').value = folderId ? 'Shared Google Drive folder' : '';
+  renderGoogleDriveCard();
   updateClipProviderHint();
 });
 

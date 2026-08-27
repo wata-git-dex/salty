@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=114-native-sync">
+  <link rel="stylesheet" href="./styles.css?v=115-drive-share">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -71,7 +71,7 @@
 
   <div id="boot" class="boot" aria-live="polite">
     <img class="boot-mark" src="./icon-ink.svg" alt="Sodium">
-    <small class="boot-credit">Saltyview Productions · v1.114</small>
+    <small class="boot-credit">Saltyview Productions · v1.115</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -247,7 +247,7 @@
         <div class="backbar"><button data-action="go-surfing"><svg><use href="#i-back"/></svg></button><div><h2>Inbox</h2><small>Messages and clip deliveries</small></div></div>
         <div class="inbox-tabs" role="tablist" aria-label="Inbox sections"><button class="active" data-inbox-tab="messages" role="tab" aria-selected="true"><svg><use href="#i-chat"/></svg>Messages</button><button data-inbox-tab="clips" role="tab" aria-selected="false"><svg><use href="#i-folder"/></svg>Clips <b id="clipReadyBadge" class="hidden">0</b></button></div>
         <section id="dmInboxMessages" class="inbox-panel active"><div class="inbox-message-group"><div class="section-label inbox-group-label"><span>Session chats</span><small>Everyone joining the surf</small></div><div id="sessionChatThreads" class="session-chat-threads"></div></div><div class="inbox-message-group"><div class="section-label inbox-group-label"><span>Direct messages</span><small>Private · text only</small></div><div id="dmThreads" class="dm-threads"></div></div><div class="section-label"><span>Start a message</span></div><div id="dmPeople" class="members-list dm-people"></div></section>
-        <section id="dmInboxClips" class="inbox-panel"><div class="clip-inbox-intro"><span>CLIP DELIVERIES</span><h3>Your clip outbox</h3><p>Every delivery stays here. Reopen it, edit it, open the folder, or share it again.</p></div><div id="clipDriveInboxStatus" class="clip-drive-inbox-status hidden"><div><span>GOOGLE DRIVE COUNTING</span><b id="clipDriveInboxHeading">Checking connection…</b><small id="clipDriveInboxCopy">Sodium checks connected folders in the background.</small></div><button id="clipDriveInboxAction" type="button" data-action="connect-google-drive">Connect Drive</button></div><div class="clip-box-tabs" role="tablist" aria-label="Clip delivery folders"><button class="active" data-clip-box="sent" role="tab" aria-selected="true">Sent <b id="clipSentCount">0</b></button><button data-clip-box="received" role="tab" aria-selected="false">Received <b id="clipReceivedCount">0</b></button></div><div id="clipDeliveries" class="clip-deliveries"></div></section>
+        <section id="dmInboxClips" class="inbox-panel"><div class="clip-inbox-intro"><span>CLIP DELIVERIES</span><h3>Your clip outbox</h3><p>Every delivery stays here. Reopen it, edit it, open the folder, or share it again.</p></div><div id="clipDriveInboxStatus" class="clip-drive-inbox-status hidden"><div><span>GOOGLE DRIVE COUNTING</span><b id="clipDriveInboxHeading">Checking setup…</b><small id="clipDriveInboxCopy">Sodium counts only folders explicitly shared with it.</small></div><button id="clipDriveInboxAction" type="button" data-action="copy-drive-email">Copy sharing email</button></div><div class="clip-box-tabs" role="tablist" aria-label="Clip delivery folders"><button class="active" data-clip-box="sent" role="tab" aria-selected="true">Sent <b id="clipSentCount">0</b></button><button data-clip-box="received" role="tab" aria-selected="false">Received <b id="clipReceivedCount">0</b></button></div><div id="clipDeliveries" class="clip-deliveries"></div></section>
       </div>
       <div id="view-dm" class="app-view sub-view chat-view dm-view"><div class="dm-header"><button data-action="open-dms" aria-label="Back to inbox"><svg><use href="#i-back"/></svg></button><div id="dmPerson"></div><button class="dm-send-clips" data-action="open-clip-delivery" aria-label="Send clips"><svg><use href="#i-folder"/></svg><span>Clips</span></button></div><div id="dmClipDeliveries" class="dm-clip-deliveries"></div><div id="dmMessages" class="message-list" aria-live="polite"></div><form id="dmMessageForm" class="message-composer text-only"><div><textarea id="dmMessageBody" maxlength="2000" rows="1" required placeholder="Write a message…"></textarea><small>Text only</small></div><button type="submit" aria-label="Send message"><svg><use href="#i-send"/></svg></button></form></div>
       <div id="view-session-chat" class="app-view sub-view chat-view session-chat-view"><div class="dm-header session-chat-nav"><button data-action="open-dms" aria-label="Back to inbox"><svg><use href="#i-back"/></svg></button><div><b>Session chat</b><small>Only linked Sodium members</small></div></div><div id="sessionChatSummary" class="session-chat-summary"></div><div id="sessionChatMessages" class="message-list" aria-live="polite"></div><form id="sessionChatForm" class="message-composer text-only"><div><textarea id="sessionChatBody" maxlength="2000" rows="1" required placeholder="Message the crew…"></textarea><small>Text only · name-only guests do not receive messages</small></div><button type="submit" aria-label="Send message"><svg><use href="#i-send"/></svg></button></form></div>
@@ -523,9 +523,9 @@
         <label id="clipRecipientNameRow" class="hidden">Their first name<input id="clipRecipientName" maxlength="80" placeholder="Recipient's first name"><small>They will receive an invite that opens this delivery after signup.</small></label>
         <label>Clips of<input id="clipSubjects" type="text" maxlength="240" required placeholder="Surfer's first name"><small>The surfer in the footage. Separate multiple first names with commas.</small></label>
         <label>Related session <small>optional</small><select id="clipSession"><option value="">No linked session</option></select></label>
-        <div id="clipDriveCard" class="clip-drive-card hidden" aria-hidden="true">
-          <div><span>GOOGLE DRIVE · OPTIONAL</span><b id="clipDriveHeading">Pick a folder without copying its link</b><small id="clipDriveStatus">Manual links always remain available.</small></div>
-          <div class="clip-drive-actions"><button id="clipDriveConnect" type="button" class="secondary-button" data-action="connect-google-drive">Connect Drive</button><button id="clipDrivePick" type="button" class="secondary-button hidden" data-action="pick-google-folder">Choose folder</button><button id="clipDriveDisconnect" type="button" class="clip-drive-disconnect hidden" data-action="disconnect-google-drive">Disconnect</button></div>
+        <div id="clipDriveCard" class="clip-drive-card">
+          <div><span>GOOGLE DRIVE · FREE LIVE COUNTING</span><b id="clipDriveHeading">Paste the folder link below</b><small id="clipDriveStatus">Share only that folder with Sodium as a Viewer. Sodium never receives access to the rest of your Drive.</small></div>
+          <div class="clip-drive-actions"><button id="clipDriveCopyEmail" type="button" class="secondary-button" data-action="copy-drive-email">Copy Sodium sharing email</button></div>
         </div>
         <input id="clipGoogleFolderId" type="hidden"><input id="clipGoogleFolderName" type="hidden">
         <label>Link to clips<input id="clipFolderUrl" type="url" maxlength="2048" inputmode="url" required placeholder="https://drive.google.com/…"><small id="clipProviderHint">Drive, Dropbox, iCloud, or another HTTPS folder link.</small></label>
@@ -573,9 +573,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.114</span>
-    <h3>The iPhone and web apps now ship the same release.</h3>
-    <ul><li>Clips shows your live Google Drive connection status.</li><li>Reconnect once if Sodium asks so normal Drive uploads can be counted.</li><li>Session names no longer show the confusing “listed” badge.</li></ul>
+    <span>NEW IN V1.115</span>
+    <h3>Google Drive counting no longer needs your Google login.</h3>
+    <ul><li>Share only a clip folder with Sodium as Viewer.</li><li>Paste its link and Sodium can count new video files automatically.</li><li>Manual counts and non-Google folder links still work.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -591,6 +591,6 @@
   <script src="./vendor/supabase.min.js?v=2.57.4"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
   <script src="./vendor/tus.min.js?v=4.3.1" defer></script>
-  <script src="./app.js?v=114-native-sync" defer></script>
+  <script src="./app.js?v=115-drive-share" defer></script>
 </body>
 </html>
