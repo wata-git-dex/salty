@@ -6,8 +6,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.116.
-- This release adds a separate, honest **Log a past session** path. Historical sessions preserve the date, spot, surfers, filmer, and session history without generating Stokens, streaks, or invented timed minutes.
+- Current release: v1.117.
+- This release links selected Sodium members to session crew, adds lifecycle notifications and a three-hour organizer reminder, keeps historical logs silent, and adds a compact active-surf bar with one Start/Finish lifecycle.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -101,6 +101,9 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - Admin attribution can credit the person who actually initiated a session, including a pending nonmember who later claims it.
 - Sessions can be edited, cancelled, shared externally, or shared directly with an existing Sodium member.
 - **Log a past session** records a surf that already happened directly under Past sessions. It requires the real past date and preserves the crew and location, but it has no Start/Stop step and does not create Stokens, streaks, or fabricated duration.
+- One outing at one spot is one session. It starts once and finishes once; Sodium does not add Pause. A short beach break remains the same session, while a relocation or later outing is a new session.
+- Selecting an existing Sodium member creates a real linked crew relationship used by session chat and start/finish/change/cancellation notifications. A typed guest remains name-only and receives no private access or notifications until linked.
+- While a linked member is in an active surf, a compact bar above the bottom navigation reopens it quickly. Only the organizer can Finish it. A three-hour reminder asks the organizer whether the surf is still active.
 
 ## Stoke and media
 

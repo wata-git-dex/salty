@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.116';
+const APP_VERSION = '1.117';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -132,7 +132,7 @@ const state = {
   pendingInviteRegion: '',
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
-  consentNext: 'new', sessionPeople: [], sessionEntryMode: 'plan', editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
+  consentNext: 'new', sessionPeople: [], sessionLinkedPeople: [], sessionEntryMode: 'plan', editingSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
   notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '', pendingDeliveryId: '',
   calendarMonth: null, calendarDate: '', eventFilter: 'all',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
@@ -381,6 +381,8 @@ async function init() {
   }
   else if (!restorePendingAuth()) showWelcome();
 
+  window.setInterval(renderActiveSessionDock, 60 * 1000);
+
 }
 
 async function runPreview() {
@@ -397,7 +399,7 @@ async function runPreview() {
   state.people = [state.profile, { id: 'jonah', name: 'Jonah Reyes', nickname:'Jo', home_region:regionId, sponsors:['Snake Eyes'], onboarding_complete:true }, { id: 'mateo', name: 'Mateo Karras', nickname:null, home_region:regionId, sponsors:[], onboarding_complete:true }];
   state.spots = [{ id: 'malibu', name: 'Malibu', general_location:'Malibu', region_id: regionId }, { id: 'lowers', name: 'Lowers', general_location:'San Clemente', region_id: regionId }];
   state.previewSessions = [
-    { id:'live-mine', author:userId, initiator_user:null, initiator_name:'Steve', region_id:regionId, author_role:'film', participant_names:['Steve'], when_label:'Now', surf_time:new Date().toISOString(), wants_filmer:false, note:'clean little window right now', spot:{name:'C Street',general_location:'Ventura'}, author_profile:{name:'Cyrus'}, initiator_profile:null, session_rsvps:[] },
+    { id:'live-mine', author:userId, initiator_user:null, initiator_name:'Steve', region_id:regionId, author_role:'film', participant_names:['Steve'], when_label:'Now', surf_time:new Date().toISOString(), started_at:new Date().toISOString(), status:'active', wants_filmer:false, note:'clean little window right now', spot:{name:'C Street',general_location:'Ventura'}, author_profile:{name:'Cyrus'}, initiator_profile:null, session_rsvps:[] },
     { id:'mine', author:userId, region_id:regionId, author_role:'surf', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 86400000).toISOString(), wants_filmer:false, note:'morning glass before the wind', spot:{name:"Old Man's",general_location:'San Onofre'}, author_profile:{name:'Cyrus'}, session_rsvps:[{id:'r1',user_id:'jonah',role:'surf',profile:{name:'Jonah'}}]},
     { id:'mateo-surf', author:'mateo', region_id:regionId, author_role:'film', participant_names:['Sam'], when_label:'Scheduled', surf_time:new Date(Date.now() + 2 * 86400000).toISOString(), wants_filmer:false, note:'filming the afternoon window', spot:{name:'First Point',general_location:'Malibu'}, author_profile:{name:'Mateo'}, session_rsvps:[] },
     { id:'crew', author:'jonah', region_id:regionId, author_role:'surf', participant_names:[], when_label:'Scheduled', surf_time:new Date(Date.now() + 3 * 86400000).toISOString(), wants_filmer:true, note:'sunrise window', spot:{name:'Lowers',general_location:'San Clemente'}, author_profile:{name:'Jonah'}, session_rsvps:[] },
@@ -444,7 +446,7 @@ async function runPreview() {
     { id:'issue-2', reporter:'mateo', reporter_profile:{ id:'mateo', name:'Mateo' }, category:'suggestion', description:'Could the event card make the address easier to tap?', expected_behavior:null, screen:'Events', app_version:APP_VERSION, user_agent:'iPhone · Home Screen app', status:'reviewing', admin_notes:'Check the map target size.', created_at:new Date(Date.now() - 26 * 3600000).toISOString() },
   ];
   await loadCustomMessageReactions();
-  buildSessionChatThreads(); renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderWeeklyRecaps(); renderPerks(); renderMarketplace(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderClipDeliveries(); renderIssueReports(); showOnly('app');
+  buildSessionChatThreads(); renderChrome(); renderSessions(); renderPosts(); renderEvents(); renderWeeklyRecaps(); renderPerks(); renderMarketplace(); renderPreviewProfile(); renderMembers(); renderRoomMessages(); renderDmInbox(); renderClipDeliveries(); renderIssueReports(); renderActiveSessionDock(); showOnly('app');
   $('#appPreviewBanner').classList.remove('hidden');
 }
 
@@ -1438,6 +1440,7 @@ function setView(view) {
   if (!state.preview && view === 'marketplace') loadListings();
   if (view === 'settings') { renderNotificationSettings(); renderQuickReactionSettings(); }
   if (!state.preview && view === 'beta-feedback') loadIssueReports();
+  renderActiveSessionDock();
 }
 
 async function loadSessions() {
@@ -1447,8 +1450,48 @@ async function loadSessions() {
   if (result.error) { toast(readableError(result.error)); return; }
   state.sessions = result.data || [];
   renderSessions();
+  renderActiveSessionDock();
   if (state.sessionMessages.length || state.preview) buildSessionChatThreads();
   if (state.view === 'calendar') renderCalendar();
+}
+
+function activeSessionForCurrentMember() {
+  if (!state.profile?.id) return null;
+  return state.sessions.find(session => session.status === 'active' && session.when_label === 'Now' && [
+    session.author, session.initiator_user, session.featured_surfer_user,
+    ...(session.session_rsvps || []).map(rsvp => rsvp.user_id),
+  ].includes(state.profile.id)) || null;
+}
+
+function formatActiveSessionElapsed(session) {
+  const started = new Date(session.started_at || session.surf_time || session.created_at).getTime();
+  if (!Number.isFinite(started)) return 'Out in the water';
+  const minutes = Math.max(0, Math.floor((Date.now() - started) / 60000));
+  if (minutes < 60) return `${minutes}m in the water`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m in the water`;
+}
+
+function renderActiveSessionDock() {
+  const dock = $('#activeSessionDock');
+  if (!dock) return;
+  const session = activeSessionForCurrentMember();
+  const show = Boolean(session && state.view !== 'welcome');
+  dock.classList.toggle('hidden', !show);
+  if (!show) { dock.innerHTML = ''; return; }
+  const mine = session.author === state.profile.id;
+  dock.innerHTML = `<button class="active-session-open" data-open-active-session="${session.id}"><i></i><span><b>${esc(session.spot?.name || 'Active surf')}</b><small>${esc(formatActiveSessionElapsed(session))}</small></span></button>${mine ? `<button class="active-session-finish" data-end-session="${session.id}">Finish</button>` : '<span class="active-session-member">OPEN</span>'}`;
+}
+
+function openActiveSession(sessionId) {
+  setView('surfing');
+  requestAnimationFrame(() => {
+    const card = document.querySelector(`[data-session-id="${CSS.escape(sessionId)}"]`);
+    if (!card) return;
+    card.classList.add('shared-target');
+    card.scrollIntoView({ behavior:'smooth', block:'center' });
+    setTimeout(() => card.classList.remove('shared-target'), 2400);
+  });
 }
 
 function revealSharedSession() {
@@ -3986,7 +4029,8 @@ async function ensureSpot(name, generalLocation, regionId) {
 
 function renderSessionPeopleChips() {
   $('#sessionPeopleChips').innerHTML = state.sessionPeople.map((name, index) => {
-    const member = state.people.find(person => person.name.toLowerCase() === name.toLowerCase());
+    const linkedId = state.sessionLinkedPeople.find(person => person.name.toLowerCase() === name.toLowerCase())?.userId;
+    const member = linkedId ? memberById(linkedId) : null;
     return `<button type="button" class="${member ? 'linked-member' : ''}" data-remove-session-person="${index}" title="${member ? 'Sodium member' : 'Added by name'}">${member ? `<svg><use href="#i-user"/></svg>` : ''}${esc(name)}<span>×</span></button>`;
   }).join('');
 }
@@ -4006,7 +4050,7 @@ function renderSessionPersonOptions() {
 function addSessionMember(memberId) {
   const person = state.people.find(item => item.id === memberId);
   if (!person) return;
-  addSessionPerson(person.name);
+  addSessionPerson(person.name, person.id);
 }
 
 function showOtherSessionPerson(show = true) {
@@ -4014,11 +4058,12 @@ function showOtherSessionPerson(show = true) {
   if (show) setTimeout(() => $('#sessionPersonInput').focus({ preventScroll:true }), 50);
 }
 
-function addSessionPerson(rawName = $('#sessionPersonInput').value) {
+function addSessionPerson(rawName = $('#sessionPersonInput').value, memberId = '') {
   const names = rawName.split(',').map(name => name.trim()).filter(Boolean);
   names.forEach(name => {
     if (state.sessionPeople.length >= 20) return;
     if (!state.sessionPeople.some(existing => existing.toLowerCase() === name.toLowerCase()) && name.toLowerCase() !== state.profile.name.toLowerCase()) state.sessionPeople.push(name);
+    if (memberId && !state.sessionLinkedPeople.some(person => person.userId === memberId)) state.sessionLinkedPeople.push({ userId:memberId, name });
   });
   $('#sessionPersonInput').value = '';
   showOtherSessionPerson(false);
@@ -4030,6 +4075,7 @@ function resetSessionComposer() {
   state.sessionEntryMode = 'plan';
   state.editingSessionId = null;
   state.sessionPeople = [];
+  state.sessionLinkedPeople = [];
   $('#sessionForm').reset();
   $('#sessionSheetTitle').textContent = 'Create a session';
   $('#sessionSheetIntro').textContent = "Post where and when you'll be surfing or filming. The crew can join without another group text.";
@@ -4078,6 +4124,7 @@ function openSessionComposer(sessionId = null) {
   if (session) {
     state.editingSessionId = session.id;
     state.sessionPeople = [...(session.participant_names || (session.featured_surfer_name ? [session.featured_surfer_name] : []))];
+    state.sessionLinkedPeople = (session.session_rsvps || []).filter(rsvp => rsvp.user_id !== state.profile.id).map(rsvp => ({ userId:rsvp.user_id, name:rsvp.profile?.name || memberById(rsvp.user_id)?.name || 'Member' }));
     $('#sessionSheetTitle').textContent = 'Edit session';
     $('#sessionSubmit').textContent = 'Save changes';
     $('#sessionCancel').classList.remove('hidden');
@@ -4172,9 +4219,15 @@ async function createSession(event) {
       payload.wants_filmer = false;
     }
     const result = state.editingSessionId
-      ? await db.from('sessions').update(payload).eq('id', state.editingSessionId).eq('author', state.profile.id)
-      : await db.from('sessions').insert(payload);
+      ? await db.from('sessions').update(payload).eq('id', state.editingSessionId).eq('author', state.profile.id).select('id').single()
+      : await db.from('sessions').insert(payload).select('id').single();
     if (result.error) throw result.error;
+    if (!loggingPast && result.data?.id) {
+      for (const linked of state.sessionLinkedPeople) {
+        const linkedResult = await db.rpc('add_session_member', { target_session:result.data.id, target_user:linked.userId, target_role:'surf' });
+        if (linkedResult.error) throw linkedResult.error;
+      }
+    }
     const edited = Boolean(state.editingSessionId);
     resetSessionComposer(); closeSheet(); await loadSessions(); await renderProfile(); toast(edited ? 'Session updated.' : (loggingPast ? 'Past session saved.' : 'Your session is live.'));
   } catch (error) { toast(readableError(error)); }
@@ -4194,16 +4247,16 @@ async function setRsvp(sessionId, role) {
 
 async function startSession(sessionId) {
   const startedAt = new Date().toISOString();
-  const result = await db.from('sessions').update({ when_label: 'Now', surf_time: startedAt, started_at: startedAt }).eq('id', sessionId).eq('author', state.profile.id).eq('status', 'active');
+  const result = await db.from('sessions').update({ when_label: 'Now', surf_time: startedAt, started_at: startedAt, reminder_sent_at:null }).eq('id', sessionId).eq('author', state.profile.id).eq('status', 'active');
   if (result.error) { toast(readableError(result.error)); return; }
   await loadSessions(); toast('Session started — the crew can see you are out now.');
 }
 
 async function endSession(sessionId) {
-  if (!confirm('Stop this surf and move it to Past sessions? If it was cancelled, use the pencil and Cancel session instead.')) return;
+  if (!confirm('Finish this surf and move it to Past sessions? If it was cancelled, use the pencil and Cancel session instead.')) return;
   const result = await db.from('sessions').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', sessionId).eq('author', state.profile.id);
   if (result.error) { toast(readableError(result.error)); return; }
-  await loadSessions(); toast('Surf stopped and moved to Past sessions.');
+  await loadSessions(); toast('Surf finished and moved to Past sessions.');
 }
 
 async function cancelSession() {
@@ -5995,7 +6048,9 @@ document.addEventListener('click', async event => {
     openListingComposer(editListingNode.dataset.editListing);
   } else if (listingNode) openListingDetail(listingNode.dataset.listing);
   if (removeSessionPersonNode) {
+    const removedName = state.sessionPeople[Number(removeSessionPersonNode.dataset.removeSessionPerson)];
     state.sessionPeople.splice(Number(removeSessionPersonNode.dataset.removeSessionPerson), 1);
+    state.sessionLinkedPeople = state.sessionLinkedPeople.filter(person => person.name.toLowerCase() !== removedName?.toLowerCase());
     renderSessionPeopleChips();
     renderSessionPersonOptions();
   }
@@ -6041,6 +6096,8 @@ document.addEventListener('click', async event => {
   if (shareEventNode) await shareEvent(shareEventNode.dataset.shareEvent);
   if (editPostNode) openPostComposer(editPostNode.dataset.editPost);
   if (endNode) await endSession(endNode.dataset.endSession);
+  const activeSessionNode = event.target.closest('[data-open-active-session]');
+  if (activeSessionNode) openActiveSession(activeSessionNode.dataset.openActiveSession);
   if (likeNode) await toggleLike(likeNode.dataset.like);
   if (eventRsvpNode) await toggleEventRsvp(eventRsvpNode.dataset.eventRsvp);
   if (eventCalendarNode) addEventToCalendar(eventCalendarNode.dataset.eventCalendar);

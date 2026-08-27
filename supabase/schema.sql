@@ -64,6 +64,7 @@ create table public.sessions (
   created_at timestamptz not null default now(),
   started_at timestamptz,
   ended_at timestamptz,
+  reminder_sent_at timestamptz,
   points_awarded_at timestamptz,
   check ((status = 'active' and ended_at is null) or status <> 'active')
 );

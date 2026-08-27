@@ -12,6 +12,7 @@ const worker = read('sw.js');
 const xcodeProject = read('ios/App/App.xcodeproj/project.pbxproj');
 const sessionChatMigration = read('supabase/session-chat-v1-migration.sql');
 const clipReceiptMigration = read('supabase/clip-delivery-receipts-v1-migration.sql');
+const sessionLifecycleMigration = read('supabase/session-lifecycle-v1-migration.sql');
 const apiMiddleware = read('functions/api/_middleware.js');
 
 test('HTML IDs are unique and hard JavaScript selectors resolve', () => {
@@ -81,6 +82,22 @@ test('past sessions use a separate no-reward logging path', () => {
   assert.match(app, /if \(loggingPast\) \{[\s\S]*payload\.status = 'ended';[\s\S]*payload\.ended_at = savedSurfTime;/);
   assert.match(app, /started_at: loggingPast \? null : startedAt/);
   assert.doesNotMatch(app.match(/if \(loggingPast\) \{[\s\S]*?\n    \}/)?.[0] || '', /points_awarded_at|streak/);
+});
+
+test('active sessions have one Start/Finish lifecycle with linked-crew alerts', () => {
+  assert.match(html, /id="activeSessionDock"/);
+  assert.match(app, /function activeSessionForCurrentMember/);
+  assert.match(app, /data-open-active-session/);
+  assert.match(app, /reminder_sent_at:null/);
+  assert.match(app, /Finish this surf and move it to Past sessions/);
+  assert.doesNotMatch(app, /pauseSession|Pause session/);
+  assert.match(sessionLifecycleMigration, /public\.add_session_member/);
+  assert.match(sessionLifecycleMigration, /selected_user is distinct from actor/);
+  assert.match(sessionLifecycleMigration, /finished the surf/);
+  assert.match(sessionLifecycleMigration, /started the surf/);
+  assert.match(sessionLifecycleMigration, /Still surfing\?/);
+  assert.match(sessionLifecycleMigration, /sodium-active-session-reminders/);
+  assert.match(sessionLifecycleMigration, /new\.when_label = 'Logged'/);
 });
 
 test('session chat stays tied to the surf crew across UI, RLS, and realtime', () => {
