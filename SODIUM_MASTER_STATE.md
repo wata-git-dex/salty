@@ -6,8 +6,8 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.112.
-- This release adds truthful Clip Delivery receipts: a sender can see when the recipient viewed the Sodium delivery and when they tapped through to the external clips folder. Sodium does not claim to verify external-file downloads.
+- Current release: v1.113.
+- This release enables real background Google Drive folder counting after one explicit reconnect and renames the external receipt to **Folder link tapped**. Sodium still does not claim to verify external-file downloads.
 - `supabase/nonprofit-events-weekly-recap-v1-migration.sql` and `supabase/profile-activity-stats-v1-migration.sql` were applied to production on August 25, 2026.
 - `supabase/google-drive-optional-v1-migration.sql` was applied to production on August 25, 2026.
 
@@ -131,8 +131,8 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - Clip deliveries do not have their own chat. Members can use a normal DM when they need to talk.
 - The clip outbox allows the sender to reopen, edit, and reshare deliveries.
 - A recipient joining Sodium can claim a prepared delivery.
-- Google Drive is optional. A filmer may connect with the narrow `drive.file` permission, choose one folder with Google Picker, and let Sodium refresh its completed-video count while a sender, recipient, or guest is viewing the delivery.
-- Sodium never requires the broad full-Drive read scope. Manual Drive, Dropbox, iCloud, and other HTTPS folder links remain the permanent fallback.
+- Google Drive is optional. Picker uses `drive.file`; automatic background counting additionally requires the metadata-only `drive.metadata.readonly` permission so Sodium can see videos later added through normal Google Drive uploads. Sodium does not read file contents.
+- Existing Drive connections from before v1.113 must reconnect once before live counting is enabled. Manual Drive, Dropbox, iCloud, and other HTTPS folder links remain the permanent fallback.
 - Google refresh tokens are encrypted server-side and are never stored in the browser or exposed through Supabase member policies.
 
 ## Events and nonprofits
@@ -189,3 +189,5 @@ Version 1.110 clarifies the communication hierarchy without changing navigation 
 Version 1.111 adds secure Clip Delivery receipts for both linked members and private guest links. The sender sees **Delivery viewed** when the recipient opens the Sodium delivery and **Clips opened** when the recipient taps the external folder. Receipt timestamps and counts are recorded, sender activity never creates a recipient receipt, and Sodium explicitly does not claim to know whether every external Drive, Dropbox, or iCloud file was downloaded.
 
 Version 1.112 makes Google Drive counting monotonic and honest. The narrow `drive.file` permission may not expose clips added later through the normal Google Drive app, so a background Drive check is allowed to raise an upload count but can never lower or erase a filmer-confirmed count. The sender can always edit **Uploaded so far** or use **Mark all clips ready**; those values remain authoritative across foreground and scheduled syncs.
+
+Version 1.113 fixes the underlying Drive visibility limitation. Sodium now requests metadata-only Drive access in addition to Picker access, requires one explicit reconnect for old connections, and can count ordinary video uploads in the selected folder during the scheduled background checks. It does not read video contents. The sender-facing receipt now says **Folder link tapped — not proof of download**, because neither Sodium nor the folder click can prove that Google Drive files were downloaded.
