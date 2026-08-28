@@ -6,7 +6,9 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.125 (server-finalized Stream publication candidate; device validation required before beta release).
+- Current release: v1.126 (transactional session/member-linking release; device validation required before beta release).
+- Session fields, linked crew UUIDs/roles, removed crew, and genuine guest names now save through one `save_session_with_crew` database transaction. The client uses one explicit member/guest participant model, compares members by UUID, and never auto-links a typed name to an account. A matching name only offers a confirm-to-link action. The production migration was applied August 27, 2026; the rollback-safe live create/update smoke test retained zero test rows.
+- A read-only pre-repair audit found three legacy text/profile candidates for manual review: Steven Buchan in two sessions and Pearce Mendoza in one. These remain intentionally unlinked until Cyrus confirms the exact identities. The worklist is in `docs/SODIUM_MEMBER_LINKING_AUDIT_V1.125.md`.
 - Clip posts now create a private pending database row before the first byte upload, attach every Cloudflare Stream UID to that post server-side, and become published only after a signature-verified Stream webhook confirms every selected clip is ready. Processing failures remain private and visible to the author with an explicit error instead of silently losing the draft. Real-device force-quit and recovery validation is still required.
 - Session cards now use one fixed-width overflow control instead of wrapping four or five icon buttons across multiple rows. Start/finish, join, chat, clips, share, and edit remain available in a labeled Session actions sheet; unread crew-chat activity badges the single overflow control. This keeps every card header consistent regardless of screen width or member permissions.
 - Eligible session owners and linked crew always see the compact session-chat icon, including before the thread has multiple linked members or its first message. Name-only guests remain outside the private chat until linked to an account.
@@ -110,6 +112,7 @@ Session duration is measured only from a trustworthy `started_at` to `ended_at`.
 - **Log a past session** records a surf that already happened directly under Past sessions. It requires the real past date and preserves the crew and location, but it has no Start/Stop step and does not create Stokens, streaks, or fabricated duration.
 - One outing at one spot is one session. It starts once and finishes once; Sodium does not add Pause. A short beach break remains the same session, while a relocation or later outing is a new session.
 - Selecting an existing Sodium member creates a real linked crew relationship used by session chat and start/finish/change/cancellation notifications. A typed guest remains name-only and receives no private access or notifications until linked.
+- Editing a legacy typed guest can explicitly replace it with one selected Sodium profile after a confirmation prompt. Matching text is never enough to link private chat, clips, notifications, attendance, or Stokens.
 - While a linked member is in an active surf, a compact bar above the bottom navigation reopens it quickly. Only the organizer can Finish it. A three-hour reminder asks the organizer whether the surf is still active.
 
 ## Stoke and media

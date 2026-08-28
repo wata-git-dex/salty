@@ -14,6 +14,7 @@ const sessionChatMigration = read('supabase/session-chat-v1-migration.sql');
 const clipReceiptMigration = read('supabase/clip-delivery-receipts-v1-migration.sql');
 const sessionLifecycleMigration = read('supabase/session-lifecycle-v1-migration.sql');
 const sessionAttendanceMigration = read('supabase/session-attendance-v1-migration.sql');
+const sessionCrewTransactionMigration = read('supabase/session-crew-transaction-v1-migration.sql');
 const apiMiddleware = read('functions/api/_middleware.js');
 const streamUpload = read('functions/api/stream/upload.js');
 const streamWebhook = read('functions/api/stream/webhook.js');
@@ -112,6 +113,23 @@ test('active sessions have one Start/Finish lifecycle with linked-crew alerts', 
   assert.match(sessionLifecycleMigration, /Still surfing\?/);
   assert.match(sessionLifecycleMigration, /sodium-active-session-reminders/);
   assert.match(sessionLifecycleMigration, /new\.when_label = 'Logged'/);
+});
+
+test('session identity is explicit and session plus crew save atomically', () => {
+  assert.match(app, /sessionParticipants: \[\]/);
+  assert.doesNotMatch(app, /state\.sessionPeople|state\.sessionLinkedPeople/);
+  assert.match(app, /kind:'member',userId:person\.id,name:person\.name/);
+  assert.match(app, /kind:'guest',name,role:'surf'/);
+  assert.match(app, /Link “\$\{guest\.name\}” to \$\{identity\}\?/);
+  assert.match(app, /This replaces the guest text with this exact Sodium account/);
+  assert.match(app, /db\.rpc\('save_session_with_crew'/);
+  assert.doesNotMatch(app, /db\.rpc\('add_session_member'/);
+  assert.match(sessionCrewTransactionMigration, /create or replace function public\.save_session_with_crew/);
+  assert.match(sessionCrewTransactionMigration, /for update/);
+  assert.match(sessionCrewTransactionMigration, /participant_names=cleaned_guests/);
+  assert.match(sessionCrewTransactionMigration, /delete from public\.session_rsvps/);
+  assert.match(sessionCrewTransactionMigration, /on conflict\(session_id,user_id\) do update/);
+  assert.doesNotMatch(sessionCrewTransactionMigration, /normalized_name|join public\.profiles[\s\S]{0,100}lower/);
 });
 
 test('session chat stays tied to the surf crew across UI, RLS, and realtime', () => {

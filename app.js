@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.125';
+const APP_VERSION = '1.126';
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
 const CONSENT_VERSION = '1.0';
@@ -135,7 +135,7 @@ const state = {
   pendingInviteRegion: '',
   preview: false, previewSessions: [], avatarUrls: {}, selectedMember: null,
   authEmail: '', pendingTokenHash: '', pendingTokenType: 'email',
-  consentNext: 'new', sessionPeople: [], sessionLinkedPeople: [], sessionEntryMode: 'plan', editingSessionId: null, finishingSessionId: null, sessionClipSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
+  consentNext: 'new', sessionParticipants: [], sessionEntryMode: 'plan', editingSessionId: null, finishingSessionId: null, sessionClipSessionId: null, editingPostId: null, editingEventId: null, editingPerkId: null, installPrompt: null,
   notificationPreferences: { ...NOTIFICATION_DEFAULTS }, notificationSubscription: null, pendingOpen: '', pendingSessionId: '', pendingSessionRegion: '', pendingEventId: '', pendingEventRegion: '', pendingDeliveryId: '',
   calendarMonth: null, calendarDate: '', eventFilter: 'all',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
@@ -4244,21 +4244,24 @@ async function ensureSpot(name, generalLocation, regionId) {
 }
 
 function renderSessionPeopleChips() {
-  $('#sessionPeopleChips').innerHTML = state.sessionPeople.map((name, index) => {
-    const linkedId = state.sessionLinkedPeople.find(person => person.name.toLowerCase() === name.toLowerCase())?.userId;
-    const member = linkedId ? memberById(linkedId) : null;
-    return `<button type="button" class="${member ? 'linked-member' : ''}" data-remove-session-person="${index}" title="${member ? 'Sodium member' : 'Added by name'}">${member ? `<svg><use href="#i-user"/></svg>` : ''}${esc(name)}<span>×</span></button>`;
+  $('#sessionPeopleChips').innerHTML = state.sessionParticipants.map((participant, index) => {
+    const member = participant.kind === 'member';
+    return `<button type="button" class="${member ? 'linked-member' : ''}" data-remove-session-person="${index}" title="${member ? 'Linked Sodium member' : 'Guest added by name'}">${member ? `<svg><use href="#i-user"/></svg>` : ''}${esc(participant.name)}<span>×</span></button>`;
   }).join('');
 }
 
 function renderSessionPersonOptions() {
   const target = $('#sessionPersonSelect');
-  const selected = new Set(state.sessionPeople.map(name => name.toLowerCase()));
-  const available = state.people.filter(person => person.id !== state.profile.id && !selected.has(person.name.toLowerCase()));
+  const selectedMemberIds = new Set(state.sessionParticipants.filter(participant => participant.kind === 'member').map(participant => participant.userId));
+  const available = state.people.filter(person => person.id !== state.profile.id && !selectedMemberIds.has(person.id));
   const role = $('[data-session-role].active')?.dataset.sessionRole;
   const label = role === 'film' ? 'Choose a surfer' : 'Choose a community member';
   target.innerHTML = `<option value="">${label}</option>`
-    + available.map(person => `<option value="${person.id}">${esc(person.name)}${person.nickname ? ` · ${esc(person.nickname)}` : ''}</option>`).join('')
+    + available.map(person => {
+      const guest = state.sessionParticipants.find(participant => participant.kind === 'guest' && normalizePersonName(participant.name) === normalizePersonName(person.name));
+      const identity = `${person.name}${person.nickname ? ` · ${person.nickname}` : ''}`;
+      return `<option value="${person.id}">${guest ? `Link “${esc(guest.name)}” → ${esc(identity)}` : esc(identity)}</option>`;
+    }).join('')
     + '<option value="other">Other · not in the community yet</option>';
   target.value = '';
 }
@@ -4266,7 +4269,20 @@ function renderSessionPersonOptions() {
 function addSessionMember(memberId) {
   const person = state.people.find(item => item.id === memberId);
   if (!person) return;
-  addSessionPerson(person.name, person.id);
+  const guestIndex = state.sessionParticipants.findIndex(participant => participant.kind === 'guest' && normalizePersonName(participant.name) === normalizePersonName(person.name));
+  if (guestIndex >= 0) {
+    const guest = state.sessionParticipants[guestIndex];
+    const identity = `${person.name}${person.nickname ? ` · ${person.nickname}` : ''}`;
+    if (!window.confirm(`Link “${guest.name}” to ${identity}?\n\nThis replaces the guest text with this exact Sodium account.`)) {
+      renderSessionPersonOptions();
+      return;
+    }
+    state.sessionParticipants.splice(guestIndex,1,{ kind:'member',userId:person.id,name:person.name,role:guest.role || 'surf' });
+  } else {
+    state.sessionParticipants.push({ kind:'member',userId:person.id,name:person.name,role:'surf' });
+  }
+  renderSessionPeopleChips();
+  renderSessionPersonOptions();
 }
 
 function showOtherSessionPerson(show = true) {
@@ -4274,12 +4290,14 @@ function showOtherSessionPerson(show = true) {
   if (show) setTimeout(() => $('#sessionPersonInput').focus({ preventScroll:true }), 50);
 }
 
-function addSessionPerson(rawName = $('#sessionPersonInput').value, memberId = '') {
+function addSessionPerson(rawName = $('#sessionPersonInput').value) {
   const names = rawName.split(',').map(name => name.trim()).filter(Boolean);
   names.forEach(name => {
-    if (state.sessionPeople.length >= 20) return;
-    if (!state.sessionPeople.some(existing => existing.toLowerCase() === name.toLowerCase()) && name.toLowerCase() !== state.profile.name.toLowerCase()) state.sessionPeople.push(name);
-    if (memberId && !state.sessionLinkedPeople.some(person => person.userId === memberId)) state.sessionLinkedPeople.push({ userId:memberId, name });
+    if (state.sessionParticipants.length >= 20) return;
+    const normalizedName = normalizePersonName(name);
+    if (!state.sessionParticipants.some(participant => normalizePersonName(participant.name) === normalizedName) && normalizedName !== normalizePersonName(state.profile.name)) {
+      state.sessionParticipants.push({ kind:'guest',name,role:'surf' });
+    }
   });
   $('#sessionPersonInput').value = '';
   showOtherSessionPerson(false);
@@ -4290,8 +4308,7 @@ function addSessionPerson(rawName = $('#sessionPersonInput').value, memberId = '
 function resetSessionComposer() {
   state.sessionEntryMode = 'plan';
   state.editingSessionId = null;
-  state.sessionPeople = [];
-  state.sessionLinkedPeople = [];
+  state.sessionParticipants = [];
   $('#sessionForm').reset();
   $('#sessionSheetTitle').textContent = 'Create a session';
   $('#sessionSheetIntro').textContent = "Post where and when you'll be surfing or filming. The crew can join without another group text.";
@@ -4339,8 +4356,17 @@ function openSessionComposer(sessionId = null) {
   const session = sessionId ? state.sessions.find(item => item.id === sessionId && (item.author === state.profile.id || state.profile.is_admin)) : null;
   if (session) {
     state.editingSessionId = session.id;
-    state.sessionPeople = [...(session.participant_names || (session.featured_surfer_name ? [session.featured_surfer_name] : []))];
-    state.sessionLinkedPeople = (session.session_rsvps || []).filter(rsvp => rsvp.user_id !== state.profile.id).map(rsvp => ({ userId:rsvp.user_id, name:rsvp.profile?.name || memberById(rsvp.user_id)?.name || 'Member' }));
+    const linkedParticipants = (session.session_rsvps || []).filter(rsvp => rsvp.user_id !== state.profile.id).map(rsvp => ({
+      kind:'member',
+      userId:rsvp.user_id,
+      name:rsvp.profile?.name || memberById(rsvp.user_id)?.name || 'Member',
+      role:rsvp.role || 'surf',
+    }));
+    const linkedNames = new Set(linkedParticipants.map(participant => normalizePersonName(participant.name)));
+    const guestNames = [...(session.participant_names || (session.featured_surfer_name ? [session.featured_surfer_name] : []))]
+      .filter(name => !linkedNames.has(normalizePersonName(name)))
+      .map(name => ({ kind:'guest',name,role:'surf' }));
+    state.sessionParticipants = [...linkedParticipants,...guestNames];
     $('#sessionSheetTitle').textContent = 'Edit session';
     $('#sessionSubmit').textContent = 'Save changes';
     $('#sessionCancel').classList.remove('hidden');
@@ -4358,6 +4384,11 @@ function openSessionComposer(sessionId = null) {
     $('#wantsFilmer').checked = session.wants_filmer;
     $('#sessionNote').value = session.note || '';
     if (state.profile.is_admin) {
+      if (!session.initiator_user && session.initiator_name) {
+        const matchingInitiator = state.people.find(person => normalizePersonName(person.name) === normalizePersonName(session.initiator_name));
+        const matchingOption = matchingInitiator ? $(`#sessionInitiator option[value="${matchingInitiator.id}"]`) : null;
+        if (matchingOption) matchingOption.textContent = `Link “${session.initiator_name}” → ${matchingInitiator.name}${matchingInitiator.nickname ? ` · ${matchingInitiator.nickname}` : ''}`;
+      }
       $('#sessionInitiator').value = session.initiator_user || 'pending';
       $('#sessionInitiatorName').value = session.initiator_user ? '' : (session.initiator_name || '');
       $('#sessionInitiatorNameRow').classList.toggle('hidden', Boolean(session.initiator_user));
@@ -4420,7 +4451,7 @@ async function createSession(event) {
       author: existingSession?.author || state.profile.id, spot_id: spot.id, region_id: state.currentRegion.id,
       when_label: loggingPast ? 'Logged' : (later ? 'Scheduled' : 'Now'), surf_time: savedSurfTime, started_at: loggingPast ? null : startedAt,
       author_role: $('[data-session-role].active').dataset.sessionRole,
-      featured_surfer_name: null, featured_surfer_user: null, participant_names: state.sessionPeople,
+      featured_surfer_name: null, featured_surfer_user: null,
       wants_filmer: $('#wantsFilmer').checked, note: $('#sessionNote').value.trim() || null,
     };
     if (state.profile.is_admin) {
@@ -4434,18 +4465,26 @@ async function createSession(event) {
       payload.ended_at = savedSurfTime;
       payload.wants_filmer = false;
     }
-    let updateQuery = state.editingSessionId ? db.from('sessions').update(payload).eq('id', state.editingSessionId) : null;
-    if (updateQuery && !state.profile.is_admin) updateQuery = updateQuery.eq('author', state.profile.id);
-    const result = state.editingSessionId
-      ? await updateQuery.select('id').single()
-      : await db.from('sessions').insert(payload).select('id').single();
+    const guestNames = state.sessionParticipants.filter(participant => participant.kind === 'guest').map(participant => participant.name);
+    const linkedCrew = state.sessionParticipants.filter(participant => participant.kind === 'member').map(participant => ({ user_id:participant.userId,role:participant.role || 'surf' }));
+    const result = await db.rpc('save_session_with_crew', {
+      target_session:state.editingSessionId || null,
+      target_spot:payload.spot_id,
+      target_region:payload.region_id,
+      target_when_label:payload.when_label,
+      target_surf_time:payload.surf_time,
+      target_started_at:payload.started_at,
+      target_author_role:payload.author_role,
+      target_wants_filmer:payload.wants_filmer,
+      target_note:payload.note,
+      target_status:payload.status || existingSession?.status || 'active',
+      target_ended_at:payload.ended_at || existingSession?.ended_at || null,
+      target_initiator_user:Object.hasOwn(payload,'initiator_user') ? payload.initiator_user : (existingSession?.initiator_user || state.profile.id),
+      target_initiator_name:Object.hasOwn(payload,'initiator_name') ? payload.initiator_name : (existingSession?.initiator_name || null),
+      linked_crew:linkedCrew,
+      guest_names:guestNames,
+    });
     if (result.error) throw result.error;
-    if (!loggingPast && result.data?.id) {
-      for (const linked of state.sessionLinkedPeople) {
-        const linkedResult = await db.rpc('add_session_member', { target_session:result.data.id, target_user:linked.userId, target_role:'surf' });
-        if (linkedResult.error) throw linkedResult.error;
-      }
-    }
     const edited = Boolean(state.editingSessionId);
     resetSessionComposer(); closeSheet(); await loadSessions(); await renderProfile(); toast(edited ? 'Session updated.' : (loggingPast ? 'Past session saved.' : 'Your session is live.'));
   } catch (error) { toast(readableError(error)); }
@@ -6442,9 +6481,7 @@ document.addEventListener('click', async event => {
     openListingComposer(editListingNode.dataset.editListing);
   } else if (listingNode) openListingDetail(listingNode.dataset.listing);
   if (removeSessionPersonNode) {
-    const removedName = state.sessionPeople[Number(removeSessionPersonNode.dataset.removeSessionPerson)];
-    state.sessionPeople.splice(Number(removeSessionPersonNode.dataset.removeSessionPerson), 1);
-    state.sessionLinkedPeople = state.sessionLinkedPeople.filter(person => person.name.toLowerCase() !== removedName?.toLowerCase());
+    state.sessionParticipants.splice(Number(removeSessionPersonNode.dataset.removeSessionPerson),1);
     renderSessionPeopleChips();
     renderSessionPersonOptions();
   }
@@ -6670,6 +6707,15 @@ document.addEventListener('change', async event => {
     return;
   }
   if (event.target.id === 'sessionInitiator') {
+    const editingSession = state.sessions.find(session => session.id === state.editingSessionId);
+    const selectedMember = memberById(event.target.value);
+    if (editingSession && !editingSession.initiator_user && editingSession.initiator_name && selectedMember
+      && normalizePersonName(editingSession.initiator_name) === normalizePersonName(selectedMember.name)) {
+      const identity = `${selectedMember.name}${selectedMember.nickname ? ` · ${selectedMember.nickname}` : ''}`;
+      if (!window.confirm(`Link initiator “${editingSession.initiator_name}” to ${identity}?\n\nOrganizer credit will belong to this exact Sodium account.`)) {
+        event.target.value = 'pending';
+      }
+    }
     $('#sessionInitiatorNameRow').classList.toggle('hidden', event.target.value !== 'pending');
     return;
   }
