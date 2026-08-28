@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.121';
+const APP_VERSION = '1.123';
 const CLIP_POSTING_TEMPORARILY_PAUSED = true;
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
@@ -140,7 +140,7 @@ const state = {
   guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
   postMemberTags: [], postPersonNames: [], postCustomTags: [], postSessionId: '', qrInviteUrl: '', qrInviteRegionName: '',
   nonprofitLogoUrls: {}, editingNonprofitId: null, drawerScrollY: 0,
-  googleDriveConfigured: false, googleDriveSharingEmail: '', googleDriveChecked: false, googleDriveSyncTimer: null,
+  googleDriveConfigured: false, googleDriveConnected: false, googleDriveSharingEmail: '', googleDriveChecked: false, googleDriveSyncTimer: null, pendingDriveStatus: '',
   driveShareWarned: false,
   editingMessageKind: '', editingMessageId: '', editingMessageHasAttachment: false,
   reactingMessageKind: '', reactingMessageId: '',
@@ -353,6 +353,7 @@ async function init() {
   state.pendingEventId = params.get('event')?.trim() || '';
   state.pendingDeliveryId = params.get('delivery')?.trim() || '';
   state.pendingEventRegion = params.get('region')?.trim() || '';
+  state.pendingDriveStatus = params.get('drive')?.trim() || '';
   if (state.pendingInvite) localStorage.setItem('salty:invite', state.pendingInvite);
   if (state.pendingInviteRegion) localStorage.setItem('salty:invite-region', state.pendingInviteRegion);
   state.pendingTokenHash = params.get('token_hash') || '';
@@ -480,6 +481,13 @@ function showWelcome() {
 function openAuth(mode, keepPending = false) {
   state.authMode = mode;
   const isNew = mode === 'new';
+  // Invite codes are one-time onboarding credentials, not member login
+  // credentials. A consumed invite left in this browser must never override an
+  // existing member's valid Google or email session.
+  if (!isNew) {
+    state.pendingInvite = '';
+    localStorage.removeItem('salty:invite');
+  }
   if (isNew && !state.pendingInvite) {
     toast('Open the invite link your friend sent you.');
     return;
@@ -816,7 +824,13 @@ async function enterCommunity() {
   let { data: profile, error } = await db.rpc('get_my_profile');
   if (error) { toast(readableError(error)); showWelcome(); return; }
 
-  if (state.pendingInvite) {
+  // Existing members do not need to redeem an invite again. This also makes
+  // member login portable across devices when a browser has retained an old,
+  // expired, or already-used invite URL.
+  if (profile) {
+    state.pendingInvite = '';
+    localStorage.removeItem('salty:invite');
+  } else if (state.pendingInvite) {
     const redeemed = await db.rpc('redeem_invite', {
       invite_code: state.pendingInvite,
       profile_name: null,
@@ -840,8 +854,8 @@ async function enterCommunity() {
     return;
   }
 
-  // Existing members can open invitation-backed session links without leaving
-  // a stale invite on this device after the shared surf has opened.
+  // Invitation-backed shared links must not leave a stale invite on this
+  // device after the member or newly redeemed profile has opened.
   state.pendingInvite = '';
   localStorage.removeItem('salty:invite');
 
@@ -862,6 +876,7 @@ async function enterCommunity() {
   await loadApp();
   showOnly('app');
   clearPendingAuth();
+  handleGoogleDriveReturn();
   cleanAuthUrl();
   offerInstallAfterAuth();
   revealSharedTarget();
@@ -2337,13 +2352,16 @@ function renderGoogleDriveCard() {
   const folderId = $('#clipGoogleFolderId').value;
   const folderName = $('#clipGoogleFolderName').value;
   card.classList.toggle('selected', Boolean(folderId));
-  $('#clipDriveHeading').textContent = folderId ? (folderName || 'Google Drive folder selected') : 'Paste the folder link below';
+  $('#clipDriveConnect').classList.toggle('hidden', state.googleDriveConnected);
+  $('#clipDrivePick').classList.toggle('hidden', !state.googleDriveConnected && !NATIVE_APP);
+  $('#clipDriveDisconnect').classList.toggle('hidden', !state.googleDriveConnected);
+  $('#clipDriveHeading').textContent = folderId ? (folderName || 'Google Drive folder selected') : 'Choose a folder without copying its link';
   $('#clipDriveStatus').textContent = folderId
-    ? `For live counts, share this folder with ${state.googleDriveSharingEmail || 'the Sodium sharing email'} as a Viewer.`
-    : state.googleDriveConfigured
-      ? `Share only the clip folder with ${state.googleDriveSharingEmail} as a Viewer, then paste its link.`
-      : 'Manual Drive, Dropbox, and iCloud links still work while automatic counting is unavailable.';
-  $('#clipDriveCopyEmail').classList.toggle('hidden', !state.googleDriveSharingEmail);
+    ? 'Selected. Sodium can count finished video uploads in this folder while the delivery is open.'
+    : state.googleDriveConnected
+      ? 'Connected. Choose only the folder for this delivery.'
+      : 'Connect once. Sodium receives access only to folders you explicitly choose.';
+  $('#clipDriveCopyEmail').classList.toggle('hidden', !state.googleDriveSharingEmail || state.googleDriveConnected);
   const automatic = Boolean(folderId);
   $('.clip-count-fields').classList.toggle('google-tracked', automatic);
   $('#clipUploadedCount').readOnly = false;
@@ -2357,12 +2375,19 @@ function renderGoogleDriveInboxStatus() {
   const copy = $('#clipDriveInboxCopy');
   const action = $('#clipDriveInboxAction');
   card.classList.remove('hidden', 'connected', 'upgrade');
-  if (state.googleDriveConfigured) {
+  if (state.googleDriveConnected) {
     card.classList.add('connected');
-    heading.textContent = 'Free live folder counting is available';
-    copy.textContent = 'Share only a delivery folder with Sodium as Viewer. Manual counts are never lowered.';
-    action.textContent = 'Copy sharing email';
-    action.classList.toggle('hidden', !state.googleDriveSharingEmail);
+    heading.textContent = 'Google Drive is connected';
+    copy.textContent = 'Choose a delivery folder directly when you send clips. Manual counts are never lowered.';
+    action.textContent = 'Send clips';
+    action.dataset.action = 'open-clip-delivery';
+    action.classList.remove('hidden');
+  } else if (state.googleDriveConfigured) {
+    heading.textContent = 'Choose folders directly from Google Drive';
+    copy.textContent = 'Connect once. Sodium sees only folders you select.';
+    action.textContent = 'Connect Drive';
+    action.dataset.action = 'connect-google-drive';
+    action.classList.remove('hidden');
   } else {
     heading.textContent = 'Manual folder links are on';
     copy.textContent = 'Automatic Google Drive counting is not configured yet.';
@@ -2378,15 +2403,163 @@ async function loadGoogleDriveStatus(force = false) {
   try {
     const result = await googleDriveRequest('status', { method:'POST' });
     state.googleDriveConfigured = Boolean(result.configured);
+    state.googleDriveConnected = Boolean(result.connected);
     state.googleDriveSharingEmail = result.sharingEmail || '';
   } catch (error) {
     console.warn('Optional Google Drive status unavailable:', error.message);
     state.googleDriveConfigured = false;
+    state.googleDriveConnected = false;
     state.googleDriveSharingEmail = '';
   }
   state.googleDriveChecked = true;
   renderGoogleDriveCard();
   return state.googleDriveConfigured;
+}
+
+function applyGoogleDriveFolder(folder) {
+  if (!folder?.id) return;
+  $('#clipGoogleFolderId').value = folder.id;
+  $('#clipGoogleFolderName').value = folder.name || 'Google Drive folder';
+  $('#clipFolderUrl').value = folder.url || `https://drive.google.com/drive/folders/${folder.id}`;
+  $('#clipUploadedCount').value = '0';
+  state.googleDriveConnected = true;
+  state.googleDriveChecked = true;
+  renderGoogleDriveCard();
+  updateClipProviderHint();
+  updateClipProgressPreview();
+}
+
+function handleGoogleDriveReturn() {
+  const status = state.pendingDriveStatus;
+  if (!status) return false;
+  state.pendingDriveStatus = '';
+  if (status === 'connected' || status === 'selected') {
+    state.googleDriveConnected = true;
+    state.googleDriveChecked = true;
+    renderGoogleDriveCard();
+    toast(status === 'selected' ? 'Google Drive folder selected.' : 'Google Drive connected. Choose the clip folder next.');
+  } else if (status === 'cancelled') toast('Google Drive selection cancelled.');
+  else toast('Google Drive could not connect. You can still paste a folder link.', 7000);
+  return true;
+}
+
+async function handleNativeDriveUrl(event) {
+  if (!NATIVE_APP || !event?.url) return false;
+  let url;
+  try { url = new URL(event.url); } catch (_error) { return false; }
+  if (url.protocol !== 'sodium:' || url.hostname !== 'drive') return false;
+  const status = url.searchParams.get('drive') || '';
+  if (status === 'selected') {
+    applyGoogleDriveFolder({
+      id:url.searchParams.get('folder') || '',
+      name:url.searchParams.get('name') || 'Google Drive folder',
+      url:url.searchParams.get('url') || '',
+    });
+    toast('Google Drive folder selected.');
+  } else if (status === 'connected') {
+    state.googleDriveConnected = true;
+    state.googleDriveChecked = true;
+    renderGoogleDriveCard();
+    toast('Google Drive connected.');
+  } else if (status === 'cancelled') toast('Google Drive selection cancelled.');
+  else toast('Google Drive could not connect. You can still paste a folder link.', 7000);
+  return true;
+}
+
+async function openNativeGoogleDrivePicker() {
+  if (!await hydrateNativePlugins() || typeof NATIVE_AUTH?.authenticate !== 'function') {
+    throw new Error('Sodium could not open the secure Google Drive picker.');
+  }
+  const result = await googleDriveRequest('connect', {
+    method:'POST',
+    body:JSON.stringify({ native:true, pick:true }),
+  });
+  const callback = await NATIVE_AUTH.authenticate({ url:result.authorizationUrl, callbackScheme:'sodium' });
+  if (!callback?.url || !await handleNativeDriveUrl({ url:callback.url })) throw new Error('Google Drive did not return a folder.');
+}
+
+async function connectGoogleDrive() {
+  try {
+    if (NATIVE_APP) { await openNativeGoogleDrivePicker(); return; }
+    const result = await googleDriveRequest('connect', { method:'POST', body:JSON.stringify({ native:false, pick:false }) });
+    if (!result.authorizationUrl) throw new Error('Google Drive did not provide a connection page.');
+    location.assign(result.authorizationUrl);
+  } catch (error) { toast(readableError(error), 7000); }
+}
+
+async function disconnectGoogleDrive() {
+  if (!confirm('Disconnect Google Drive from Sodium? Existing folder links will keep working with manual counts.')) return;
+  try {
+    await googleDriveRequest('disconnect', { method:'POST' });
+    state.googleDriveConnected = false;
+    state.googleDriveChecked = true;
+    $('#clipGoogleFolderId').value = '';
+    $('#clipGoogleFolderName').value = '';
+    renderGoogleDriveCard();
+    updateClipProviderHint();
+    toast('Google Drive disconnected. Pasted links still work.');
+  } catch (error) { toast(readableError(error), 6000); }
+}
+
+let googlePickerPromise = null;
+function loadGooglePicker() {
+  if (globalThis.google?.picker) return Promise.resolve();
+  if (googlePickerPromise) return googlePickerPromise;
+  googlePickerPromise = new Promise((resolve, reject) => {
+    const ready = () => globalThis.gapi.load('picker', { callback:resolve, onerror:() => reject(new Error('Google Picker did not load.')) });
+    const existing = document.querySelector('script[data-google-picker]');
+    if (existing) {
+      if (globalThis.gapi) ready();
+      else existing.addEventListener('load', ready, { once:true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://apis.google.com/js/api.js';
+    script.async = true;
+    script.dataset.googlePicker = 'true';
+    script.onload = ready;
+    script.onerror = () => reject(new Error('Google Picker did not load.'));
+    document.head.append(script);
+  });
+  return googlePickerPromise;
+}
+
+async function pickGoogleDriveFolder() {
+  try {
+    if (NATIVE_APP) { await openNativeGoogleDrivePicker(); return; }
+    const config = await googleDriveRequest('token', { method:'POST' });
+    await loadGooglePicker();
+    const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(true)
+      .setMimeTypes('application/vnd.google-apps.folder');
+    const picker = new google.picker.PickerBuilder()
+      .setAppId(config.appId)
+      .setDeveloperKey(config.apiKey)
+      .setOAuthToken(config.accessToken)
+      .addView(view)
+      .setTitle('Choose the clip folder')
+      .setCallback(async data => {
+        if (data.action !== google.picker.Action.PICKED || !data.docs?.[0]) return;
+        try {
+          const selected = await googleDriveRequest('select', {
+            method:'POST',
+            body:JSON.stringify({ folderId:data.docs[0].id }),
+          });
+          applyGoogleDriveFolder(selected.folder);
+          toast('Folder selected. Sodium will count clips as they finish uploading.');
+        } catch (error) { toast(readableError(error), 7000); }
+      })
+      .build();
+    picker.setVisible(true);
+  } catch (error) {
+    if (/reconnect|connect google drive/i.test(error.message)) {
+      state.googleDriveConnected = false;
+      state.googleDriveChecked = true;
+      renderGoogleDriveCard();
+    }
+    toast(`${readableError(error)} You can still paste the folder link.`, 7000);
+  }
 }
 
 async function copyGoogleDriveSharingEmail() {
@@ -3974,24 +4147,11 @@ function renderSessions() {
       .filter(Boolean)
       .filter((name, index, names) => names.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index);
     const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...visibleRsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter((name, index, names) => name && names.indexOf(name) === index);
-    const edit = canManage ? `<button class="session-edit-icon" data-edit-session="${session.id}" aria-label="${finished ? 'Edit finished surf' : 'Edit surf'}"><svg><use href="#i-edit"/></svg></button>` : '';
-    const share = !pastSession ? `<button class="session-share-icon" data-share-session="${session.id}" aria-label="Share this surf"><svg><use href="#i-share"/></svg></button>` : '';
-    const sessionState = !finished && canManage
-      ? (session.when_label === 'Now'
-        ? `<button class="session-state-icon stop" data-end-session="${session.id}" aria-label="Stop surf" title="Stop surf"><svg><use href="#i-stop"/></svg></button>`
-        : `<button class="session-state-icon start" data-start-session="${session.id}" aria-label="Start surf" title="Start surf"><svg><use href="#i-play"/></svg></button>`)
-      : '';
     const canSendClips = finished && ((session.author_role === 'film' && mine) || myRsvp?.role === 'film' || state.profile.is_admin);
-    const sendClips = canSendClips ? `<button class="session-clips-icon" data-session-clips="${session.id}" aria-label="Send clips to this crew" title="Send clips"><svg><use href="#i-camera"/></svg></button>` : '';
     const sessionChatUnread = sessionChatUnreadCount(session.id);
     const showSessionChat = canAccessSessionChat(session);
-    const sessionChat = showSessionChat ? `<button class="session-chat-icon ${sessionChatUnread ? 'unread' : ''}" data-session-chat="${session.id}" aria-label="Message session crew" title="Message crew"><svg><use href="#i-chat"/></svg>${sessionChatUnread ? `<b>${sessionChatUnread > 9 ? '9+' : sessionChatUnread}</b>` : ''}</button>` : '';
-    const tools = `<div class="session-card-tools">${finished ? '<span class="past-badge">Finished</span>' : sessionState}${sendClips}${sessionChat}${share}${edit}</div>`;
-    const surfAction = `<button class="small-action surf ${myRsvp?.role === 'surf' ? 'on' : ''}" data-rsvp="${session.id}" data-role="surf"><svg><use href="#i-surf"/></svg>${myRsvp?.role === 'surf' ? 'Surfing ✓' : 'Join surf'}</button>`;
-    const filmAction = (session.wants_filmer || myRsvp?.role === 'film')
-      ? `<button class="small-action film ${myRsvp?.role === 'film' ? 'on' : ''}" data-rsvp="${session.id}" data-role="film"><svg><use href="#i-camera"/></svg>${myRsvp?.role === 'film' ? 'Filming ✓' : (filmers.length ? 'Film too' : 'I can film')}</button>`
-      : '';
-    const actions = finished || mine ? '' : `${surfAction}${filmAction}`;
+    const hasActions = canManage || !pastSession || canSendClips || showSessionChat;
+    const tools = `<div class="session-card-tools">${finished ? '<span class="past-badge">Finished</span>' : ''}${hasActions ? `<button class="session-more-icon ${sessionChatUnread ? 'unread' : ''}" data-session-actions="${session.id}" aria-label="Open session actions" title="Session actions"><svg><use href="#i-more"/></svg>${sessionChatUnread ? `<b>${sessionChatUnread > 9 ? '9+' : sessionChatUnread}</b>` : ''}</button>` : ''}</div>`;
     const mapUrl = spotMapUrl(session.spot);
     const location = session.spot?.general_location ? `<a class="spot-location" href="${esc(mapUrl)}" target="_blank" rel="noopener"><svg><use href="#i-pin"/></svg>${esc(session.spot.general_location)}</a>` : '';
     const surferNames = surfers.length ? surfers.map(name => `<b>${esc(name)}</b>`).join('') : '<em>Open</em>';
@@ -4008,13 +4168,46 @@ function renderSessions() {
       ? schedulePills(scheduleParts(session.surf_time || session.ended_at || session.created_at), 'session-schedule')
       : sessionSchedulePills(session);
     const timingClass = pastSession ? 'past-card' : (finishedToday ? 'finished-today' : (session.when_label === 'Now' ? 'live-session' : 'future-session'));
-    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${actions ? `<div class="card-actions">${actions}</div>` : ''}${claimInvite}</article>`;
+    return `<article class="session-card ${mine ? 'mine' : ''} ${session.wants_filmer ? 'wants' : ''} ${session.author_role === 'film' ? 'filming' : ''} ${timingClass}" data-session-id="${session.id}"><i class="stripe"></i><div class="session-card-heading"><strong>${esc(session.spot?.name || 'Spot TBD')}</strong>${tools}</div>${schedule}${location}${starter}${session.note ? `<p class="session-note">${esc(session.note)}</p>` : ''}<div class="session-crew"><div class="session-crew-row surfers"><span><svg><use href="#i-surf"/></svg>SURFERS</span><div>${surferNames}</div></div>${filmerRow}</div>${claimInvite}</article>`;
   };
   const activeMarkup = orderedSessions.length
     ? orderedSessions.map(session => renderSessionCard(session)).join('')
     : '<div class="empty compact-empty"><span>OPEN</span><h2>No active surfs</h2><p>Finished sessions are saved below.</p></div>';
   const pastMarkup = past.length ? `<details class="past-items"><summary><span><b>Past sessions</b><small>${past.length} finished</small></span><svg><use href="#i-chevron"/></svg></summary><div>${past.map(session => renderSessionCard(session, true)).join('')}</div></details>` : '';
   feed.innerHTML = `${activeMarkup}${pastMarkup}`;
+}
+
+function openSessionActions(sessionId) {
+  const session = state.sessions.find(item => item.id === sessionId);
+  if (!session) return;
+  const mine = session.author === state.profile.id;
+  const canManage = mine || Boolean(state.profile.is_admin);
+  const pastSession = isPastSession(session);
+  const finished = pastSession || isFinishedToday(session);
+  const rsvps = session.session_rsvps || [];
+  const myRsvp = rsvps.find(rsvp => rsvp.user_id === state.profile.id);
+  const filmers = [session.author_role === 'film' ? session.author_profile?.name : null, ...rsvps.filter(rsvp => rsvp.role === 'film').map(rsvp => rsvp.profile?.name)].filter(Boolean);
+  const canSendClips = finished && ((session.author_role === 'film' && mine) || myRsvp?.role === 'film' || state.profile.is_admin);
+  const actions = [];
+  const add = (attrs, icon, title, detail, tone = '') => actions.push(`<button type="button" class="${tone}" ${attrs}><svg><use href="#${icon}"/></svg><span><b>${title}</b><small>${detail}</small></span><i>›</i></button>`);
+
+  if (!finished && canManage) {
+    if (session.when_label === 'Now') add(`data-end-session="${session.id}"`, 'i-stop', 'Finish session', 'Confirm who showed up and move this surf into today’s finished history.', 'danger');
+    else add(`data-start-session="${session.id}"`, 'i-play', 'Start session', 'Mark the crew as out in the water now.', 'success');
+  }
+  if (!finished && !mine) {
+    add(`data-rsvp="${session.id}" data-role="surf"`, 'i-surf', myRsvp?.role === 'surf' ? 'Leave this surf' : 'Join this surf', myRsvp?.role === 'surf' ? 'Remove yourself from the surfer list.' : 'Add yourself to the surfer list.', myRsvp?.role === 'surf' ? '' : 'success');
+    if (session.wants_filmer || myRsvp?.role === 'film') add(`data-rsvp="${session.id}" data-role="film"`, 'i-camera', myRsvp?.role === 'film' ? 'Stop filming this surf' : (filmers.length ? 'Join the filmers' : 'Film this surf'), myRsvp?.role === 'film' ? 'Remove yourself from the filmer list.' : 'Let the crew know you can film.', 'clips');
+  }
+  if (canAccessSessionChat(session)) add(`data-session-chat="${session.id}"`, 'i-chat', 'Message crew', 'Open this session’s private crew chat.', 'chat');
+  if (canSendClips) add(`data-session-clips="${session.id}"`, 'i-camera', 'Send clips', 'Create deliveries for surfers from this session.', 'clips');
+  if (!pastSession) add(`data-share-session="${session.id}"`, 'i-share', 'Share session', 'Send this surf inside or outside Sodium.', 'share');
+  if (canManage) add(`data-edit-session="${session.id}"`, 'i-edit', finished ? 'Edit finished session' : 'Edit session', 'Update details or cancel this session.', 'edit');
+
+  $('#sessionActionsTitle').textContent = session.spot?.name || 'Session actions';
+  $('#sessionActionsDescription').textContent = finished ? 'This surf is finished. Its history, crew chat, and clip tools remain available.' : 'Everything for this surf is organized here.';
+  $('#sessionActionChoices').innerHTML = actions.join('') || '<p class="session-actions-empty">No actions are available for this session.</p>';
+  openSheet('sessionActionsSheet');
 }
 
 async function ensureSpot(name, generalLocation, regionId) {
@@ -5947,6 +6140,7 @@ document.addEventListener('click', async event => {
   const editSessionNode = event.target.closest('[data-edit-session]');
   const shareSessionNode = event.target.closest('[data-share-session]');
   const sessionChatNode = event.target.closest('[data-session-chat]');
+  const sessionActionsNode = event.target.closest('[data-session-actions]');
   const shareSessionMemberNode = event.target.closest('[data-share-session-member]');
   const shareEventNode = event.target.closest('[data-share-event]');
   const inviteSessionClaimNode = event.target.closest('[data-invite-session-claim]');
@@ -5966,6 +6160,7 @@ document.addEventListener('click', async event => {
   const sessionRoleNode = event.target.closest('[data-session-role]');
   const memberNode = event.target.closest('[data-member]');
   const iconThemeNode = event.target.closest('[data-icon-theme]');
+  if (event.target.closest('#sessionActionsSheet') && (rsvpNode || endNode || startNode || editSessionNode || shareSessionNode || sessionChatNode || event.target.closest('[data-session-clips]'))) closeSheet();
   if (editMessageNode) {
     const [kind, id] = editMessageNode.dataset.editMessage.split(':');
     openMessageEditor(kind, id); return;
@@ -6036,6 +6231,7 @@ document.addEventListener('click', async event => {
     return;
   }
   if (shareSessionMemberNode) { await shareSessionToMember(shareSessionMemberNode.dataset.shareSessionMember); return; }
+  if (sessionActionsNode) { openSessionActions(sessionActionsNode.dataset.sessionActions); return; }
   if (sessionChatNode) { await openSessionChat(sessionChatNode.dataset.sessionChat); return; }
   const eventRegionNode = event.target.closest('[data-event-region]');
   const eventFilterNode = event.target.closest('[data-event-filter]');
@@ -6265,6 +6461,9 @@ document.addEventListener('click', async event => {
     'close-ready-clips': closeClipReadyAlert,
     'start-message': startInboxMessage,
     'open-clip-delivery': () => openClipDeliveryComposer(),
+    'connect-google-drive': connectGoogleDrive,
+    'pick-google-folder': pickGoogleDriveFolder,
+    'disconnect-google-drive': disconnectGoogleDrive,
     'copy-drive-email': copyGoogleDriveSharingEmail,
     'mark-clips-ready': markClipDeliveryReady,
     'delete-clip-delivery': deleteClipDelivery,
@@ -6615,7 +6814,8 @@ globalThis.sodiumNativeRefresh = async () => {
 async function bootstrap() {
   await hydrateNativePlugins();
   if (NATIVE_APP_LINKS?.addListener) {
-    await NATIVE_APP_LINKS.addListener('appUrlOpen', event => {
+    await NATIVE_APP_LINKS.addListener('appUrlOpen', async event => {
+      if (await handleNativeDriveUrl(event)) return;
       handleNativeAuthUrl(event).catch(error => {
         state.nativeAuthProcessing = false;
         openAuth(state.pendingInvite ? 'new' : 'existing', true);
@@ -6630,6 +6830,7 @@ async function bootstrap() {
   }
   if (NATIVE_APP_LINKS?.getLaunchUrl) {
     const launch = await NATIVE_APP_LINKS.getLaunchUrl();
+    if (launch?.url && await handleNativeDriveUrl(launch)) return;
     if (launch?.url && await handleNativeAuthUrl(launch)) return;
   }
   await init();

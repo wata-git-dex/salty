@@ -85,6 +85,12 @@ test('past sessions use a separate no-reward logging path', () => {
   assert.doesNotMatch(app.match(/if \(loggingPast\) \{[\s\S]*?\n    \}/)?.[0] || '', /points_awarded_at|streak/);
 });
 
+test('existing-member login ignores stale one-time invite codes', () => {
+  assert.match(app, /if \(!isNew\) \{[\s\S]*state\.pendingInvite = '';[\s\S]*localStorage\.removeItem\('salty:invite'\)/);
+  assert.match(app, /if \(profile\) \{[\s\S]*localStorage\.removeItem\('salty:invite'\);[\s\S]*\} else if \(state\.pendingInvite\) \{/);
+  assert.match(app, /if \(!profile\) \{[\s\S]*This account is not in the community/);
+});
+
 test('active sessions have one Start/Finish lifecycle with linked-crew alerts', () => {
   assert.match(html, /id="activeSessionDock"/);
   assert.match(app, /function activeSessionForCurrentMember/);
@@ -111,6 +117,9 @@ test('session chat stays tied to the surf crew across UI, RLS, and realtime', ()
   assert.match(app, /function sessionChatParticipantIds/);
   assert.match(app, /data-session-chat=/);
   assert.match(app, /const showSessionChat = canAccessSessionChat\(session\);/);
+  assert.match(app, /data-session-actions=/);
+  assert.match(app, /function openSessionActions\(sessionId\)/);
+  assert.doesNotMatch(app, /<div class="card-actions">\$\{actions\}/);
   assert.match(app, /table: 'session_messages'/);
   assert.match(sessionChatMigration, /create table if not exists public\.session_messages/);
   assert.match(sessionChatMigration, /public\.is_session_chat_member\(session_id\)/);
@@ -132,7 +141,7 @@ test('clip receipts are recipient-authorized and never claim external downloads'
   assert.doesNotMatch(app, /clips downloaded|files downloaded/i);
 });
 
-test('Google Drive sync can advance but never erase a filmer-confirmed clip count', () => {
+test('Google Drive picker is narrow and sync can never erase a filmer-confirmed clip count', () => {
   const driveShared = read('functions/api/google-drive/_shared.js');
   const driveSync = read('functions/api/google-drive/sync.js');
   const scheduledDriveSync = read('functions/api/google-drive/sync-all.js');
@@ -142,10 +151,15 @@ test('Google Drive sync can advance but never erase a filmer-confirmed clip coun
   assert.match(driveShared, /googleServiceAccountAccessToken/);
   assert.match(driveShared, /drive\.metadata\.readonly/);
   assert.match(driveShared, /Share this Google Drive folder with Sodium as a Viewer/);
+  assert.match(driveShared, /https:\/\/www\.googleapis\.com\/auth\/drive\.file/);
+  assert.match(driveShared, /trigger_onepick/);
+  assert.match(driveShared, /allow_folder_selection/);
+  assert.match(driveShared, /authorizeSelectedFolder/);
   assert.match(app, /\$\('#clipUploadedCount'\)\.readOnly = false/);
   assert.match(html, /Drive will never lower this number/);
-  assert.match(html, /Copy Sodium sharing email/);
-  assert.doesNotMatch(html, /Connect Drive/);
+  assert.match(html, /Connect Google Drive/);
+  assert.match(html, /Choose folder/);
+  assert.match(app, /function pickGoogleDriveFolder/);
 });
 
 test('large Stream uploads recover stale sessions and tolerate mobile interruptions', () => {
@@ -172,7 +186,8 @@ test('native Sodium routes protected APIs to production and compresses before St
   assert.doesNotMatch(app, /fetch\(localUrl\)[\s\S]{0,500}new File\(\[blob\]/);
   assert.match(app, /Compressed on this iPhone\. Ready to upload\./);
   assert.match(app, /new URL\('sodium:\/\/auth'\)/);
-  assert.match(app, /addListener\('appUrlOpen', event =>/);
+  assert.match(app, /addListener\('appUrlOpen', async event =>/);
+  assert.match(app, /handleNativeDriveUrl/);
   assert.match(apiMiddleware, /capacitor:\/\/localhost/);
   assert.match(apiMiddleware, /request\.method === 'OPTIONS'/);
   const nativeController = read('ios/App/App/AppDelegate.swift');

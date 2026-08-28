@@ -2,16 +2,40 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   countDriveVideoFiles,
+  createOAuthState,
   decryptRefreshToken,
   encryptRefreshToken,
+  googleAuthorizationUrl,
   googleServiceAccountAccessToken,
   googleServiceAccountEmail,
+  verifyOAuthState,
 } from '../api/google-drive/_shared.js';
 
 const env = {
+  GOOGLE_CLIENT_ID:'123456789012-example.apps.googleusercontent.com',
   GOOGLE_OAUTH_STATE_SECRET:'test-only-state-secret-with-enough-entropy',
   GOOGLE_TOKEN_ENCRYPTION_KEY:'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8',
 };
+
+test('Drive authorization uses only the chosen-file scope and preserves native picker state', async () => {
+  const state = await createOAuthState(env, 'user-123', { native:true, pick:true });
+  const verified = await verifyOAuthState(env, state);
+  assert.equal(verified.sub, 'user-123');
+  assert.equal(verified.native, true);
+  assert.equal(verified.pick, true);
+
+  const authorization = new URL(googleAuthorizationUrl(
+    env,
+    new Request('https://community.saltyviewfinder.com/api/google-drive/connect'),
+    state,
+    { pick:true },
+  ));
+  assert.equal(authorization.searchParams.get('scope'), 'https://www.googleapis.com/auth/drive.file');
+  assert.equal(authorization.searchParams.get('include_granted_scopes'), 'false');
+  assert.equal(authorization.searchParams.get('trigger_onepick'), 'true');
+  assert.equal(authorization.searchParams.get('allow_folder_selection'), 'true');
+  assert.equal(authorization.searchParams.get('redirect_uri'), 'https://community.saltyviewfinder.com/api/google-drive/callback');
+});
 
 test('Google refresh tokens are encrypted at rest', async () => {
   const encrypted = await encryptRefreshToken(env, 'refresh-token-that-never-enters-the-client');
