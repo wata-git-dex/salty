@@ -6,7 +6,7 @@ This file consolidates decisions and implementation state from the Sodium Commun
 
 ## Release state
 
-- Current release: v1.123.
+- Current release: v1.124 (native background-upload candidate; device validation required before beta release).
 - Session cards now use one fixed-width overflow control instead of wrapping four or five icon buttons across multiple rows. Start/finish, join, chat, clips, share, and edit remain available in a labeled Session actions sheet; unread crew-chat activity badges the single overflow control. This keeps every card header consistent regardless of screen width or member permissions.
 - Eligible session owners and linked crew always see the compact session-chat icon, including before the thread has multiple linked members or its first message. Name-only guests remain outside the private chat until linked to an account.
 - Session chat is now a compact icon in the card's top action cluster beside start/finish, clips, share, and edit. The full-width Message crew bar was removed so finished and active session cards stay compact while retaining the same chat access and unread count.

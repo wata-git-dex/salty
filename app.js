@@ -26,8 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.123';
-const CLIP_POSTING_TEMPORARILY_PAUSED = true;
+const APP_VERSION = '1.124';
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
 const CONSENT_VERSION = '1.0';
@@ -52,6 +51,10 @@ const STREAM_UPLOAD_SESSION_KEY = 'sodium:stream-upload-sessions';
 // therefore the stable native signal; relying only on the bridge caused OAuth
 // callbacks to arrive at SceneDelegate while JavaScript had no listener.
 const NATIVE_APP = location.protocol === 'capacitor:' || Boolean(globalThis.Capacitor?.isNativePlatform?.());
+// Large Stoke clips are enabled only where iOS owns compression and the
+// persisted background TUS job. Browser/PWA uploads stay paused until they
+// have an equally durable owner.
+const CLIP_POSTING_TEMPORARILY_PAUSED = !NATIVE_APP;
 document.documentElement.classList.toggle('native-app', NATIVE_APP);
 const API_ORIGIN = NATIVE_APP ? 'https://community.saltyviewfinder.com' : '';
 let NATIVE_MEDIA = null;
@@ -1204,6 +1207,7 @@ async function showProfileSetup() {
   $('#setupPhone').value = state.profile.phone || '';
   const invitedRegion = state.regions.find(region => region.id === state.pendingInviteRegion)?.id;
   $('#setupRegion').value = invitedRegion || state.profile.home_region || state.regions[0]?.id || '';
+  $('#setupRegion').setCustomValidity(state.regions.length ? '' : 'Add your home location before saving your profile.');
   $('#setupSponsors').value = (state.profile.sponsors || []).join(', ');
   $('#setupSocial').value = state.profile.social_url || '';
   $('#profileAvatar').required = !state.profile.avatar_path;
@@ -1263,6 +1267,7 @@ async function saveLocation(event) {
     const setupRegion = $('#setupRegion');
     setupRegion.innerHTML = state.regions.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join('');
     setupRegion.value = region.id;
+    setupRegion.setCustomValidity('');
     if (state.profile?.onboarding_complete) {
       state.currentRegion = region; state.eventRegion = region; state.chatRegion = region;
       localStorage.setItem('salty:last-location', region.id);
@@ -1281,6 +1286,7 @@ async function completeProfile(event) {
   submit.disabled = true; submit.textContent = 'Saving…';
   let avatarPath = state.profile.avatar_path;
   try {
+    if (!$('#setupRegion').value) throw new Error('Choose your home location, or tap “Home location not listed?” to add it. Location Services are not required.');
     const avatar = $('#profileAvatar').files[0];
     if (!avatarPath && !avatar) throw new Error('Add a profile photo.');
     if (avatar) {
@@ -4967,7 +4973,10 @@ async function uploadStreamClip(file, progressCallback = () => {}, statusCallbac
     await hydrateNativePlugins();
     if (!NATIVE_MEDIA?.uploadTus) throw new Error('The native Sodium uploader is unavailable. Close and reopen the app, then try again.');
     await ensureNativeMediaListeners();
-    const uploadId = crypto.randomUUID();
+    // The fingerprint is stable across retries/relaunches. Native iOS uses it
+    // as the durable upload-job id, so reopening a draft reconnects to the
+    // same Cloudflare checkpoint instead of creating an orphaned job.
+    const uploadId = fingerprint;
     nativeUploadObservers.set(uploadId, ({ progress, bytesUploaded }) => {
       const fraction = Math.max(0, Math.min(1, Number(progress) || 0));
       progressCallback(fraction);

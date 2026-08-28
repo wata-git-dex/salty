@@ -72,7 +72,7 @@
 
   <div id="boot" class="boot" aria-live="polite">
     <img class="boot-mark" src="./icon-ink.svg" alt="Sodium">
-    <small class="boot-credit">Saltyview Productions · v1.123</small>
+    <small class="boot-credit">Saltyview Productions · v1.124</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -169,7 +169,8 @@
         <label>Name<input id="setupName" autocomplete="name" maxlength="80" required placeholder="Your name"></label>
         <label>Nickname <small>optional</small><input id="setupNickname" maxlength="50" placeholder="What else does the crew call you?"></label>
         <label>Phone<input id="setupPhone" autocomplete="tel" inputmode="tel" required placeholder="(949) 555-0142"></label>
-        <label>Home location<select id="setupRegion" required></select><small>United States members use their state. Everywhere else uses the country.</small></label>
+        <label>Home location<select id="setupRegion" required></select><small>Choose manually. Sodium never requires Location Services to finish your profile.</small></label>
+        <button class="secondary profile-location-add" type="button" data-action="open-location">Home location not listed? Add it</button>
         <label>Sponsors <small>optional · separate with commas</small><input id="setupSponsors" maxlength="300" placeholder="Sponsor or brand names"></label>
         <label>Instagram or social link <small>optional</small><input id="setupSocial" maxlength="300" inputmode="url" placeholder="https://instagram.com/yourname"></label>
         <button id="profileSubmit" class="primary" type="submit">Save profile and enter Sodium</button>
@@ -603,7 +604,7 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.123</span>
+    <span>NEW IN V1.124</span>
     <h3>Sign in anywhere and choose clip folders directly.</h3>
     <ul><li>Existing members can sign in on another device without reusing an old invite.</li><li>Connect Google Drive once, then choose only the folder you want to send.</li><li>Session actions stay together in one compact menu.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>

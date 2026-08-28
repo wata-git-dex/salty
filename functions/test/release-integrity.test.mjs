@@ -195,6 +195,11 @@ test('native Sodium routes protected APIs to production and compresses before St
   assert.match(nativeController, /AVAssetExportPreset1280x720/);
   assert.match(nativeController, /private static let chunkSize = 5 \* 1024 \* 1024/);
   assert.match(nativeController, /application\/offset\+octet-stream/);
+  assert.match(nativeController, /URLSessionConfiguration\.background/);
+  assert.match(nativeController, /sessionSendsLaunchEvents = true/);
+  assert.match(nativeController, /applicationSupportDirectory/);
+  assert.match(nativeController, /handleEventsForBackgroundURLSession/);
+  assert.match(app, /const uploadId = fingerprint/);
 });
 
 test('native refresh uses one system trigger and respects full-screen overlays', () => {
@@ -208,8 +213,15 @@ test('native refresh uses one system trigger and respects full-screen overlays',
 
 test('clip posting is clearly paused without disabling photo posting or existing media', () => {
   assert.match(html, /id="clipPostingNotice"/);
-  assert.match(app, /const CLIP_POSTING_TEMPORARILY_PAUSED = true/);
+  assert.match(app, /const CLIP_POSTING_TEMPORARILY_PAUSED = !NATIVE_APP/);
   assert.match(app, /selectedPostKind\(\) === 'clip'/);
   assert.match(app, /for \(let index = 0; index < files\.length; index \+= 1\)[\s\S]*await uploadMedia\(selected, path\)/);
   assert.doesNotMatch(html.match(/<input id="mediaFile"[^>]+>/)?.[0] || '', /disabled/);
+});
+
+test('profile onboarding never requires device location services', () => {
+  assert.match(html, /Sodium never requires Location Services to finish your profile/);
+  assert.match(html, /Home location not listed\? Add it/);
+  assert.match(app, /Location Services are not required/);
+  assert.doesNotMatch(app, /navigator\.geolocation\.getCurrentPosition/);
 });
