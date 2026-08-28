@@ -44,7 +44,7 @@ begin
     'surfed', (select count(distinct session_id) from participation where user_id = target_user and role = 'surf'),
     'filmed', (select count(distinct session_id) from participation where user_id = target_user and role = 'film'),
     'organized', (select count(*) from completed where initiator_user = target_user),
-    'stoke', (select count(*) from public.posts where author = target_user),
+    'stoke', (select count(*) from public.posts where author = target_user and status = 'published'),
     'locations', (select count(distinct spot_id) from participation where user_id = target_user and spot_id is not null),
     'surf_minutes', coalesce((select round(sum(minutes))::bigint from valid_time where user_id = target_user and role = 'surf'), 0),
     'film_minutes', coalesce((select round(sum(minutes))::bigint from valid_time where user_id = target_user and role = 'film'), 0),

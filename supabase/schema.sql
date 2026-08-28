@@ -93,7 +93,12 @@ create table public.posts (
   board text,
   spot_id uuid references public.spots(id),
   caption text,
-  created_at timestamptz not null default now()
+  status text not null default 'published' check (status in ('pending', 'published', 'failed')),
+  expected_media_count smallint not null default 0 check (expected_media_count between 0 and 5),
+  publish_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (status <> 'pending' or (media_type = 'clip' and expected_media_count between 1 and 5))
 );
 
 create table public.post_tags (
@@ -116,6 +121,25 @@ create table public.post_likes (
   user_id uuid references public.profiles(id) on delete cascade not null,
   primary key (post_id, user_id)
 );
+
+create or replace function public.protect_post_publication_state()
+returns trigger language plpgsql set search_path = public
+as $$
+begin
+  if (new.status is distinct from old.status
+      or new.expected_media_count is distinct from old.expected_media_count
+      or new.publish_error is distinct from old.publish_error)
+     and coalesce(auth.role(), '') <> 'service_role'
+     and current_user not in ('postgres', 'supabase_admin') then
+    raise exception 'Post publication state is server managed';
+  end if;
+  new.updated_at := now();
+  return new;
+end $$;
+
+create trigger protect_post_publication_state
+before update on public.posts
+for each row execute function public.protect_post_publication_state();
 
 create table public.connections (
   id uuid primary key default gen_random_uuid(),
@@ -575,7 +599,9 @@ as $$
 declare activity_user uuid; activity_action text; activity_points int; activity_source uuid;
 begin
   case tg_table_name
-    when 'posts' then activity_user := new.author; activity_action := 'post_clip'; activity_points := 15; activity_source := new.id;
+    when 'posts' then
+      if new.status <> 'published' or (tg_op = 'UPDATE' and old.status = 'published') then return new; end if;
+      activity_user := new.author; activity_action := 'post_clip'; activity_points := 15; activity_source := new.id;
     when 'post_comments' then activity_user := new.author; activity_action := 'comment'; activity_points := 3; activity_source := new.id;
     when 'event_rsvps' then activity_user := new.user_id; activity_action := 'attend_event'; activity_points := 10; activity_source := new.event_id;
     else return new;
@@ -584,7 +610,7 @@ begin
   return new;
 end $$;
 
-create trigger points_post after insert on public.posts for each row execute function public.points_from_action();
+create trigger points_post after insert or update of status on public.posts for each row execute function public.points_from_action();
 create trigger points_comment after insert on public.post_comments for each row execute function public.points_from_action();
 create trigger points_event_rsvp after insert on public.event_rsvps for each row execute function public.points_from_action();
 
@@ -645,6 +671,7 @@ end $$;
 
 create or replace function public.notify_new_stoke() returns trigger language plpgsql security definer set search_path = public
 as $$ declare member record; author_name text; begin
+  if new.status <> 'published' or (tg_op = 'UPDATE' and old.status = 'published') then return new; end if;
   select name into author_name from public.profiles where id=new.author;
   for member in select id from public.profiles where onboarding_complete and id<>new.author loop
     perform public.enqueue_notification(member.id,'new_stoke','New Stoke',coalesce(author_name,'A friend')||' shared a '||case when new.media_type='clip' then 'clip.' else 'photo.' end,'./?open=feed',new.id);
@@ -727,7 +754,7 @@ as $$ declare attendee record; author_name text; message text; selected_id uuid;
 end $$;
 
 create trigger notify_new_session after insert on public.sessions for each row execute function public.notify_new_session();
-create trigger notify_new_stoke after insert on public.posts for each row execute function public.notify_new_stoke();
+create trigger notify_new_stoke after insert or update of status on public.posts for each row execute function public.notify_new_stoke();
 create trigger notify_new_dm after insert on public.dm_messages for each row execute function public.notify_new_dm();
 create trigger touch_session_message_updated_at before update on public.session_messages for each row execute function public.touch_session_message_updated_at();
 create trigger notify_new_session_message after insert on public.session_messages for each row execute function public.notify_new_session_message();
@@ -796,18 +823,18 @@ create policy session_rsvps_read on public.session_rsvps for select using (publi
 create policy session_rsvps_insert_own on public.session_rsvps for insert with check (public.is_member() and user_id = auth.uid());
 create policy session_rsvps_update_own on public.session_rsvps for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy session_rsvps_delete_own on public.session_rsvps for delete using (user_id = auth.uid());
-create policy posts_read on public.posts for select using (public.is_member());
-create policy posts_insert_own on public.posts for insert to authenticated with check (public.is_member() and author = auth.uid() and split_part(media_path, '/', 1) = auth.uid()::text);
+create policy posts_read on public.posts for select using (public.is_member() and (status = 'published' or author = auth.uid() or public.is_admin()));
+create policy posts_insert_own on public.posts for insert to authenticated with check (public.is_member() and author = auth.uid() and split_part(media_path, '/', 1) = auth.uid()::text and ((media_type = 'photo' and status = 'published' and expected_media_count = 0) or (media_type = 'clip' and status = 'pending' and expected_media_count between 1 and 5)));
 create policy posts_update_own on public.posts for update to authenticated using (author = auth.uid()) with check (author = auth.uid() and split_part(media_path, '/', 1) = auth.uid()::text);
 create policy posts_delete_own on public.posts for delete using (author = auth.uid() or public.is_admin());
-create policy post_tags_read on public.post_tags for select using (public.is_member());
+create policy post_tags_read on public.post_tags for select using (public.is_member() and exists (select 1 from public.posts p where p.id = post_id and (p.status = 'published' or p.author = auth.uid() or public.is_admin())));
 create policy post_tags_insert_by_post_author on public.post_tags for insert with check (exists (select 1 from public.posts p where p.id = post_id and p.author = auth.uid()));
 create policy post_tags_delete_by_post_author on public.post_tags for delete using (exists (select 1 from public.posts p where p.id = post_id and p.author = auth.uid()));
-create policy comments_read on public.post_comments for select using (public.is_member());
+create policy comments_read on public.post_comments for select using (public.is_member() and exists (select 1 from public.posts p where p.id = post_id and (p.status = 'published' or p.author = auth.uid() or public.is_admin())));
 create policy comments_insert_own on public.post_comments for insert with check (public.is_member() and author = auth.uid());
 create policy comments_update_own on public.post_comments for update using (author = auth.uid()) with check (author = auth.uid());
 create policy comments_delete_own on public.post_comments for delete using (author = auth.uid() or public.is_admin());
-create policy likes_read on public.post_likes for select using (public.is_member());
+create policy likes_read on public.post_likes for select using (public.is_member() and exists (select 1 from public.posts p where p.id = post_id and (p.status = 'published' or p.author = auth.uid() or public.is_admin())));
 create policy likes_insert_own on public.post_likes for insert with check (public.is_member() and user_id = auth.uid());
 create policy likes_delete_own on public.post_likes for delete using (user_id = auth.uid());
 create policy connections_read_parties on public.connections for select using (public.is_member() and auth.uid() in (user_a, user_b));

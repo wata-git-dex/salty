@@ -1,6 +1,15 @@
 const SUPABASE_URL = 'https://maihhnwrstewzapsvrec.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_YtVKcZqgPalUaYOHpoSV1w_86he5PDV';
 
+function supabaseHeaders(key, extraHeaders = {}) {
+  return {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    'Content-Type': 'application/json',
+    ...extraHeaders,
+  };
+}
+
 export function json(payload, status = 200, extraHeaders = {}) {
   return Response.json(payload, {
     status,
@@ -35,6 +44,23 @@ export async function requireSodiumMember(request) {
   const rows = await member.json();
   if (!Array.isArray(rows) || !rows.length) throw new Response('Community membership required', { status:403 });
   return user;
+}
+
+export async function serviceSupabase(env, path, init = {}) {
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Response('Server database access is not configured', { status:503 });
+  }
+  return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: supabaseHeaders(env.SUPABASE_SERVICE_ROLE_KEY, init.headers),
+  });
+}
+
+export async function readServiceJson(response, fallback) {
+  const text = await response.text();
+  if (!text) return fallback;
+  try { return JSON.parse(text); }
+  catch (_error) { return fallback; }
 }
 
 export function streamApi(env, path, init = {}) {

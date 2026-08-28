@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=123-drive-picker">
+  <link rel="stylesheet" href="./styles.css?v=125-stream-publish">
 </head>
 <body>
   <svg class="svg-defs" aria-hidden="true">
@@ -72,7 +72,7 @@
 
   <div id="boot" class="boot" aria-live="polite">
     <img class="boot-mark" src="./icon-ink.svg" alt="Sodium">
-    <small class="boot-credit">Saltyview Productions · v1.124</small>
+    <small class="boot-credit">Saltyview Productions · v1.125</small>
   </div>
 
   <main id="welcome" class="welcome hidden">
@@ -604,9 +604,9 @@
 
   <aside id="whatsNewCard" class="whats-new-card hidden" aria-label="What's new in Sodium">
     <button class="whats-new-close" data-action="close-whats-new" aria-label="Close What's new"><svg><use href="#i-close"/></svg></button>
-    <span>NEW IN V1.124</span>
-    <h3>Sign in anywhere and choose clip folders directly.</h3>
-    <ul><li>Existing members can sign in on another device without reusing an old invite.</li><li>Connect Google Drive once, then choose only the folder you want to send.</li><li>Session actions stay together in one compact menu.</li></ul>
+    <span>NEW IN V1.125</span>
+    <h3>Clip posts now finish safely in the background.</h3>
+    <ul><li>A clip post stays private while every video is processing.</li><li>Cloudflare publishes it only after every selected clip is ready.</li><li>Failed processing stays visible to you with a clear retry or delete path.</li></ul>
     <button class="whats-new-action" data-action="whats-new-notifications"><svg><use href="#i-chat"/></svg>Check notifications</button>
   </aside>
 
@@ -622,6 +622,6 @@
   <script src="./vendor/supabase.min.js?v=2.57.4"></script>
   <script src="./vendor/qrcode.min.js?v=1.0.0" defer></script>
   <script src="./vendor/tus.min.js?v=4.3.1" defer></script>
-  <script src="./app.js?v=123-drive-picker" defer></script>
+  <script src="./app.js?v=125-stream-publish" defer></script>
 </body>
 </html>

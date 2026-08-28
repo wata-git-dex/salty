@@ -15,6 +15,9 @@ const clipReceiptMigration = read('supabase/clip-delivery-receipts-v1-migration.
 const sessionLifecycleMigration = read('supabase/session-lifecycle-v1-migration.sql');
 const sessionAttendanceMigration = read('supabase/session-attendance-v1-migration.sql');
 const apiMiddleware = read('functions/api/_middleware.js');
+const streamUpload = read('functions/api/stream/upload.js');
+const streamWebhook = read('functions/api/stream/webhook.js');
+const streamPublishMigration = read('supabase/stoke-server-publish-v1-migration.sql');
 
 test('HTML IDs are unique and hard JavaScript selectors resolve', () => {
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
@@ -171,6 +174,31 @@ test('large Stream uploads recover stale sessions and tolerate mobile interrupti
   assert.match(app, /starting a fresh upload automatically/);
   assert.match(app, /navigator\.wakeLock\.request\('screen'\)/);
   assert.match(app, /chunkSize:5 \* 1024 \* 1024/);
+});
+
+test('Stream publication is server-owned and survives a killed client', () => {
+  assert.match(app, /status:'pending'/);
+  assert.match(app, /expected_media_count:files\.length/);
+  assert.match(app, /body:JSON\.stringify\(\{ filename:file\.name, size:file\.size, postId:context\.postId, position:context\.position \}\)/);
+  assert.match(app, /waitForPostPublication\(postId\)/);
+  assert.match(app, /\.eq\('status', 'published'\)/);
+  assert.doesNotMatch(app, /db\.from\('post_stream_media'\)\.insert\(rows\)/);
+  assert.match(streamUpload, /post_id:postId/);
+  assert.match(streamUpload, /status:'uploading'/);
+  assert.match(streamWebhook, /request\.headers\.get\('Webhook-Signature'\)/);
+  assert.match(streamWebhook, /crypto\.subtle\.sign\('HMAC'/);
+  assert.match(streamWebhook, /Math\.abs\(nowSeconds - parsed\.time\) > MAX_SIGNATURE_AGE_SECONDS/);
+  assert.match(streamWebhook, /status:'failed'/);
+  assert.match(streamWebhook, /allMedia\.length === expected && allMedia\.every\(item => item\.status === 'ready'\)/);
+  assert.match(streamWebhook, /status:'published'/);
+  assert.match(streamWebhook, /serviceSupabase\(env/);
+  assert.match(streamPublishMigration, /Post publication state is server managed/);
+  assert.match(streamPublishMigration, /post\.status = 'published' or post\.author = auth\.uid\(\)/);
+  assert.match(streamPublishMigration, /post_stream_media[\s\S]*post\.status = 'published'/);
+  assert.match(streamPublishMigration, /post_tags_read[\s\S]*post\.status = 'published'/);
+  assert.match(streamPublishMigration, /comments_read[\s\S]*post\.status = 'published'/);
+  assert.match(streamPublishMigration, /likes_read[\s\S]*post\.status = 'published'/);
+  assert.match(streamPublishMigration, /after insert or update of status on public\.posts/);
 });
 
 test('native Sodium routes protected APIs to production and compresses before Stream upload', () => {

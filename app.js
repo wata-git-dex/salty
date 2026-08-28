@@ -26,7 +26,7 @@ const CONFIG = Object.freeze({
   emailOtpDigits: 8,
   vapidPublicKey: 'BA51gFp65k9tONl1nzm_DCnk9Xh6eAGHyeWi0RTvuSZQzRSnyAYJfUeW2WCi86IXnxIWcIFq7UOprumm3ssvMnI',
 });
-const APP_VERSION = '1.124';
+const APP_VERSION = '1.125';
 const POST_PERSON_TAG_PREFIX = '__person__:';
 const POST_SESSION_TAG_PREFIX = '__session__:';
 const CONSENT_VERSION = '1.0';
@@ -140,7 +140,7 @@ const state = {
   calendarMonth: null, calendarDate: '', eventFilter: 'all',
   previousView: 'surfing', issueOriginView: 'surfing', issueReports: [], issueScreenshotUrls: {}, issueFilter: 'open',
   marketplaceImageUrls: {}, editingListingId: null, selectedListingId: null, editingClipDeliveryId: null, inboxTab: 'messages', clipBox: 'sent', sharingSessionId: null,
-  guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], editingPostDraftId: null,
+  guestClipToken: '', guestClipDelivery: null, postPreviewUrl: '', postDraftFiles: [], postDrafts: [], serverPostDrafts: [], editingPostDraftId: null, pendingPostId: '',
   postMemberTags: [], postPersonNames: [], postCustomTags: [], postSessionId: '', qrInviteUrl: '', qrInviteRegionName: '',
   nonprofitLogoUrls: {}, editingNonprofitId: null, drawerScrollY: 0,
   googleDriveConfigured: false, googleDriveConnected: false, googleDriveSharingEmail: '', googleDriveChecked: false, googleDriveSyncTimer: null, pendingDriveStatus: '',
@@ -4544,6 +4544,7 @@ async function cancelSession() {
 async function loadPosts() {
   const result = await db.from('posts')
     .select('*,spot:spots(*),author_profile:profiles!posts_author_fkey(id,name),stream_media:post_stream_media(*),post_tags(user_id,role,profile:profiles!post_tags_user_id_fkey(id,name)),post_likes(user_id),post_comments(id,body,created_at,author_profile:profiles!post_comments_author_fkey(id,name))')
+    .eq('status', 'published')
     .order('created_at', { ascending: false }).limit(50);
   if (result.error) { toast(readableError(result.error)); return; }
   const posts = result.data || [];
@@ -4844,7 +4845,8 @@ function readStreamUploadSessions() {
 function saveStreamUploadSession(fingerprint, session) {
   try {
     const sessions = readStreamUploadSessions();
-    sessions[fingerprint] = { ...session, createdAt:session.createdAt || Date.now(), updatedAt:Date.now() };
+    const existing = sessions[fingerprint] || {};
+    sessions[fingerprint] = { ...existing, ...session, createdAt:existing.createdAt || session.createdAt || Date.now(), updatedAt:Date.now() };
     localStorage.setItem(STREAM_UPLOAD_SESSION_KEY, JSON.stringify(sessions));
   } catch (_error) { /* Uploads still work when private storage is unavailable. */ }
 }
@@ -4882,15 +4884,15 @@ async function keepUploadAwake() {
   catch (_error) { return null; }
 }
 
-async function createStreamUpload(file, fingerprint, statusCallback) {
+async function createStreamUpload(file, fingerprint, statusCallback, context) {
   statusCallback('Preparing a fresh secure upload…');
   const created = await streamRequest('/upload', {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },
-    body:JSON.stringify({ filename:file.name, size:file.size }),
+    body:JSON.stringify({ filename:file.name, size:file.size, postId:context.postId, position:context.position }),
   });
   if (!validStreamUploadUrl(created.uploadUrl) || !created.uid) throw new Error('Cloudflare returned an invalid upload address. Try again in a moment.');
-  saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:0 });
+  saveStreamUploadSession(fingerprint, { uploadUrl:created.uploadUrl, uid:created.uid, offset:0, postId:context.postId, position:context.position });
   return created;
 }
 
@@ -4956,9 +4958,15 @@ async function runTusStreamUpload(file, created, saved, fingerprint, progressCal
   }
 }
 
-async function uploadStreamClip(file, progressCallback = () => {}, statusCallback = () => {}) {
+async function uploadStreamClip(file, progressCallback = () => {}, statusCallback = () => {}, context = {}) {
+  if (!context.postId || !Number.isInteger(context.position)) throw new Error('Sodium could not attach this clip to its pending post.');
   const fingerprint = streamUploadFingerprint(file);
   let saved = readStreamUploadSessions()[fingerprint];
+  const belongsToPost = saved?.postId === context.postId && Number(saved?.position) === context.position;
+  if (saved && (!belongsToPost || context.forceFresh)) {
+    clearStreamUploadSession(fingerprint);
+    saved = null;
+  }
   if (saved?.complete && saved.uid) {
     progressCallback(1);
     statusCallback('Recovered the completed clip. Finishing the post…');
@@ -4968,7 +4976,7 @@ async function uploadStreamClip(file, progressCallback = () => {}, statusCallbac
     let created = saved?.uploadUrl && saved?.uid && validStreamUploadUrl(saved.uploadUrl) ? saved : null;
     if (!created) {
       clearStreamUploadSession(fingerprint);
-      created = await createStreamUpload(file, fingerprint, statusCallback);
+      created = await createStreamUpload(file, fingerprint, statusCallback, context);
     }
     await hydrateNativePlugins();
     if (!NATIVE_MEDIA?.uploadTus) throw new Error('The native Sodium uploader is unavailable. Close and reopen the app, then try again.');
@@ -5003,7 +5011,7 @@ async function uploadStreamClip(file, progressCallback = () => {}, statusCallbac
   if (!created) {
     clearStreamUploadSession(fingerprint);
     saved = null;
-    created = await createStreamUpload(file, fingerprint, statusCallback);
+    created = await createStreamUpload(file, fingerprint, statusCallback, context);
   }
   try {
     return await runTusStreamUpload(file, created, saved, fingerprint, progressCallback, statusCallback);
@@ -5013,7 +5021,7 @@ async function uploadStreamClip(file, progressCallback = () => {}, statusCallbac
     // automatically; the member should never have to understand this detail.
     clearStreamUploadSession(fingerprint);
     statusCallback('The saved upload expired—starting a fresh upload automatically…');
-    created = await createStreamUpload(file, fingerprint, statusCallback);
+    created = await createStreamUpload(file, fingerprint, statusCallback, context);
     return await runTusStreamUpload(file, created, null, fingerprint, progressCallback, statusCallback);
   }
 }
@@ -5152,13 +5160,32 @@ function renderStokeDraftBanner() {
   const banner = $('#postDraftBanner');
   if (!banner) return;
   const draft = state.postDrafts[0];
-  banner.classList.toggle('hidden', !draft);
-  banner.innerHTML = draft ? `<button type="button" data-open-post-draft="${esc(draft.id)}"><svg><use href="#i-folder"/></svg><span><b>${state.postDrafts.length === 1 ? 'You have 1 saved draft' : `You have ${state.postDrafts.length} saved drafts`}</b><small>Continue ${esc(postDraftTitle(draft))}</small></span><svg><use href="#i-chevron"/></svg></button>` : '';
+  const serverPost = state.serverPostDrafts[0];
+  banner.classList.toggle('hidden', !draft && !serverPost);
+  const localMarkup = draft ? `<button type="button" data-open-post-draft="${esc(draft.id)}"><svg><use href="#i-folder"/></svg><span><b>${state.postDrafts.length === 1 ? 'You have 1 saved draft' : `You have ${state.postDrafts.length} saved drafts`}</b><small>Continue ${esc(postDraftTitle(draft))}</small></span><svg><use href="#i-chevron"/></svg></button>` : '';
+  const serverMarkup = serverPost ? `<div class="server-post-draft ${serverPost.status === 'failed' ? 'failed' : ''}"><svg><use href="#i-camera"/></svg><span><b>${serverPost.status === 'failed' ? 'A clip post needs attention' : 'A clip post is processing'}</b><small>${esc(serverPost.publish_error || 'Cloudflare is finishing your clips. You can close Sodium.')}</small></span><button type="button" data-delete-pending-post="${esc(serverPost.id)}" aria-label="Delete this pending post">×</button></div>` : '';
+  banner.innerHTML = `${serverMarkup}${localMarkup}`;
+}
+
+async function loadServerPostDrafts() {
+  const result = await db.from('posts')
+    .select('id,status,publish_error,updated_at')
+    .eq('author', state.profile.id)
+    .in('status', ['pending', 'failed'])
+    .order('updated_at', { ascending:false });
+  if (result.error) throw result.error;
+  state.serverPostDrafts = result.data || [];
 }
 
 async function loadPostDrafts() {
-  if (!state.profile?.id || !window.indexedDB) return;
+  if (!state.profile?.id) return;
   try {
+    await loadServerPostDrafts();
+    if (!window.indexedDB) {
+      state.postDrafts = [];
+      renderPostDrafts();
+      return;
+    }
     const all = await postDraftTransaction('readonly', store => store.getAll());
     const now = Date.now();
     const owned = (all || []).filter(draft => draft.owner === state.profile.id);
@@ -5178,6 +5205,45 @@ async function loadPostDrafts() {
       banner.innerHTML = '<p class="post-draft-empty">Drafts are unavailable on this device.</p>';
     }
   }
+}
+
+async function deletePendingPost(postId) {
+  const post = state.serverPostDrafts.find(item => item.id === postId);
+  if (!post || !confirm('Delete this unfinished Stoke post?')) return;
+  const media = await db.from('post_stream_media').select('stream_uid').eq('post_id', postId);
+  if (!media.error) await Promise.allSettled((media.data || []).map(item => streamRequest(`/video/${encodeURIComponent(item.stream_uid)}`, { method:'DELETE' })));
+  const removed = await db.from('posts').delete().eq('id', postId).eq('author', state.profile.id);
+  if (removed.error) { toast(readableError(removed.error)); return; }
+  if (state.pendingPostId === postId) state.pendingPostId = '';
+  await loadPostDrafts();
+  toast('Unfinished post deleted.');
+}
+
+function waitForPostPublication(postId, timeoutMs = 120000) {
+  return new Promise(resolve => {
+    let settled = false;
+    const channel = db.channel(`post-publication-${postId}-${Date.now()}`);
+    const timer = setTimeout(async () => {
+      if (settled) return;
+      settled = true;
+      await db.removeChannel(channel);
+      resolve({ id:postId, status:'pending' });
+    }, timeoutMs);
+    const finish = async post => {
+      if (settled || !post || !['published', 'failed'].includes(post.status)) return;
+      settled = true;
+      clearTimeout(timer);
+      await db.removeChannel(channel);
+      resolve(post);
+    };
+    const checkCurrent = async () => {
+      const result = await db.from('posts').select('id,status,publish_error').eq('id', postId).eq('author', state.profile.id).maybeSingle();
+      if (!result.error) await finish(result.data);
+    };
+    channel
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'posts', filter:`id=eq.${postId}` }, payload => void finish(payload.new))
+      .subscribe(status => { if (status === 'SUBSCRIBED') void checkCurrent(); });
+  });
 }
 
 function postDraftFields() {
@@ -5360,6 +5426,7 @@ function resetPostComposer() {
   }
   state.editingPostId = null;
   state.editingPostDraftId = null;
+  state.pendingPostId = '';
   state.postDraftFiles = [];
   state.postMemberTags = [];
   state.postPersonNames = [];
@@ -5391,6 +5458,36 @@ function resetPostComposer() {
   $('#postDelete').classList.add('hidden');
   $('#postDeleteNote').classList.add('hidden');
   renderPostTagEditors();
+}
+
+async function reusablePendingPost(files) {
+  const candidates = new Set();
+  if (state.pendingPostId) candidates.add(state.pendingPostId);
+  files.forEach(file => {
+    const saved = readStreamUploadSessions()[streamUploadFingerprint(file)];
+    if (saved?.postId) candidates.add(saved.postId);
+  });
+  for (const postId of candidates) {
+    const result = await db.from('posts')
+      .select('id,status,expected_media_count')
+      .eq('id', postId)
+      .eq('author', state.profile.id)
+      .in('status', ['pending', 'failed'])
+      .maybeSingle();
+    if (!result.error && result.data && Number(result.data.expected_media_count) === files.length) return result.data;
+  }
+  return null;
+}
+
+async function replacePostTags(postId, filmer) {
+  const removed = await db.from('post_tags').delete().eq('post_id', postId);
+  if (removed.error) throw removed.error;
+  const tags = [];
+  if (filmer && filmer.id !== state.profile.id) tags.push({ post_id:postId, user_id:filmer.id, role:'filmer' });
+  state.postMemberTags.forEach(person => tags.push({ post_id:postId, user_id:person.id, role:'surfer' }));
+  if (!tags.length) return;
+  const inserted = await db.from('post_tags').insert(tags);
+  if (inserted.error) throw inserted.error;
 }
 
 function openPostComposer(postId = null) {
@@ -5445,8 +5542,9 @@ async function savePost(event) {
   const progress = $('#uploadProgress');
   const uploadStatus = $('#uploadStatus');
   let streamUploads = [];
-  let streamMediaLinked = false;
   let recoverableUpload = false;
+  let processingFailure = false;
+  let tagsLinked = false;
   let postId = state.editingPostId;
   try {
     const editing = state.editingPostId;
@@ -5465,8 +5563,8 @@ async function savePost(event) {
     if (editing) {
       const updated = await db.from('posts').update(details).eq('id', editing).eq('author', state.profile.id).select('id').single();
       if (updated.error) throw updated.error;
-      const removedTags = await db.from('post_tags').delete().eq('post_id', editing);
-      if (removedTags.error) throw removedTags.error;
+      await replacePostTags(editing, filmer);
+      tagsLinked = true;
     } else {
       const files = currentPostFiles();
       await validatePostSelection(files);
@@ -5476,12 +5574,37 @@ async function savePost(event) {
       uploadStatus.textContent = mediaType === 'clip' ? 'Preparing upload…' : 'Uploading photos…';
       uploadStatus.classList.remove('hidden');
       if (mediaType === 'clip') {
+        let pending = await reusablePendingPost(files);
+        if (!pending) {
+          postId = crypto.randomUUID();
+          const created = await db.from('posts').insert({
+            id:postId,
+            author:state.profile.id,
+            media_url:`cloudflare-stream:pending:${postId}`,
+            media_path:`${state.profile.id}/stream/pending/${postId}`,
+            media_paths:[],
+            media_type:'clip',
+            status:'pending',
+            expected_media_count:files.length,
+            ...details,
+          }).select('id,status,expected_media_count').single();
+          if (created.error) throw created.error;
+          pending = created.data;
+        } else {
+          postId = pending.id;
+          const updated = await db.from('posts').update(details)
+            .eq('id', postId).eq('author', state.profile.id).select('id').single();
+          if (updated.error) throw updated.error;
+        }
+        state.pendingPostId = postId;
+        await replacePostTags(postId, filmer);
+        tagsLinked = true;
         for (let index = 0; index < files.length; index += 1) {
           const uploaded = await uploadStreamClip(files[index], fraction => {
             progress.value = 8 + Math.round(((index + fraction) / files.length) * 72);
           }, message => {
             uploadStatus.textContent = files.length > 1 ? `Clip ${index + 1} of ${files.length} · ${message}` : message;
-          });
+          }, { postId, position:index, forceFresh:pending.status === 'failed' });
           streamUploads.push(uploaded);
         }
       } else {
@@ -5493,47 +5616,38 @@ async function savePost(event) {
           paths.push(path);
           progress.value = 8 + Math.round(((index + 1) / files.length) * 72);
         }
-      }
-      const mediaUrl = mediaType === 'clip' ? `cloudflare-stream:${streamUploads[0].uid}` : paths[0];
-      const mediaPath = mediaType === 'clip' ? `${state.profile.id}/stream/${streamUploads[0].uid}` : paths[0];
-      progress.value = 82;
-      const created = await db.from('posts').insert({ author: state.profile.id, media_url:mediaUrl, media_path:mediaPath, media_paths:paths, media_type:mediaType, ...details }).select('id').single();
-      if (created.error) throw created.error;
-      postId = created.data.id;
-      if (mediaType === 'clip') {
-        const rows = streamUploads.map((item, position) => ({
-          post_id:postId,
-          creator:state.profile.id,
-          position,
-          stream_uid:item.uid,
-          status:'processing',
-          duration_seconds:item.duration,
-        }));
-        const mediaResult = await db.from('post_stream_media').insert(rows);
-        if (mediaResult.error) throw mediaResult.error;
-        streamMediaLinked = true;
+        progress.value = 82;
+        const created = await db.from('posts').insert({ author:state.profile.id, media_url:paths[0], media_path:paths[0], media_paths:paths, media_type:'photo', status:'published', expected_media_count:0, ...details }).select('id').single();
+        if (created.error) throw created.error;
+        postId = created.data.id;
       }
     }
-    const tags = [];
-    if (filmer && filmer.id !== state.profile.id) tags.push({ post_id: postId, user_id: filmer.id, role: 'filmer' });
-    state.postMemberTags.forEach(person => tags.push({ post_id:postId, user_id:person.id, role:'surfer' }));
-    if (tags.length) {
-      const tagsResult = await db.from('post_tags').insert(tags);
-      if (tagsResult.error) throw tagsResult.error;
+    if (!tagsLinked) await replacePostTags(postId, filmer);
+
+    let publication = { status:'published' };
+    if (!editing && selectedPostKind() === 'clip') {
+      progress.value = 90;
+      uploadStatus.textContent = 'Upload complete—Cloudflare is processing your clips. You can close Sodium.';
+      publication = await waitForPostPublication(postId);
+      if (publication.status === 'failed') {
+        processingFailure = true;
+        const error = new Error(publication.publish_error || 'Cloudflare could not process one of these clips.');
+        error.processingFailure = true;
+        throw error;
+      }
     }
     if (state.editingPostDraftId) await postDraftTransaction('readwrite', store => store.delete(state.editingPostDraftId));
     streamUploads.forEach(item => clearStreamUploadSession(item.fingerprint));
     progress.value = 100; resetPostComposer(); closeSheet();
-    await loadPosts(); await renderProfile(); toast(editing ? 'Stoke post updated.' : 'Shared with the whole community.');
+    await loadPosts(); await loadPostDrafts(); await renderProfile();
+    toast(editing ? 'Stoke post updated.' : publication.status === 'published' ? 'Shared with the whole community.' : 'Clips uploaded. Cloudflare is finishing your post in the background.', 7000);
   } catch (error) {
     recoverableUpload = Boolean(error?.recoverableUpload);
-    if (streamUploads.length && !streamMediaLinked && !recoverableUpload) {
-      await Promise.allSettled(streamUploads.map(item => streamRequest(`/video/${encodeURIComponent(item.uid)}`, { method:'DELETE' })));
-      streamUploads.forEach(item => clearStreamUploadSession(item.fingerprint));
-      if (postId && !state.editingPostId) await db.from('posts').delete().eq('id', postId).eq('author', state.profile.id);
-    }
+    processingFailure = processingFailure || Boolean(error?.processingFailure);
     const message = readableError(error);
-    const uploadHelp = recoverableUpload
+    const uploadHelp = processingFailure
+      ? `${message} Your failed post is visible only to you. Delete it from Stoke drafts or select the clips again to retry.`
+      : recoverableUpload
       ? `${message} Keep the same clip selected and tap Resume upload. Sodium will continue from its saved checkpoint.`
       : streamUploads.length || selectedPostKind() === 'clip'
       ? `${message} The selected clip is still here so you can try again.`
@@ -5543,6 +5657,7 @@ async function savePost(event) {
       uploadStatus.textContent = 'Upload paused · tap Resume upload when the connection returns.';
       uploadStatus.classList.remove('hidden');
     }
+    await loadPostDrafts().catch(() => {});
     toast(uploadHelp, 9000);
   }
   finally {
@@ -5597,7 +5712,7 @@ async function renderProfile() {
   const [points, streak, posts, participation] = await Promise.all([
     db.from('points_events').select('points').eq('user_id', state.profile.id),
     db.from('streaks').select('*').eq('user_id', state.profile.id).maybeSingle(),
-    db.from('posts').select('id', { count: 'exact', head: true }).eq('author', state.profile.id),
+    db.from('posts').select('id', { count: 'exact', head: true }).eq('author', state.profile.id).eq('status', 'published'),
     db.rpc('get_profile_participation_stats', { target_user:state.profile.id }),
   ]);
   const total = (points.data || []).reduce((sum, event) => sum + event.points, 0);
@@ -6159,6 +6274,7 @@ document.addEventListener('click', async event => {
   const editPostNode = event.target.closest('[data-edit-post]');
   const openPostDraftNode = event.target.closest('[data-open-post-draft]');
   const deletePostDraftNode = event.target.closest('[data-delete-post-draft]');
+  const deletePendingPostNode = event.target.closest('[data-delete-pending-post]');
   const removePostMemberTagNode = event.target.closest('[data-remove-post-member-tag]');
   const removePostPersonNameNode = event.target.closest('[data-remove-post-person-name]');
   const removePostCustomTagNode = event.target.closest('[data-remove-post-custom-tag]');
@@ -6219,6 +6335,7 @@ document.addEventListener('click', async event => {
   if (shareClipDeliveryNode) { await shareExistingClipDelivery(shareClipDeliveryNode.dataset.shareClipDelivery); return; }
   if (shareGuestClipsNode) { await shareGuestClipLink(shareGuestClipsNode.dataset.shareGuestClips); return; }
   if (deletePostDraftNode) { await deletePostDraft(deletePostDraftNode.dataset.deletePostDraft); return; }
+  if (deletePendingPostNode) { await deletePendingPost(deletePendingPostNode.dataset.deletePendingPost); return; }
   if (openPostDraftNode) { await openPostDraft(openPostDraftNode.dataset.openPostDraft); return; }
   if (removePostMemberTagNode) {
     state.postMemberTags = state.postMemberTags.filter(person => person.id !== removePostMemberTagNode.dataset.removePostMemberTag);
